@@ -1,0 +1,31 @@
+<html>
+    <head>
+        <script
+            src="https://code.jquery.com/jquery-3.4.1.min.js"
+            integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
+            crossorigin="anonymous"
+        ></script>
+        <script type="javascript" src="default.js"></script>
+    </head>
+    <body>
+        <h1>Welcome to my home page</h1>
+        <div style="margin-top: 16px">
+            <a href="https://pelasne-web.azurewebsites.net/api/auth/authorize"
+                >login</a
+            >
+            - goes through the login process (anonymous)
+        </div>
+        <div style="margin-top: 16px">
+            <a href="https://pelasne-web.azurewebsites.net/api/auth/hello"
+                >hello</a
+            >
+            - shows information known about the user (authenticated)
+        </div>
+        <div style="margin-top: 16px">
+            <a href="https://pelasne-web.azurewebsites.net/api/auth/version"
+                >version</a
+            >
+            - shows version of API to ensure it is operational (anonymous)
+        </div>
+    </body>
+</html>
