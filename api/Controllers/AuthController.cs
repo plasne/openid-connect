@@ -258,6 +258,14 @@ namespace authentication.Controllers
                 // use the token to get user info
                 User me = await GetUser(token);
 
+                // write the X-XSRF-TOKEN
+                string xsrf = this.GenerateSafeRandomString(16);
+                Response.Cookies.Append("XSRF-TOKEN", xsrf, new CookieOptions()
+                {
+                    Domain = new Uri(this.AppHome).Host,
+                    Secure = true
+                });
+
                 // populate the claims
                 List<Claim> claims = new List<Claim>();
                 if (!string.IsNullOrEmpty(me.DisplayName)) claims.Add(new Claim("displayName", me.DisplayName));
@@ -280,7 +288,7 @@ namespace authentication.Controllers
                 JwtSecurityTokenHandler handler = new JwtSecurityTokenHandler();
                 string jwt_s = handler.WriteToken(jwt);
 
-                // write the id token to a cookie
+                // write the identity to a cookie
                 Response.Cookies.Append("user", jwt_s, new CookieOptions()
                 {
                     Expires = DateTimeOffset.Now.AddHours(4),

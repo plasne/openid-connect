@@ -119,3 +119,8 @@ XSRF is an attack technique by which the attacker can trick an authenticated use
 This sample does not address this because the "user" cookie is not set to SameSite=strict. It could be if the web pages and API services were hosted on the same domain and if the browser supports it: https://caniuse.com/#search=samesite).
 
 Some frameworks, like Angular, also include a method to implement XSRF protection: https://docs.angularjs.org/api/ng/service/$http#cross-site-request-forgery-xsrf-protection.
+
+## Stuff
+
+I don't like that the nonce is stored in a cookie https://auth0.com/docs/api-auth/tutorials/nonce
+alternatively could write IP address to JWT
