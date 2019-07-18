@@ -111,3 +111,11 @@ The highlighted option in each section could be implemented by Azure AD. It is a
 ## Sample
 
 The sample is 2 separate projects: API and WFE, which could be hosted on 2 different URLs.
+
+## XSRF
+
+XSRF is an attack technique by which the attacker can trick an authenticated user into unknowingly executing actions on your website. A malicious actor posts data to your API and expects that an existing authorization/identity/session cookie will be automatically sent along with the request.
+
+This sample does not address this because the "user" cookie is not set to SameSite=strict. It could be if the web pages and API services were hosted on the same domain and if the browser supports it: https://caniuse.com/#search=samesite).
+
+Some frameworks, like Angular, also include a method to implement XSRF protection: https://docs.angularjs.org/api/ng/service/$http#cross-site-request-forgery-xsrf-protection.
