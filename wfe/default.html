@@ -5,7 +5,8 @@
             integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
             crossorigin="anonymous"
         ></script>
-        <script type="javascript" src="default.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js"></script>
+        <script src="./default.js"></script>
     </head>
     <body>
         <h1>Welcome to my home page</h1>
@@ -16,9 +17,7 @@
             - goes through the login process (anonymous)
         </div>
         <div style="margin-top: 16px">
-            <a href="https://pelasne-web.azurewebsites.net/api/auth/hello"
-                >hello</a
-            >
+            <a href="#" onclick="javascript:hello()">hello</a>
             - shows information known about the user (authenticated)
         </div>
         <div style="margin-top: 16px">
@@ -27,5 +26,6 @@
             >
             - shows version of API to ensure it is operational (anonymous)
         </div>
+        <div style="margin-top: 16px" id="results"></div>
     </body>
 </html>

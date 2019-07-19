@@ -124,3 +124,5 @@ Some frameworks, like Angular, also include a method to implement XSRF protectio
 
 I don't like that the nonce is stored in a cookie https://auth0.com/docs/api-auth/tutorials/nonce
 alternatively could write IP address to JWT
+
+https://publicsuffix.org/list/effective_tld_names.dat

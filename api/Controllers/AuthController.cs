@@ -97,6 +97,14 @@ namespace authentication.Controllers
             }
         }
 
+        private bool Secure
+        {
+            get
+            {
+                return (String.Compare(System.Environment.GetEnvironmentVariable("SECURE"), "false", true) != 0);
+            }
+        }
+
         private string GenerateSafeRandomString(int length)
         {
             RNGCryptoServiceProvider provider = new RNGCryptoServiceProvider();
@@ -142,7 +150,7 @@ namespace authentication.Controllers
             {
                 Expires = DateTimeOffset.Now.AddMinutes(10),
                 HttpOnly = true,
-                Secure = true,
+                Secure = this.Secure,
                 SameSite = SameSiteMode.None
             });
 
@@ -230,6 +238,14 @@ namespace authentication.Controllers
 
         }
 
+        private static string GetBaseDomain(Uri uri)
+        {
+            var host = uri.Host;
+            var parts = host.Split(".");
+            if (parts.Length < 2) return host;
+            return $"{parts[parts.Length - 2]}.{parts[parts.Length - 1]}";
+        }
+
         [AllowAnonymous]
         [HttpPost, Route("token")]
         public async Task<ActionResult> Token()
@@ -262,14 +278,17 @@ namespace authentication.Controllers
                 string xsrf = this.GenerateSafeRandomString(16);
                 Response.Cookies.Append("XSRF-TOKEN", xsrf, new CookieOptions()
                 {
-                    Domain = new Uri(this.AppHome).Host,
-                    Secure = true
+                    Expires = DateTimeOffset.Now.AddHours(4),
+                    Secure = this.Secure,
+                    Domain = GetBaseDomain(new Uri(this.AppHome)),
+                    Path = "/"
                 });
 
                 // populate the claims
                 List<Claim> claims = new List<Claim>();
                 if (!string.IsNullOrEmpty(me.DisplayName)) claims.Add(new Claim("displayName", me.DisplayName));
                 if (!string.IsNullOrEmpty(me.Mail)) claims.Add(new Claim("email", me.Mail));
+                claims.Add(new Claim("xsrf", xsrf));
                 claims.Add(new Claim("roles", "user"));
 
                 // sign the token
@@ -293,7 +312,9 @@ namespace authentication.Controllers
                 {
                     Expires = DateTimeOffset.Now.AddHours(4),
                     HttpOnly = true,
-                    Secure = true
+                    Secure = this.Secure,
+                    Domain = GetBaseDomain(new Uri(this.AppHome)),
+                    Path = "/"
                 });
 
                 return Redirect(flow.redirecturi);
@@ -312,7 +333,7 @@ namespace authentication.Controllers
             var identity = User.Identity as ClaimsIdentity;
             foreach (var claim in identity.Claims)
             {
-                list.Add($"{claim.Subject}: {claim.Value}");
+                list.Add($"{claim.Type}: {claim.Value}");
             }
             return Ok(list);
         }

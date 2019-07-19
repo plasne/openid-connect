@@ -1,11 +1,18 @@
-function getParameterByName(name, url) {
-    if (!url) url = window.location.href;
-    name = name.replace(/[\[\]]/g, '\\$&');
-    var regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
-        results = regex.exec(url);
-    if (!results) return null;
-    if (!results[2]) return '';
-    return decodeURIComponent(results[2].replace(/\+/g, ' '));
+function hello() {
+    // read the XSRF cookie
+    var xsrf = Cookies.get('XSRF-TOKEN');
+
+    // send the XSRF on the header
+    $.ajax({
+        method: 'GET',
+        url: 'https://pelasne-web.azurewebsites.net/api/auth/hello',
+        headers: {
+            'X-XSRF-TOKEN': xsrf
+        },
+        xhrFields: { withCredentials: true }
+    }).done(function(data) {
+        $('#results').append(data);
+    });
 }
 
 $(document).ready(function() {});

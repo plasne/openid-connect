@@ -7,7 +7,7 @@
 
 # bin, obj
 **/bin/
-**.obj/
+**/obj/
 
 # env vars
 **/*.env
