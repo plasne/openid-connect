@@ -57,61 +57,6 @@ namespace dotnetauth
             }
         }
 
-        public class CustomJwtSecurityTokenHandler : ISecurityTokenValidator
-        {
-
-            private int maxTokenSizeInBytes = TokenValidationParameters.DefaultMaximumTokenSizeInBytes;
-            private JwtSecurityTokenHandler tokenHandler;
-            private HttpContext httpContext;
-
-            public CustomJwtSecurityTokenHandler(IHttpContextAccessor httpContextAccessor)
-            {
-                this.tokenHandler = new JwtSecurityTokenHandler();
-                this.httpContext = httpContextAccessor.HttpContext;
-            }
-
-            public bool CanValidateToken
-            {
-                get
-                {
-                    return tokenHandler.CanValidateToken;
-                }
-            }
-
-            public int MaximumTokenSizeInBytes
-            {
-                get
-                {
-                    return this.maxTokenSizeInBytes;
-                }
-                set
-                {
-                    this.maxTokenSizeInBytes = value;
-                }
-            }
-
-            public bool CanReadToken(string securityToken)
-            {
-                return tokenHandler.CanReadToken(securityToken);
-            }
-
-            public ClaimsPrincipal ValidateToken(string securityToken, TokenValidationParameters validationParameters, out SecurityToken validatedToken)
-            {
-                var principal = tokenHandler.ValidateToken(securityToken, validationParameters, out validatedToken);
-
-                // ensure the XSRF matches
-                string xsrfFromCookie = this.httpContext.Request.Cookies["xsrf"];
-                var xsrfFromJwt = principal.Claims.First(claim => claim.Type == "xsrf");
-                if (xsrfFromJwt == null || xsrfFromJwt.Value != xsrfFromCookie)
-                {
-                    throw new SecurityTokenValidationException("XSRF does not match");
-                }
-
-                return principal;
-            }
-
-        }
-
         private class XsrfRequirement : IAuthorizationRequirement
         {
         }

@@ -274,7 +274,7 @@ namespace authentication.Controllers
                 // use the token to get user info
                 User me = await GetUser(token);
 
-                // write the X-XSRF-TOKEN
+                // write the XSRF-TOKEN cookie
                 string xsrf = this.GenerateSafeRandomString(16);
                 Response.Cookies.Append("XSRF-TOKEN", xsrf, new CookieOptions()
                 {
