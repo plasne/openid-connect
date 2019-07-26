@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Linq;
 using dotenv.net;
+using authentication.Controllers;
 
 namespace dotnetauth
 {
@@ -25,35 +26,15 @@ namespace dotnetauth
             DotEnv.Config(false);
         }
 
-        private string Issuer
-        {
-            get
-            {
-                return System.Environment.GetEnvironmentVariable("ISSUER");
-            }
-        }
+        public IConfiguration Configuration { get; }
 
-        private string Audience
+        private static bool AllowAutoRenew
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("AUDIENCE");
-            }
-        }
-
-        private string SigningKey
-        {
-            get
-            {
-                return System.Environment.GetEnvironmentVariable("SIGNING_KEY");
-            }
-        }
-
-        private string AppHome
-        {
-            get
-            {
-                return System.Environment.GetEnvironmentVariable("APP_HOME");
+                string ar = System.Environment.GetEnvironmentVariable("ALLOW_AUTO_RENEW");
+                if (string.IsNullOrEmpty(ar)) return false;
+                return (ar.ToUpper() == "TRUE" || ar.ToUpper() == "YES" || ar == "1");
             }
         }
 
@@ -93,8 +74,6 @@ namespace dotnetauth
             }
         }
 
-        public IConfiguration Configuration { get; }
-
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
@@ -109,9 +88,9 @@ namespace dotnetauth
                         ValidateAudience = true,
                         ValidateLifetime = true,
                         ValidateIssuerSigningKey = true,
-                        ValidIssuer = this.Issuer,
-                        ValidAudience = this.Audience,
-                        IssuerSigningKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(this.SigningKey))
+                        ValidIssuer = AuthController.Issuer,
+                        ValidAudience = AuthController.Audience,
+                        IssuerSigningKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(AuthController.SigningKey))
                     };
                 });
 
@@ -130,8 +109,8 @@ namespace dotnetauth
                    options.AddPolicy("apphome",
                    builder =>
                    {
-                       Uri home = new Uri(this.AppHome);
-                       builder.WithOrigins($"{home.Scheme}://{home.Host}")
+                       Uri home = new Uri(AuthController.AppHome);
+                       builder.WithOrigins($"{home.Scheme}://{home.Host}", $"{home.Scheme}://{home.Host}:{home.Port}")
                        .AllowAnyHeader()
                        .AllowAnyMethod()
                        .AllowCredentials();
@@ -170,11 +149,77 @@ namespace dotnetauth
             }
         }
 
+        public class AutoRenewJwt
+        {
+            private readonly RequestDelegate Next;
+            private readonly Graph Graph;
+
+            public AutoRenewJwt(RequestDelegate next, Graph graph)
+            {
+                this.Next = next;
+                this.Graph = graph;
+            }
+
+            public async Task Invoke(HttpContext context)
+            {
+
+                // see if the JWT is provided
+                var header = context.Request.Headers["Authorization"];
+                if (header.Count() > 0)
+                {
+                    var token = header.First().Replace("Bearer ", "");
+
+                    // see if the JWT is expired
+                    var handler = new JwtSecurityTokenHandler();
+                    var original = handler.ReadJwtToken(token);
+                    if (DateTime.UtcNow >= original.Payload.ValidTo.ToUniversalTime())
+                    {
+
+                        // see if the user is still valid
+                        var oid = original.Claims.FirstOrDefault(claim => claim.Type == "oid");
+                        if (oid != null)
+                        {
+                            Console.WriteLine("oid = " + oid.Value);
+                            bool isEnabled = await Graph.IsUserEnabled(oid.Value);
+                            if (isEnabled)
+                            {
+
+                                // reissue the token
+                                string reissued = AuthController.ReissueToken(original);
+                                context.Response.Cookies.Append("user", reissued, new CookieOptions()
+                                {
+                                    HttpOnly = true,
+                                    Secure = true,
+                                    Domain = AuthController.BaseDomain,
+                                    Path = "/"
+                                });
+
+                                // replace the header
+                                context.Request.Headers.Remove("Authorization");
+                                context.Request.Headers.Append("Authorization", $"Bearer {reissued}");
+
+                            }
+                        }
+                    }
+                }
+
+                // next
+                await Next.Invoke(context);
+
+            }
+        }
+
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)
         {
             app.UseCors("apphome");
             app.UseMiddleware<JwtCookieToHeader>();
+            if (AllowAutoRenew)
+            {
+                var graph = new Graph();
+                graph.Start();
+                app.UseMiddleware<AutoRenewJwt>(graph);
+            }
             app.UseAuthentication();
             app.UseMvc();
         }

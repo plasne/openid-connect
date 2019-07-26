@@ -28,12 +28,12 @@ namespace authentication.Controllers
         public AuthController()
         {
             DotEnv.Config(false);
-            ConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>($"{this.Authority}/.well-known/openid-configuration", new OpenIdConnectConfigurationRetriever());
+            ConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>($"{Authority}/.well-known/openid-configuration", new OpenIdConnectConfigurationRetriever());
         }
 
         private ConfigurationManager<OpenIdConnectConfiguration> ConfigManager { get; }
 
-        private string Authority
+        public static string Authority
         {
             get
             {
@@ -41,7 +41,7 @@ namespace authentication.Controllers
             }
         }
 
-        private string ClientId
+        public static string ClientId
         {
             get
             {
@@ -49,7 +49,7 @@ namespace authentication.Controllers
             }
         }
 
-        private string ClientSecret
+        public static string ClientSecret
         {
             get
             {
@@ -57,7 +57,7 @@ namespace authentication.Controllers
             }
         }
 
-        private string RedirectUri
+        public static string RedirectUri
         {
             get
             {
@@ -65,7 +65,7 @@ namespace authentication.Controllers
             }
         }
 
-        private string SigningKey
+        public static string SigningKey
         {
             get
             {
@@ -73,7 +73,7 @@ namespace authentication.Controllers
             }
         }
 
-        private string Issuer
+        public static string Issuer
         {
             get
             {
@@ -81,7 +81,7 @@ namespace authentication.Controllers
             }
         }
 
-        private string Audience
+        public static string Audience
         {
             get
             {
@@ -89,7 +89,7 @@ namespace authentication.Controllers
             }
         }
 
-        private string AppHome
+        public static string AppHome
         {
             get
             {
@@ -97,11 +97,28 @@ namespace authentication.Controllers
             }
         }
 
-        private bool Secure
+        public static string BaseDomain
         {
             get
             {
-                return (String.Compare(System.Environment.GetEnvironmentVariable("SECURE"), "false", true) != 0);
+                return System.Environment.GetEnvironmentVariable("BASE_DOMAIN");
+            }
+        }
+
+        public static int JwtDuration
+        {
+            get
+            {
+                string duration = System.Environment.GetEnvironmentVariable("JWT_DURATION");
+                int result;
+                if (int.TryParse(duration, out result))
+                {
+                    return result;
+                }
+                else
+                {
+                    return 60 * 4; // 4 hours
+                }
             }
         }
 
@@ -130,16 +147,16 @@ namespace authentication.Controllers
         {
 
             // get the necessary variables
-            string authority = this.Authority;
-            string clientId = WebUtility.UrlEncode(this.ClientId);
-            string redirectUri = WebUtility.UrlEncode(this.RedirectUri);
+            string authority = Authority;
+            string clientId = WebUtility.UrlEncode(ClientId);
+            string redirectUri = WebUtility.UrlEncode(RedirectUri);
             string scope = WebUtility.UrlEncode("openid https://graph.microsoft.com/user.read"); // space sep
             string response_type = WebUtility.UrlEncode("id_token code");
 
             // generate state and nonce
             AuthFlow flow = new AuthFlow()
             {
-                redirecturi = (string.IsNullOrEmpty(redirecturi)) ? this.AppHome : redirecturi,
+                redirecturi = (string.IsNullOrEmpty(redirecturi)) ? AppHome : redirecturi,
                 state = this.GenerateSafeRandomString(16),
                 nonce = this.GenerateSafeRandomString(16)
             };
@@ -150,7 +167,7 @@ namespace authentication.Controllers
             {
                 Expires = DateTimeOffset.Now.AddMinutes(10),
                 HttpOnly = true,
-                Secure = this.Secure,
+                Secure = true,
                 SameSite = SameSiteMode.None
             });
 
@@ -173,9 +190,9 @@ namespace authentication.Controllers
                 RequireExpirationTime = true,
                 RequireSignedTokens = true,
                 ValidateIssuer = true,
-                ValidIssuer = $"{this.Authority}/v2.0",
+                ValidIssuer = $"{Authority}/v2.0",
                 ValidateAudience = true,
-                ValidAudience = this.ClientId,
+                ValidAudience = ClientId,
                 ValidateLifetime = true,
                 IssuerSigningKeys = config.SigningKeys
             };
@@ -217,17 +234,17 @@ namespace authentication.Controllers
         {
 
             // build the URL
-            string url = $"{this.Authority}/oauth2/v2.0/token";
+            string url = $"{Authority}/oauth2/v2.0/token";
 
             // get the response
             using (WebClient client = new WebClient())
             {
                 NameValueCollection data = new NameValueCollection();
-                data.Add("client_id", this.ClientId);
-                data.Add("client_secret", this.ClientSecret);
+                data.Add("client_id", ClientId);
+                data.Add("client_secret", ClientSecret);
                 data.Add("scope", scope);
                 data.Add("code", code);
-                data.Add("redirect_uri", this.RedirectUri);
+                data.Add("redirect_uri", RedirectUri);
                 data.Add("grant_type", "authorization_code");
                 byte[] response = client.UploadValues(url, data);
                 string result = System.Text.Encoding.UTF8.GetString(response);
@@ -236,14 +253,6 @@ namespace authentication.Controllers
                 return json.access_token;
             }
 
-        }
-
-        private static string GetBaseDomain(Uri uri)
-        {
-            var host = uri.Host;
-            var parts = host.Split(".");
-            if (parts.Length < 2) return host;
-            return $"{parts[parts.Length - 2]}.{parts[parts.Length - 1]}";
         }
 
         [AllowAnonymous]
@@ -278,9 +287,8 @@ namespace authentication.Controllers
                 string xsrf = this.GenerateSafeRandomString(16);
                 Response.Cookies.Append("XSRF-TOKEN", xsrf, new CookieOptions()
                 {
-                    Expires = DateTimeOffset.Now.AddHours(4),
-                    Secure = this.Secure,
-                    Domain = GetBaseDomain(new Uri(this.AppHome)),
+                    Secure = true,
+                    Domain = BaseDomain,
                     Path = "/"
                 });
 
@@ -291,29 +299,13 @@ namespace authentication.Controllers
                 claims.Add(new Claim("xsrf", xsrf));
                 claims.Add(new Claim("roles", "user"));
 
-                // sign the token
-                var key = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(this.SigningKey));
-                var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-                // generate the token
-                var jwt = new JwtSecurityToken(
-                    issuer: this.Issuer,
-                    audience: this.Audience,
-                    claims: claims,
-                    expires: DateTime.Now.AddHours(4),
-                    signingCredentials: creds);
-
-                // write to string
-                JwtSecurityTokenHandler handler = new JwtSecurityTokenHandler();
-                string jwt_s = handler.WriteToken(jwt);
-
-                // write the identity to a cookie
-                Response.Cookies.Append("user", jwt_s, new CookieOptions()
+                // issue the token
+                string jwt = IssueToken(claims);
+                Response.Cookies.Append("user", jwt, new CookieOptions()
                 {
-                    Expires = DateTimeOffset.Now.AddHours(4),
                     HttpOnly = true,
-                    Secure = this.Secure,
-                    Domain = GetBaseDomain(new Uri(this.AppHome)),
+                    Secure = true,
+                    Domain = BaseDomain,
                     Path = "/"
                 });
 
@@ -343,6 +335,46 @@ namespace authentication.Controllers
         public ActionResult<string> Version()
         {
             return "v1.3.0";
+        }
+
+        private static string IssueToken(IEnumerable<Claim> claims)
+        {
+
+            // sign the token
+            var key = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(SigningKey));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            // generate the token
+            var jwt = new JwtSecurityToken(
+                issuer: Issuer,
+                audience: Audience,
+                claims: claims,
+                expires: DateTime.UtcNow.AddMinutes(JwtDuration),
+                signingCredentials: creds);
+
+            // serialize
+            JwtSecurityTokenHandler handler = new JwtSecurityTokenHandler();
+            return handler.WriteToken(jwt);
+
+        }
+
+        public static string ReissueToken(JwtSecurityToken original)
+        {
+
+            // sign the token
+            var key = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(SigningKey));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            // generate the token
+            var jwt = new JwtSecurityToken(
+                claims: original.Payload.Claims,
+                expires: DateTime.UtcNow.AddMinutes(JwtDuration),
+                signingCredentials: creds);
+
+            // serialize
+            JwtSecurityTokenHandler handler = new JwtSecurityTokenHandler();
+            return handler.WriteToken(jwt);
+
         }
 
     }
