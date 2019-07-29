@@ -1,9 +1,9 @@
 using System;
-using System.Linq;
 using Microsoft.Identity.Client;
 using dotenv.net;
-using Microsoft.Graph;
 using System.Threading.Tasks;
+using System.Net;
+using Newtonsoft.Json.Linq;
 
 public class Graph
 {
@@ -15,73 +15,66 @@ public class Graph
 
     private IConfidentialClientApplication App { get; set; }
 
-    private string ClientId
+    private async Task<bool> IsUserEnabled(string userId, string token)
     {
-        get
+        return await Task.Run(() =>
         {
-            return System.Environment.GetEnvironmentVariable("CLIENT_ID");
-        }
+            using (var client = new WebClient())
+            {
+                client.Headers.Add("Authorization", $"Bearer {token}");
+                string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{userId}?$select=accountEnabled"));
+                dynamic json = JObject.Parse(raw);
+                return (bool)json.accountEnabled;
+            }
+        });
     }
 
-    private string ClientSecret
+    private async Task<bool> IsUserAuthorizedForApp(string userId, string token)
     {
-        get
+        return await Task.Run(() =>
         {
-            return System.Environment.GetEnvironmentVariable("CLIENT_SECRET");
-        }
+            using (var client = new WebClient())
+            {
+                client.Headers.Add("Authorization", $"Bearer {token}");
+                string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{userId}/appRoleAssignments"));
+                dynamic json = JObject.Parse(raw);
+                var values = (JArray)json.value;
+                string enterpriseAppId = authentication.Controllers.AuthController.EnterpriseAppId;
+                foreach (dynamic value in values)
+                {
+                    var resourceId = (string)value.resourceId;
+                    if (resourceId == enterpriseAppId) return true;
+                }
+            }
+            return false;
+        });
     }
 
-    private string TenantId
-    {
-        get
-        {
-            return System.Environment.GetEnvironmentVariable("TENANT_ID");
-        }
-    }
-
-    public async Task<bool> IsUserEnabled(string id)
+    public async Task<bool> IsUserEnabledAndAuthorized(string userId)
     {
 
         // get the token
         string[] scopes = new string[] { "offline_access https://graph.microsoft.com/.default" };
         AuthenticationResult result = await this.App.AcquireTokenForClient(scopes).ExecuteAsync();
 
-        // get a graph client
-        var graphServiceClient = new GraphServiceClient(new DelegateAuthenticationProvider((requestMessage) =>
-                   {
-                       requestMessage
-                           .Headers
-                           .Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("bearer", result.AccessToken);
-                       return Task.FromResult(0);
-                   }));
+        // check all user requirements
+        var t1 = IsUserEnabled(userId, result.AccessToken);
+        var t2 = IsUserAuthorizedForApp(userId, result.AccessToken);
+        await Task.WhenAll(t1, t2);
+        Console.WriteLine($"user: {userId}, isEnabled? {t1.Result}, isAuthorized? {t2.Result}");
 
-        // query for the specified user
-        var users = await graphServiceClient
-        .Users
-        .Request()
-        .Filter($"id eq '{id}'")
-        .Select("displayName, accountEnabled")
-        .GetAsync();
-
-        foreach (var user in users)
-        {
-            Console.WriteLine($" user: {user.DisplayName} , enabled: {user.AccountEnabled}");
-        }
-
-        // return the appropiate value
-        if (users.Count != 1) return false;
-        return (bool)users.FirstOrDefault().AccountEnabled;
-
+        return (t1.Result && t2.Result);
     }
 
     public void Start()
     {
 
         // build the app
-        this.App = ConfidentialClientApplicationBuilder.Create(this.ClientId)
-                   .WithTenantId(this.TenantId)
-                   .WithClientSecret(this.ClientSecret)
-                   .Build();
+        this.App = ConfidentialClientApplicationBuilder
+            .Create(authentication.Controllers.AuthController.ClientId)
+            .WithTenantId(authentication.Controllers.AuthController.TenantId)
+            .WithClientSecret(authentication.Controllers.AuthController.ClientSecret)
+            .Build();
 
     }
 

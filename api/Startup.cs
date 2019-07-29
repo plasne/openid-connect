@@ -131,16 +131,25 @@ namespace dotnetauth
 
             public async Task Invoke(HttpContext context)
             {
-
-                // remove any existing authorization header
-                //  note: this ensures someone cannot send something with a madeup xsrf claim
-                context.Request.Headers.Remove("Authorization");
-
-                // add the authorization header from the user HttpOnly cookie
-                string cookie = context.Request.Cookies["user"];
-                if (!string.IsNullOrEmpty(cookie))
+                try
                 {
-                    context.Request.Headers.Append("Authorization", "Bearer " + cookie);
+
+                    // remove any existing authorization header
+                    //  note: this ensures someone cannot send something with a madeup xsrf claim
+                    context.Request.Headers.Remove("Authorization");
+
+                    // add the authorization header from the user HttpOnly cookie
+                    string cookie = context.Request.Cookies["user"];
+                    if (!string.IsNullOrEmpty(cookie))
+                    {
+                        context.Request.Headers.Append("Authorization", "Bearer " + cookie);
+                    }
+
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("exception in AutoRenewJwt...");
+                    Console.WriteLine(e.Message);
                 }
 
                 // next
@@ -162,45 +171,54 @@ namespace dotnetauth
 
             public async Task Invoke(HttpContext context)
             {
-
-                // see if the JWT is provided
-                var header = context.Request.Headers["Authorization"];
-                if (header.Count() > 0)
+                try
                 {
-                    var token = header.First().Replace("Bearer ", "");
 
-                    // see if the JWT is expired
-                    var handler = new JwtSecurityTokenHandler();
-                    var original = handler.ReadJwtToken(token);
-                    if (DateTime.UtcNow >= original.Payload.ValidTo.ToUniversalTime())
+                    // see if the JWT is provided
+                    var header = context.Request.Headers["Authorization"];
+                    if (header.Count() > 0)
                     {
+                        var token = header.First().Replace("Bearer ", "");
 
-                        // see if the user is still valid
-                        var oid = original.Claims.FirstOrDefault(claim => claim.Type == "oid");
-                        if (oid != null)
+                        // see if the JWT is expired
+                        var handler = new JwtSecurityTokenHandler();
+                        var original = handler.ReadJwtToken(token);
+                        if (DateTime.UtcNow >= original.Payload.ValidTo.ToUniversalTime())
                         {
-                            Console.WriteLine("oid = " + oid.Value);
-                            bool isEnabled = await Graph.IsUserEnabled(oid.Value);
-                            if (isEnabled)
+
+                            // see if the user is still valid
+                            var oid = original.Claims.FirstOrDefault(claim => claim.Type == "oid");
+                            if (oid != null)
                             {
-
-                                // reissue the token
-                                string reissued = AuthController.ReissueToken(original);
-                                context.Response.Cookies.Append("user", reissued, new CookieOptions()
+                                Console.WriteLine("oid = " + oid.Value);
+                                bool isAllowedToRenew = await Graph.IsUserEnabledAndAuthorized(oid.Value);
+                                if (isAllowedToRenew)
                                 {
-                                    HttpOnly = true,
-                                    Secure = true,
-                                    Domain = AuthController.BaseDomain,
-                                    Path = "/"
-                                });
 
-                                // replace the header
-                                context.Request.Headers.Remove("Authorization");
-                                context.Request.Headers.Append("Authorization", $"Bearer {reissued}");
+                                    // reissue the token
+                                    string reissued = AuthController.ReissueToken(original);
+                                    context.Response.Cookies.Append("user", reissued, new CookieOptions()
+                                    {
+                                        HttpOnly = true,
+                                        Secure = true,
+                                        Domain = AuthController.BaseDomain,
+                                        Path = "/"
+                                    });
 
+                                    // replace the header
+                                    context.Request.Headers.Remove("Authorization");
+                                    context.Request.Headers.Append("Authorization", $"Bearer {reissued}");
+
+                                }
                             }
                         }
                     }
+
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("exception in AutoRenewJwt...");
+                    Console.WriteLine(e.Message);
                 }
 
                 // next

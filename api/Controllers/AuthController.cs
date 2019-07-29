@@ -105,6 +105,22 @@ namespace authentication.Controllers
             }
         }
 
+        public static string TenantId
+        {
+            get
+            {
+                return System.Environment.GetEnvironmentVariable("TENANT_ID");
+            }
+        }
+
+        public static string EnterpriseAppId
+        {
+            get
+            {
+                return System.Environment.GetEnvironmentVariable("ENTERPRISE_APP_ID");
+            }
+        }
+
         public static int JwtDuration
         {
             get
@@ -177,7 +193,7 @@ namespace authentication.Controllers
             return Redirect(url);
         }
 
-        private async Task VerifyToken(string token, string nonce)
+        private async Task VerifyIdToken(string token, string nonce)
         {
 
             // get configuration info from OpenID Connect endpoint
@@ -269,7 +285,7 @@ namespace authentication.Controllers
 
                 // verify the id token
                 string id = Request.Form["id_token"];
-                await VerifyToken(id, flow.nonce);
+                await VerifyIdToken(id, flow.nonce);
 
                 // NOTE: this particular workflow isn't a realistic one (the data being read from the graph is info we already have
                 //   in the id_token), but just showcases how to authenticate, collect info about the user from various sources, and
