@@ -78,22 +78,31 @@ namespace dotnetauth
         public void ConfigureServices(IServiceCollection services)
         {
 
-            // setup JWT Bearer Auth
+            // add both an issuer and validator if this auth is for the same service
+            services.AddSingleton<TokenIssuer>(new TokenIssuer());
+            var validator = new TokenValidator();
+            services.AddSingleton<TokenValidator>(validator);
+
+            // setup authentication
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
+                        RequireAudience = true,
+                        RequireExpirationTime = true,
+                        RequireSignedTokens = true,
                         ValidateIssuer = true,
                         ValidateAudience = true,
                         ValidateLifetime = true,
                         ValidateIssuerSigningKey = true,
-                        ValidIssuer = AuthController.Issuer,
-                        ValidAudience = AuthController.Audience,
-                        IssuerSigningKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(AuthController.SigningKey))
+                        ValidIssuer = TokenValidator.Issuer,
+                        ValidAudience = TokenValidator.Audience,
+                        IssuerSigningKey = validator.ValidationKey
                     };
                 });
 
+            // setup authorization
             services.AddSingleton<IAuthorizationHandler, XsrfHandler>();
             services.AddAuthorization(options =>
             {
@@ -104,12 +113,13 @@ namespace dotnetauth
                 options.DefaultPolicy = options.GetPolicy("XSRF");
             });
 
+            // setup CORS policy
             services.AddCors(options =>
                {
                    options.AddPolicy("apphome",
                    builder =>
                    {
-                       Uri home = new Uri(AuthController.AppHome);
+                       Uri home = new Uri(TokenValidator.AppHome);
                        builder.WithOrigins($"{home.Scheme}://{home.Host}", $"{home.Scheme}://{home.Host}:{home.Port}")
                        .AllowAnyHeader()
                        .AllowAnyMethod()
@@ -117,7 +127,9 @@ namespace dotnetauth
                    });
                });
 
+            // setup MVC
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
+
         }
 
         public class JwtCookieToHeader
@@ -161,12 +173,14 @@ namespace dotnetauth
         public class AutoRenewJwt
         {
             private readonly RequestDelegate Next;
-            private readonly Graph Graph;
+            private readonly TokenValidator TokenValidator;
+            private readonly TokenIssuer TokenIssuer;
 
-            public AutoRenewJwt(RequestDelegate next, Graph graph)
+            public AutoRenewJwt(RequestDelegate next, TokenValidator tokenValidator, TokenIssuer tokenIssuer)
             {
                 this.Next = next;
-                this.Graph = graph;
+                this.TokenValidator = tokenValidator;
+                this.TokenIssuer = tokenIssuer;
             }
 
             public async Task Invoke(HttpContext context)
@@ -180,38 +194,39 @@ namespace dotnetauth
                     {
                         var token = header.First().Replace("Bearer ", "");
 
-                        // see if the JWT is expired
-                        var handler = new JwtSecurityTokenHandler();
-                        var original = handler.ReadJwtToken(token);
-                        if (DateTime.UtcNow >= original.Payload.ValidTo.ToUniversalTime())
+                        // see if the token has expired
+                        if (TokenValidator.IsTokenExpired(token))
                         {
+                            Console.WriteLine("token is expired");
 
-                            // see if the user is still valid
-                            var oid = original.Claims.FirstOrDefault(claim => claim.Type == "oid");
-                            if (oid != null)
+                            // see if it is eligible for renewal
+                            try
                             {
-                                Console.WriteLine("oid = " + oid.Value);
-                                bool isAllowedToRenew = await Graph.IsUserEnabledAndAuthorized(oid.Value);
-                                if (isAllowedToRenew)
+                                var reissued = await TokenIssuer.ReissueToken(token);
+                                Console.WriteLine("token is reissued");
+
+                                // rewrite the cookie
+                                context.Response.Cookies.Append("user", reissued, new CookieOptions()
                                 {
+                                    HttpOnly = true,
+                                    Secure = true,
+                                    Domain = TokenValidator.BaseDomain,
+                                    Path = "/"
+                                });
 
-                                    // reissue the token
-                                    string reissued = AuthController.ReissueToken(original);
-                                    context.Response.Cookies.Append("user", reissued, new CookieOptions()
-                                    {
-                                        HttpOnly = true,
-                                        Secure = true,
-                                        Domain = AuthController.BaseDomain,
-                                        Path = "/"
-                                    });
+                                // rewrite the header
+                                context.Request.Headers.Remove("Authorization");
+                                context.Request.Headers.Append("Authorization", $"Bearer {reissued}");
 
-                                    // replace the header
-                                    context.Request.Headers.Remove("Authorization");
-                                    context.Request.Headers.Append("Authorization", $"Bearer {reissued}");
-
-                                }
                             }
+                            catch (Exception e)
+                            {
+                                Console.WriteLine(e.Message);
+                                if (e.InnerException != null) Console.WriteLine(e.InnerException.Message);
+                            }
+
                         }
+
                     }
 
                 }
@@ -232,12 +247,7 @@ namespace dotnetauth
         {
             app.UseCors("apphome");
             app.UseMiddleware<JwtCookieToHeader>();
-            if (AllowAutoRenew)
-            {
-                var graph = new Graph();
-                graph.Start();
-                app.UseMiddleware<AutoRenewJwt>(graph);
-            }
+            if (AllowAutoRenew) app.UseMiddleware<AutoRenewJwt>();
             app.UseAuthentication();
             app.UseMvc();
         }
