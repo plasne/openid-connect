@@ -11,8 +11,25 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 
-public class TokenIssuer : TokenBase
+public class TokenIssuer
 {
+
+    public TokenIssuer()
+    {
+
+        // get the configuration
+        DotEnv.Config(false);
+
+        // create a builder to get permissions
+        this.App = ConfidentialClientApplicationBuilder
+            .Create(ClientId)
+            .WithTenantId(TenantId)
+            .WithClientSecret(ClientSecret)
+            .Build();
+
+    }
+
+    private IConfidentialClientApplication App { get; set; }
 
     public static string Authority
     {
@@ -46,11 +63,11 @@ public class TokenIssuer : TokenBase
         }
     }
 
-    public static string AppHome
+    public static string DefaultRedirectUrl
     {
         get
         {
-            return System.Environment.GetEnvironmentVariable("APP_HOME");
+            return System.Environment.GetEnvironmentVariable("DEFAULT_REDIRECT_URL");
         }
     }
 
@@ -62,14 +79,24 @@ public class TokenIssuer : TokenBase
         }
     }
 
-    public static IEnumerable<string> ApplicationIds
+    public static string[] AllowedOrigins
+    {
+        get
+        {
+            string origins = System.Environment.GetEnvironmentVariable("ALLOWED_ORIGINS");
+            if (string.IsNullOrEmpty(origins)) return new string[] { };
+            return origins.Split(',').Select(id => id.Trim()).ToArray();
+        }
+    }
+
+    public static string[] ApplicationIds
     {
         get
         {
             // used for determining roles
             string appId = System.Environment.GetEnvironmentVariable("APPLICATION_ID");
             if (string.IsNullOrEmpty(appId)) return new string[] { };
-            return appId.Split(',').Select(id => id.Trim());
+            return appId.Split(',').Select(id => id.Trim()).ToArray();
         }
     }
 
@@ -78,6 +105,30 @@ public class TokenIssuer : TokenBase
         get
         {
             return System.Environment.GetEnvironmentVariable("DOMAIN_HINT");
+        }
+    }
+
+    public static string ClientId
+    {
+        get
+        {
+            return System.Environment.GetEnvironmentVariable("CLIENT_ID");
+        }
+    }
+
+    public static string ClientSecret
+    {
+        get
+        {
+            return System.Environment.GetEnvironmentVariable("CLIENT_SECRET");
+        }
+    }
+
+    public static string TenantId
+    {
+        get
+        {
+            return System.Environment.GetEnvironmentVariable("TENANT_ID");
         }
     }
 
@@ -118,6 +169,30 @@ public class TokenIssuer : TokenBase
         }
     }
 
+    public static string KeyVaultPrivateKeyUrl
+    {
+        get
+        {
+            return System.Environment.GetEnvironmentVariable("KEYVAULT_PRIVATE_KEY_URL");
+        }
+    }
+
+    public static string KeyVaultPrivateKeyPasswordUrl
+    {
+        get
+        {
+            return System.Environment.GetEnvironmentVariable("KEYVAULT_PRIVATE_KEY_PASSWORD_URL");
+        }
+    }
+
+    public static string KeyVaultPublicCertUrl
+    {
+        get
+        {
+            return System.Environment.GetEnvironmentVariable("KEYVAULT_PUBLIC_CERT_URL");
+        }
+    }
+
     private X509SigningCredentials _signingCredentials;
 
     private X509SigningCredentials SigningCredentials
@@ -133,19 +208,86 @@ public class TokenIssuer : TokenBase
                 acquire.Wait();
                 string token = acquire.Result.AccessToken;
 
-                // get the certificate
+                // get the password
+                string pw;
                 using (var client = new WebClient())
                 {
                     client.Headers.Add("Authorization", $"Bearer {token}");
-                    string raw = client.DownloadString(new Uri($"https://researchandengineering.vault.azure.net/secrets/AUTH-PFX?api-version=7.0"));
+                    string raw = client.DownloadString(new Uri($"{KeyVaultPrivateKeyPasswordUrl}?api-version=7.0"));
+                    dynamic json = JObject.Parse(raw);
+                    pw = (string)json.value;
+                }
+
+                // get the private key
+                using (var client = new WebClient())
+                {
+                    client.Headers.Add("Authorization", $"Bearer {token}");
+                    string raw = client.DownloadString(new Uri($"{KeyVaultPrivateKeyUrl}?api-version=7.0"));
                     dynamic json = JObject.Parse(raw);
                     var bytes = Convert.FromBase64String((string)json.value);
-                    var certificate = new X509Certificate2(bytes, "123");
+                    var certificate = new X509Certificate2(bytes, pw);
                     _signingCredentials = new X509SigningCredentials(certificate, SecurityAlgorithms.RsaSha256);
                 }
 
             }
             return _signingCredentials;
+        }
+    }
+
+    private string _validationCertificate;
+
+    public string ValidationCertificate
+    {
+        get
+        {
+            if (_validationCertificate == null)
+            {
+
+                // get an access token
+                string[] scopes = new string[] { "offline_access https://vault.azure.net/.default" };
+                var acquire = this.App.AcquireTokenForClient(scopes).ExecuteAsync();
+                acquire.Wait();
+                string token = acquire.Result.AccessToken;
+
+                // get the certificate
+                using (var client = new WebClient())
+                {
+                    client.Headers.Add("Authorization", $"Bearer {token}");
+                    string raw = client.DownloadString(new Uri($"{KeyVaultPublicCertUrl}?api-version=7.0"));
+                    dynamic json = JObject.Parse(raw);
+                    _validationCertificate = (string)json.value;
+                }
+
+            }
+            return _validationCertificate;
+        }
+    }
+
+    private static byte[] GetBytesFromPEM(string pemString, string section = "CERTIFICATE")
+    {
+        var header = String.Format("-----BEGIN {0}-----", section);
+        var footer = String.Format("-----END {0}-----", section);
+        var start = pemString.IndexOf(header, StringComparison.Ordinal);
+        if (start < 0) return null;
+        start += header.Length;
+        var end = pemString.IndexOf(footer, start, StringComparison.Ordinal) - start;
+        if (end < 0) return null;
+        return Convert.FromBase64String(pemString.Substring(start, end));
+    }
+
+    private X509SecurityKey _validationKey;
+
+    public X509SecurityKey ValidationKey
+    {
+        get
+        {
+            if (_validationKey == null)
+            {
+                byte[] bytes = GetBytesFromPEM(ValidationCertificate, "CERTIFICATE");
+                var certificate = new X509Certificate2(bytes);
+                _validationKey = new X509SecurityKey(certificate);
+            }
+            return _validationKey;
         }
     }
 
@@ -173,14 +315,6 @@ public class TokenIssuer : TokenBase
         }
 
     }
-
-    /*
-    public async Task<bool> IsUserAuthorizedForApp(string userId, string appId)
-    {
-        List<string> assignments = await GetRoleAssignments(userId, appId);
-        return (assignments.Count > 0);
-    }
-     */
 
     public class RoleAssignments
     {
@@ -320,7 +454,6 @@ public class TokenIssuer : TokenBase
         {
             handler.ValidateToken(token, new TokenValidationParameters
             {
-                RequireAudience = true,
                 RequireExpirationTime = true,
                 RequireSignedTokens = true,
                 ValidateIssuer = true,

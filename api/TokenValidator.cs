@@ -1,12 +1,23 @@
 using System;
 using System.Linq;
-using Microsoft.Identity.Client;
 using dotenv.net;
-using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+using System.Collections.Specialized;
+using System.Text;
 
-public class TokenValidator : TokenBase
+public class TokenValidator
 {
+
+    public TokenValidator()
+    {
+
+        // get the configuration
+        DotEnv.Config(false);
+
+    }
 
     public static string Issuer
     {
@@ -24,14 +35,6 @@ public class TokenValidator : TokenBase
         }
     }
 
-    public static string AppHome
-    {
-        get
-        {
-            return System.Environment.GetEnvironmentVariable("APP_HOME");
-        }
-    }
-
     public static string BaseDomain
     {
         get
@@ -40,7 +43,68 @@ public class TokenValidator : TokenBase
         }
     }
 
-    public bool IsTokenExpired(string token)
+    public static string PublicCertificateUrl
+    {
+        get
+        {
+            return System.Environment.GetEnvironmentVariable("PUBLIC_CERTIFICATE_URL");
+        }
+    }
+
+    public static string ReissueUrl
+    {
+        get
+        {
+            return System.Environment.GetEnvironmentVariable("REISSUE_URL");
+        }
+    }
+
+    public static string[] AllowedOrigins
+    {
+        get
+        {
+            string origins = System.Environment.GetEnvironmentVariable("ALLOWED_ORIGINS");
+            if (string.IsNullOrEmpty(origins)) return new string[] { };
+            return origins.Split(',').Select(id => id.Trim()).ToArray();
+        }
+    }
+
+    private X509SecurityKey _validationKey;
+
+    public X509SecurityKey ValidationKey
+    {
+        get
+        {
+            if (_validationKey == null)
+            {
+
+                // get the certificate
+                using (var client = new WebClient())
+                {
+                    string raw = client.DownloadString(new Uri(PublicCertificateUrl));
+                    byte[] bytes = GetBytesFromPEM(raw, "CERTIFICATE");
+                    var certificate = new X509Certificate2(bytes);
+                    _validationKey = new X509SecurityKey(certificate);
+                }
+
+            }
+            return _validationKey;
+        }
+    }
+
+    private static byte[] GetBytesFromPEM(string pemString, string section = "CERTIFICATE")
+    {
+        var header = String.Format("-----BEGIN {0}-----", section);
+        var footer = String.Format("-----END {0}-----", section);
+        var start = pemString.IndexOf(header, StringComparison.Ordinal);
+        if (start < 0) return null;
+        start += header.Length;
+        var end = pemString.IndexOf(footer, start, StringComparison.Ordinal) - start;
+        if (end < 0) return null;
+        return Convert.FromBase64String(pemString.Substring(start, end));
+    }
+
+    public static bool IsTokenExpired(string token)
     {
 
         // read the token
@@ -49,6 +113,18 @@ public class TokenValidator : TokenBase
 
         return (DateTime.UtcNow > jwt.Payload.ValidTo.ToUniversalTime());
 
+    }
+
+    public static string ReissueToken(string token)
+    {
+        using (var client = new WebClient())
+        {
+            NameValueCollection data = new NameValueCollection();
+            data.Add("token", token);
+            byte[] response = client.UploadValues(ReissueUrl, data);
+            string reissued = Encoding.UTF8.GetString(response);
+            return reissued;
+        }
     }
 
 }

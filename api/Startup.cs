@@ -14,7 +14,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Linq;
 using dotenv.net;
-using authentication.Controllers;
 
 namespace dotnetauth
 {
@@ -78,8 +77,7 @@ namespace dotnetauth
         public void ConfigureServices(IServiceCollection services)
         {
 
-            // add both an issuer and validator if this auth is for the same service
-            services.AddSingleton<TokenIssuer>(new TokenIssuer());
+            // add the validator service
             var validator = new TokenValidator();
             services.AddSingleton<TokenValidator>(validator);
 
@@ -89,7 +87,6 @@ namespace dotnetauth
                 {
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
-                        RequireAudience = true,
                         RequireExpirationTime = true,
                         RequireSignedTokens = true,
                         ValidateIssuer = true,
@@ -119,8 +116,7 @@ namespace dotnetauth
                    options.AddPolicy("apphome",
                    builder =>
                    {
-                       Uri home = new Uri(TokenValidator.AppHome);
-                       builder.WithOrigins($"{home.Scheme}://{home.Host}", $"{home.Scheme}://{home.Host}:{home.Port}")
+                       builder.WithOrigins(TokenValidator.AllowedOrigins)
                        .AllowAnyHeader()
                        .AllowAnyMethod()
                        .AllowCredentials();
@@ -160,8 +156,9 @@ namespace dotnetauth
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine("exception in AutoRenewJwt...");
+                    Console.WriteLine("exception in JwtCookieToHeader...");
                     Console.WriteLine(e.Message);
+                    if (e.InnerException != null) Console.WriteLine(e.InnerException.Message);
                 }
 
                 // next
@@ -170,17 +167,13 @@ namespace dotnetauth
             }
         }
 
-        public class AutoRenewJwt
+        public class ReissueToken
         {
             private readonly RequestDelegate Next;
-            private readonly TokenValidator TokenValidator;
-            private readonly TokenIssuer TokenIssuer;
 
-            public AutoRenewJwt(RequestDelegate next, TokenValidator tokenValidator, TokenIssuer tokenIssuer)
+            public ReissueToken(RequestDelegate next)
             {
                 this.Next = next;
-                this.TokenValidator = tokenValidator;
-                this.TokenIssuer = tokenIssuer;
             }
 
             public async Task Invoke(HttpContext context)
@@ -198,33 +191,11 @@ namespace dotnetauth
                         if (TokenValidator.IsTokenExpired(token))
                         {
                             Console.WriteLine("token is expired");
+                            string reissued = TokenValidator.ReissueToken(token);
 
-                            // see if it is eligible for renewal
-                            try
-                            {
-                                var reissued = await TokenIssuer.ReissueToken(token);
-                                Console.WriteLine("token is reissued");
-
-                                // rewrite the cookie
-                                context.Response.Cookies.Append("user", reissued, new CookieOptions()
-                                {
-                                    HttpOnly = true,
-                                    Secure = true,
-                                    Domain = TokenValidator.BaseDomain,
-                                    Path = "/"
-                                });
-
-                                // rewrite the header
-                                context.Request.Headers.Remove("Authorization");
-                                context.Request.Headers.Append("Authorization", $"Bearer {reissued}");
-
-                            }
-                            catch (Exception e)
-                            {
-                                Console.WriteLine(e.Message);
-                                if (e.InnerException != null) Console.WriteLine(e.InnerException.Message);
-                            }
-
+                            // rewrite the header
+                            context.Request.Headers.Remove("Authorization");
+                            context.Request.Headers.Append("Authorization", $"Bearer {reissued}");
                         }
 
                     }
@@ -232,8 +203,9 @@ namespace dotnetauth
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine("exception in AutoRenewJwt...");
+                    Console.WriteLine("exception in ReissueToken...");
                     Console.WriteLine(e.Message);
+                    if (e.InnerException != null) Console.WriteLine(e.InnerException.Message);
                 }
 
                 // next
@@ -242,12 +214,13 @@ namespace dotnetauth
             }
         }
 
+
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)
         {
             app.UseCors("apphome");
             app.UseMiddleware<JwtCookieToHeader>();
-            if (AllowAutoRenew) app.UseMiddleware<AutoRenewJwt>();
+            if (!string.IsNullOrEmpty(TokenValidator.ReissueUrl)) app.UseMiddleware<ReissueToken>();
             app.UseAuthentication();
             app.UseMvc();
         }

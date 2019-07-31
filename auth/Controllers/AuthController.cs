@@ -1,4 +1,3 @@
-
 using System;
 using System.Linq;
 using System.Collections.Generic;
@@ -21,6 +20,7 @@ using System.Security.Cryptography;
 namespace authentication.Controllers
 {
     [Route("api/[controller]")]
+    [AllowAnonymous]
     [ApiController]
     public class AuthController : ControllerBase
     {
@@ -52,7 +52,6 @@ namespace authentication.Controllers
             public string nonce { get; set; }
         }
 
-        [AllowAnonymous]
         [HttpGet, Route("authorize")]
         public ActionResult Authorize(string redirecturi)
         {
@@ -68,7 +67,7 @@ namespace authentication.Controllers
             // generate state and nonce
             AuthFlow flow = new AuthFlow()
             {
-                redirecturi = (string.IsNullOrEmpty(redirecturi)) ? TokenIssuer.AppHome : redirecturi,
+                redirecturi = (string.IsNullOrEmpty(redirecturi)) ? TokenIssuer.DefaultRedirectUrl : redirecturi,
                 state = this.GenerateSafeRandomString(16),
                 nonce = this.GenerateSafeRandomString(16)
             };
@@ -100,7 +99,6 @@ namespace authentication.Controllers
             // define the validation parameters
             var validationParameters = new TokenValidationParameters
             {
-                RequireAudience = true,
                 RequireExpirationTime = true,
                 RequireSignedTokens = true,
                 ValidateIssuer = true,
@@ -149,7 +147,6 @@ namespace authentication.Controllers
 
         }
 
-        [AllowAnonymous]
         [HttpPost, Route("token")]
         public async Task<ActionResult> Token([FromServices] TokenIssuer tokenIssuer)
         {
@@ -210,24 +207,59 @@ namespace authentication.Controllers
             }
         }
 
-        [Authorize]
-        [HttpGet, Route("hello")]
-        public ActionResult<IEnumerable<string>> Hello()
+        [HttpPost, Route("reissue")]
+        public async Task<ActionResult> Reissue([FromForm] string token, [FromServices] TokenIssuer tokenIssuer)
         {
-            List<string> list = new List<string>();
-            var identity = User.Identity as ClaimsIdentity;
-            foreach (var claim in identity.Claims)
+            try
             {
-                list.Add($"{claim.Type}: {claim.Value}");
+
+                // ensure a token was passed
+                if (string.IsNullOrEmpty(token)) throw new Exception("token was not provided for renewal");
+
+                // see if it is eligible for reissue (an exception will be thrown if not)
+                var reissued = await tokenIssuer.ReissueToken(token);
+
+                // rewrite the cookie
+                Response.Cookies.Append("user", reissued, new CookieOptions()
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    Domain = TokenIssuer.BaseDomain,
+                    Path = "/"
+                });
+
+                return Ok(reissued);
             }
-            return Ok(list);
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                if (e.InnerException != null) Console.WriteLine(e.InnerException.Message);
+                return BadRequest(e.Message);
+            }
         }
 
-        [AllowAnonymous]
+        [HttpGet, Route("certificate")]
+        public ActionResult<string> PublicValidationCertificate([FromServices] TokenIssuer tokenIssuer)
+        {
+            return tokenIssuer.ValidationCertificate;
+        }
+
+        [HttpGet, Route("issue")]
+        public async Task<ActionResult<string>> Issue([FromServices] TokenIssuer tokenIssuer)
+        {
+            var claims = new List<Claim>();
+            claims.Add(new Claim("oid", "d5c1d5d5-fa31-4ec3-9ad3-d520b7772ad7"));
+            claims.Add(new Claim("displayName", "Lasne, Peter"));
+            claims.Add(new Claim("uniqueName", "pelasne"));
+            claims.Add(new Claim("email", "pelasne@microsoft.com"));
+            claims.Add(new Claim("xsrf", "secret"));
+            return await tokenIssuer.IssueToken(claims);
+        }
+
         [HttpGet, Route("version")]
         public ActionResult<string> Version()
         {
-            return "v1.3.0";
+            return "v3.0.0";
         }
 
     }

@@ -1,14 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using dotnetauth;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 
-namespace dotnetauth
+namespace auth
 {
     public class Program
     {
@@ -19,8 +13,6 @@ namespace dotnetauth
 
         public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
             WebHost.CreateDefaultBuilder(args)
-                .UseUrls(new string[] { "http://localhost:5000" })
-                .UseUrls("http://localhost:5050")
                 .UseStartup<Startup>();
     }
 }
