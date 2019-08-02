@@ -10,7 +10,6 @@ namespace dotnetauth
 {
     public class Startup
     {
-        private ILoggerFactory LoggerFactory { get; }
 
         public Startup(IConfiguration configuration, ILogger<Startup> logger, ILoggerFactory factory)
         {
@@ -39,6 +38,8 @@ namespace dotnetauth
             logger.LogInformation("Configuration loaded.");
 
         }
+
+        private ILoggerFactory LoggerFactory { get; }
 
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)

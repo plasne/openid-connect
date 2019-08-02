@@ -1,23 +1,22 @@
 using System;
 using System.Linq;
-using dotenv.net;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System.Collections.Specialized;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 public class TokenValidator
 {
 
-    public TokenValidator()
+    public TokenValidator(ILoggerFactory factory)
     {
-
-        // get the configuration
-        DotEnv.Config(false);
-
+        this.Logger = factory.CreateLogger<TokenValidator>();
     }
+
+    private ILogger Logger { get; }
 
     public static string Issuer
     {
@@ -32,14 +31,6 @@ public class TokenValidator
         get
         {
             return System.Environment.GetEnvironmentVariable("AUDIENCE");
-        }
-    }
-
-    public static string BaseDomain
-    {
-        get
-        {
-            return System.Environment.GetEnvironmentVariable("BASE_DOMAIN");
         }
     }
 

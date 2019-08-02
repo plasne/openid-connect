@@ -139,8 +139,7 @@ public class Config
                 {
                     var key = ((string)item.key).Split(":").Last().ToUpper();
                     var val = (string)item.value;
-                    var cur = System.Environment.GetEnvironmentVariable(key);
-                    if (string.IsNullOrEmpty(cur))
+                    if (string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable(key)))
                     {
                         System.Environment.SetEnvironmentVariable(key, val);
                         if (logger != null)
@@ -150,17 +149,6 @@ public class Config
                         else
                         {
                             Console.WriteLine($"config: {key} = \"{val}\"");
-                        }
-                    }
-                    else
-                    {
-                        if (logger != null)
-                        {
-                            logger.LogDebug($"config: [already set] {key} = \"{cur}\"");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"config: [already set] {key} = \"{cur}\"");
                         }
                     }
                 }

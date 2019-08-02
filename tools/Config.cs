@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using dotenv.net;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
@@ -78,8 +77,7 @@ public class Config
     public async static Task Load(ILoggerFactory factory = null)
     {
 
-        // load environment variables
-        DotEnv.Config(throwOnError: false);
+        // check environment variables
         if (string.IsNullOrEmpty("APPCONFIG_ID")) throw new Exception("missing required APPCONFIG_ID");
         if (string.IsNullOrEmpty("APPCONFIG_SECRET")) throw new Exception("missing required APPCONFIG_SECRET");
         if (string.IsNullOrEmpty("CONFIG_KEYS")) throw new Exception("missing required CONFIG_KEYS");
@@ -141,14 +139,29 @@ public class Config
                 {
                     var key = ((string)item.key).Split(":").Last().ToUpper();
                     var val = (string)item.value;
-                    System.Environment.SetEnvironmentVariable(key, val);
-                    if (logger != null)
+                    var cur = System.Environment.GetEnvironmentVariable(key);
+                    if (string.IsNullOrEmpty(cur))
                     {
-                        logger.LogDebug($"config: {key} = \"{val}\"");
+                        System.Environment.SetEnvironmentVariable(key, val);
+                        if (logger != null)
+                        {
+                            logger.LogDebug($"config: {key} = \"{val}\"");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"config: {key} = \"{val}\"");
+                        }
                     }
                     else
                     {
-                        Console.WriteLine($"config: {key} = \"{val}\"");
+                        if (logger != null)
+                        {
+                            logger.LogDebug($"config: [already set] {key} = \"{cur}\"");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"config: [already set] {key} = \"{cur}\"");
+                        }
                     }
                 }
 

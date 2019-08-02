@@ -1,8 +1,5 @@
-
-using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
-using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 
 namespace authentication.Controllers

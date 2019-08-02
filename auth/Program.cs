@@ -1,4 +1,5 @@
 ﻿using System;
+using dotenv.net;
 using dotnetauth;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
@@ -17,7 +18,7 @@ namespace auth
             }
         }
 
-        private static string HOST_URL
+        private static string HostUrl
         {
             get
             {
@@ -27,6 +28,7 @@ namespace auth
 
         public static void Main(string[] args)
         {
+            DotEnv.Config(throwOnError: false);
             CreateWebHostBuilder(args).Build().Run();
         }
 
@@ -47,7 +49,7 @@ namespace auth
                     }
                 })
                 .UseStartup<Startup>();
-            if (!string.IsNullOrEmpty(HOST_URL)) builder.UseUrls(HOST_URL);
+            if (!string.IsNullOrEmpty(HostUrl)) builder.UseUrls(HostUrl);
             return builder;
         }
 

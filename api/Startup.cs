@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Security.Claims;
-using System.IdentityModel.Tokens.Jwt;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -13,19 +12,33 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Linq;
-using dotenv.net;
+using Microsoft.Extensions.Logging;
 
 namespace dotnetauth
 {
     public class Startup
     {
-        public Startup(IConfiguration configuration)
+        public Startup(IConfiguration configuration, ILogger<Startup> logger, ILoggerFactory factory)
         {
-            Configuration = configuration;
-            DotEnv.Config(false);
+
+            // set the logger so it can be used in services
+            this.LoggerFactory = factory;
+
+            // load the configuration
+            logger.LogInformation("Loading configuration...");
+            Config.Load(factory).Wait();
+            Config.Require(new string[] {
+                "ISSUER",
+                "AUDIENCE",
+                "ALLOWED_ORIGINS",
+                "PUBLIC_CERTIFICATE_URL",
+                "REISSUE_URL"  // enable this to support reissuing tokens
+            });
+            logger.LogInformation("Configuration loaded.");
+
         }
 
-        public IConfiguration Configuration { get; }
+        private ILoggerFactory LoggerFactory { get; }
 
         private static bool AllowAutoRenew
         {
@@ -43,6 +56,14 @@ namespace dotnetauth
 
         private class XsrfHandler : AuthorizationHandler<XsrfRequirement>
         {
+
+            public XsrfHandler(ILoggerFactory loggerFactory)
+            {
+                this.Logger = loggerFactory.CreateLogger<XsrfHandler>();
+            }
+
+            private ILogger Logger { get; }
+
             protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, XsrfRequirement requirement)
             {
                 if (context.Resource is AuthorizationFilterContext mvc)
@@ -60,13 +81,13 @@ namespace dotnetauth
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine("authorization failure - " + e.Message);
+                        Logger.LogError(e, "authorization failure");
                         context.Fail();
                     }
                 }
                 else
                 {
-                    Console.WriteLine("authorization failure - context.Resource is not AuthorizationFilterContext");
+                    Logger.LogError("authorization failure - context.Resource is not AuthorizationFilterContext");
                     context.Fail();
                 }
                 return Task.CompletedTask;
@@ -78,7 +99,7 @@ namespace dotnetauth
         {
 
             // add the validator service
-            var validator = new TokenValidator();
+            var validator = new TokenValidator(LoggerFactory);
             services.AddSingleton<TokenValidator>(validator);
 
             // setup authentication
@@ -105,6 +126,8 @@ namespace dotnetauth
             {
                 options.AddPolicy("XSRF", policy =>
                 {
+                    policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                    policy.RequireAuthenticatedUser();
                     policy.Requirements.Add(new XsrfRequirement());
                 });
                 options.DefaultPolicy = options.GetPolicy("XSRF");
@@ -113,7 +136,7 @@ namespace dotnetauth
             // setup CORS policy
             services.AddCors(options =>
                {
-                   options.AddPolicy("apphome",
+                   options.AddPolicy("origins",
                    builder =>
                    {
                        builder.WithOrigins(TokenValidator.AllowedOrigins)
@@ -130,12 +153,15 @@ namespace dotnetauth
 
         public class JwtCookieToHeader
         {
-            private readonly RequestDelegate Next;
 
-            public JwtCookieToHeader(RequestDelegate next)
+            public JwtCookieToHeader(RequestDelegate next, ILoggerFactory loggerFactory)
             {
                 this.Next = next;
+                this.Logger = loggerFactory.CreateLogger<JwtCookieToHeader>();
             }
+
+            private RequestDelegate Next { get; }
+            private ILogger Logger { get; }
 
             public async Task Invoke(HttpContext context)
             {
@@ -156,9 +182,7 @@ namespace dotnetauth
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine("exception in JwtCookieToHeader...");
-                    Console.WriteLine(e.Message);
-                    if (e.InnerException != null) Console.WriteLine(e.InnerException.Message);
+                    Logger.LogError(e, "exception in JwtCookieToHeader");
                 }
 
                 // next
@@ -169,12 +193,15 @@ namespace dotnetauth
 
         public class ReissueToken
         {
-            private readonly RequestDelegate Next;
 
-            public ReissueToken(RequestDelegate next)
+            public ReissueToken(RequestDelegate next, ILoggerFactory loggerFactory)
             {
                 this.Next = next;
+                this.Logger = loggerFactory.CreateLogger<ReissueToken>();
             }
+
+            private RequestDelegate Next { get; }
+            private ILogger Logger { get; }
 
             public async Task Invoke(HttpContext context)
             {
@@ -190,12 +217,24 @@ namespace dotnetauth
                         // see if the token has expired
                         if (TokenValidator.IsTokenExpired(token))
                         {
-                            Console.WriteLine("token is expired");
-                            string reissued = TokenValidator.ReissueToken(token);
 
-                            // rewrite the header
+                            // remove the bad header
                             context.Request.Headers.Remove("Authorization");
-                            context.Request.Headers.Append("Authorization", $"Bearer {reissued}");
+
+                            // attempt to reissue
+                            Logger.LogDebug("attempted to reissue an expired token...");
+                            try
+                            {
+                                string reissued = TokenValidator.ReissueToken(token);
+                                context.Request.Headers.Append("Authorization", $"Bearer {reissued}");
+                                Logger.LogDebug("reissued token successfully");
+                            }
+                            catch (Exception e)
+                            {
+                                context.Response.Cookies.Delete("user");
+                                Logger.LogError(e, "exception reissuing token, revoked user cookie");
+                            }
+
                         }
 
                     }
@@ -203,9 +242,7 @@ namespace dotnetauth
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine("exception in ReissueToken...");
-                    Console.WriteLine(e.Message);
-                    if (e.InnerException != null) Console.WriteLine(e.InnerException.Message);
+                    Logger.LogError(e, "exception in ReissueToken");
                 }
 
                 // next
@@ -217,10 +254,10 @@ namespace dotnetauth
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)
         {
-            app.UseCors("apphome");
+            app.UseCors("origins");
             app.UseMiddleware<JwtCookieToHeader>();
             if (!string.IsNullOrEmpty(TokenValidator.ReissueUrl)) app.UseMiddleware<ReissueToken>();
-            app.UseAuthentication();
+            //app.UseAuthentication();
             app.UseMvc();
         }
     }

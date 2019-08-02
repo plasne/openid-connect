@@ -1,25 +1,57 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
+using dotenv.net;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace dotnetauth
 {
     public class Program
     {
+
+        private static string LogLevel
+        {
+            get
+            {
+                return System.Environment.GetEnvironmentVariable("LOG_LEVEL");
+            }
+        }
+
+        private static string HostUrl
+        {
+            get
+            {
+                return System.Environment.GetEnvironmentVariable("HOST_URL");
+            }
+        }
+
         public static void Main(string[] args)
         {
+            DotEnv.Config(throwOnError: false);
             CreateWebHostBuilder(args).Build().Run();
         }
 
-        public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
-            WebHost.CreateDefaultBuilder(args)
-                .UseUrls("http://localhost:5050")
+        public static IWebHostBuilder CreateWebHostBuilder(string[] args)
+        {
+            var builder = WebHost.CreateDefaultBuilder(args)
+                .ConfigureLogging(logging =>
+                {
+                    logging.AddConsole();
+                    logging.AddAzureWebAppDiagnostics();
+                    if (Enum.TryParse(LogLevel, out Microsoft.Extensions.Logging.LogLevel level))
+                    {
+                        logging.SetMinimumLevel(level);
+                    }
+                    else
+                    {
+                        logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Information);
+                    }
+                })
                 .UseStartup<Startup>();
+            if (!string.IsNullOrEmpty(HostUrl)) builder.UseUrls(HostUrl);
+            return builder;
+        }
+
+
     }
 }
