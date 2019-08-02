@@ -107,6 +107,7 @@ public class Cmd
         string password;
         using (var client = new WebClient())
         {
+            if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
             client.Headers.Add("Authorization", $"Bearer {accessToken}");
             string raw = client.DownloadString(new Uri($"{KeyVaultPrivateKeyPasswordUrl}?api-version=7.0"));
             dynamic json = JObject.Parse(raw);
@@ -117,6 +118,7 @@ public class Cmd
         byte[] key;
         using (var client = new WebClient())
         {
+            if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
             client.Headers.Add("Authorization", $"Bearer {accessToken}");
             string raw = client.DownloadString(new Uri($"{KeyVaultPrivateKeyUrl}?api-version=7.0"));
             dynamic json = JObject.Parse(raw);
@@ -176,6 +178,7 @@ public class Cmd
         string pem;
         using (var client = new WebClient())
         {
+            if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
             client.Headers.Add("Authorization", $"Bearer {accessToken}");
             string raw = client.DownloadString(new Uri($"https://researchandengineering.vault.azure.net/secrets/AUTH-PUB?api-version=7.0"));
             dynamic json = JObject.Parse(raw);
@@ -229,6 +232,7 @@ public class Cmd
         // query for the user
         using (var client = new WebClient())
         {
+            if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
             client.Headers.Add("Authorization", $"Bearer {accessToken}");
             string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users?$filter=mail eq '{email}'"));
             dynamic json = JObject.Parse(raw);

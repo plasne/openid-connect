@@ -50,7 +50,7 @@ namespace tools
 
             // get the configuration
             DotEnv.Config(throwOnError: false);
-            Config.Load().Wait();
+            Config.Apply().Wait();
             Config.Require(new string[] {
                 "ISSUER",
                 "AUDIENCE",

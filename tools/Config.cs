@@ -15,6 +15,14 @@ using Microsoft.Extensions.Logging;
 public class Config
 {
 
+    public static string Proxy
+    {
+        get
+        {
+            return System.Environment.GetEnvironmentVariable("PROXY");
+        }
+    }
+
     private static string KeyVaultAppConfigPrefixUrl
     {
         get
@@ -27,10 +35,14 @@ public class Config
     {
         get
         {
-            string keys = System.Environment.GetEnvironmentVariable("CONFIG_KEYS");
-            if (string.IsNullOrEmpty(keys)) return new string[] { };
-            return keys.Split(',').Select(id => id.Trim()).ToArray();
+            return ParseFilterString(System.Environment.GetEnvironmentVariable("CONFIG_KEYS"));
         }
+    }
+
+    public static string[] ParseFilterString(string compact)
+    {
+        if (string.IsNullOrEmpty(compact)) return new string[] { };
+        return compact.Split(',').Select(id => id.Trim()).ToArray();
     }
 
     private static void Sign(HttpRequestMessage request, string credential, byte[] secret)
@@ -74,8 +86,9 @@ public class Config
         }
     }
 
-    public async static Task Load(ILoggerFactory factory = null)
+    public async static Task<Dictionary<string, string>> Load(string[] filters, ILoggerFactory factory = null)
     {
+        Dictionary<string, string> kv = new Dictionary<string, string>();
 
         // check environment variables
         if (string.IsNullOrEmpty("APPCONFIG_ID")) throw new Exception("missing required APPCONFIG_ID");
@@ -83,7 +96,7 @@ public class Config
         if (string.IsNullOrEmpty("CONFIG_KEYS")) throw new Exception("missing required CONFIG_KEYS");
 
         // exit if there are no keys requested
-        if (ConfigKeys.Length < 1) return;
+        if (ConfigKeys.Length < 1) return kv;
 
         // create a logger
         ILogger logger = (factory != null) ? factory.CreateLogger<Config>() : null;
@@ -96,6 +109,7 @@ public class Config
         string AppConfigId;
         using (var client = new WebClient())
         {
+            if (!string.IsNullOrEmpty(Proxy)) client.Proxy = new WebProxy(Proxy);
             client.Headers.Add("Authorization", $"Bearer {accessToken}");
             string raw = client.DownloadString(new Uri($"{KeyVaultAppConfigPrefixUrl}ID?api-version=7.0"));
             dynamic json = JObject.Parse(raw);
@@ -106,6 +120,7 @@ public class Config
         string AppConfigSecret;
         using (var client = new WebClient())
         {
+            if (!string.IsNullOrEmpty(Proxy)) client.Proxy = new WebProxy(Proxy);
             client.Headers.Add("Authorization", $"Bearer {accessToken}");
             string raw = client.DownloadString(new Uri($"{KeyVaultAppConfigPrefixUrl}SECRET?api-version=7.0"));
             dynamic json = JObject.Parse(raw);
@@ -113,9 +128,15 @@ public class Config
         }
 
         // process each key filter request
-        foreach (var filter in ConfigKeys)
+        foreach (var filter in filters)
         {
-            using (var client = new HttpClient())
+
+            // config proxy if required
+            var handler = new HttpClientHandler();
+            if (!string.IsNullOrEmpty(Proxy)) handler.Proxy = new WebProxy(Proxy);
+
+            // make authenticated calls to Azure AppConfig
+            using (var client = new HttpClient(handler))
             {
 
                 // create the request message
@@ -139,32 +160,52 @@ public class Config
                 {
                     var key = ((string)item.key).Split(":").Last().ToUpper();
                     var val = (string)item.value;
-                    var cur = System.Environment.GetEnvironmentVariable(key);
-                    if (string.IsNullOrEmpty(cur))
-                    {
-                        System.Environment.SetEnvironmentVariable(key, val);
-                        if (logger != null)
-                        {
-                            logger.LogDebug($"config: {key} = \"{val}\"");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"config: {key} = \"{val}\"");
-                        }
-                    }
-                    else
-                    {
-                        if (logger != null)
-                        {
-                            logger.LogDebug($"config: [already set] {key} = \"{cur}\"");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"config: [already set] {key} = \"{cur}\"");
-                        }
-                    }
+                    kv[key] = val;
                 }
 
+            }
+
+        }
+
+        return kv;
+    }
+
+    public async static Task Apply(string[] filters = null, ILoggerFactory factory = null)
+    {
+
+        // create a logger
+        ILogger logger = (factory != null) ? factory.CreateLogger<Config>() : null;
+
+        // load the config
+        if (filters == null) filters = ConfigKeys;
+        Dictionary<string, string> kv = await Config.Load(filters, factory);
+
+        // apply the config
+        foreach (var pair in kv)
+        {
+            var cur = System.Environment.GetEnvironmentVariable(pair.Key);
+            if (string.IsNullOrEmpty(cur))
+            {
+                System.Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+                if (logger != null)
+                {
+                    logger.LogDebug($"config: {pair.Key} = \"{pair.Value}\"");
+                }
+                else
+                {
+                    Console.WriteLine($"config: {pair.Key} = \"{pair.Value}\"");
+                }
+            }
+            else
+            {
+                if (logger != null)
+                {
+                    logger.LogDebug($"config: [already set] {pair.Key} = \"{pair.Value}\"");
+                }
+                else
+                {
+                    Console.WriteLine($"config: [already set] {pair.Key} = \"{pair.Value}\"");
+                }
             }
         }
 

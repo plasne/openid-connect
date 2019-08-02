@@ -19,7 +19,7 @@ namespace dotnetauth
 
             // load the configuration
             logger.LogInformation("Loading configuration...");
-            Config.Load(factory).Wait();
+            Config.Apply(null, factory).Wait();
             Config.Require(new string[] {
                 "AUTHORITY",
                 "REDIRECT_URI",

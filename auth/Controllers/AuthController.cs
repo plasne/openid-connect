@@ -142,6 +142,7 @@ namespace authentication.Controllers
             // get the response
             using (WebClient client = new WebClient())
             {
+                if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
                 NameValueCollection data = new NameValueCollection();
                 data.Add("client_id", TokenIssuer.ClientId);
                 data.Add("client_secret", tokenIssuer.ClientSecret);

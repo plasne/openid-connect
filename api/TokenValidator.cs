@@ -72,6 +72,7 @@ public class TokenValidator
                 // get the certificate
                 using (var client = new WebClient())
                 {
+                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
                     string raw = client.DownloadString(new Uri(PublicCertificateUrl));
                     byte[] bytes = GetBytesFromPEM(raw, "CERTIFICATE");
                     var certificate = new X509Certificate2(bytes);
@@ -110,6 +111,7 @@ public class TokenValidator
     {
         using (var client = new WebClient())
         {
+            if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
             NameValueCollection data = new NameValueCollection();
             data.Add("token", token);
             byte[] response = client.UploadValues(ReissueUrl, data);

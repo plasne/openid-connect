@@ -135,6 +135,7 @@ public class TokenIssuer
                 // get the password
                 using (var client = new WebClient())
                 {
+                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
                     client.Headers.Add("Authorization", $"Bearer {accessToken}");
                     string raw = client.DownloadString(new Uri($"{KeyVaultClientSecretUrl}?api-version=7.0"));
                     dynamic json = JObject.Parse(raw);
@@ -234,6 +235,7 @@ public class TokenIssuer
                 string pw;
                 using (var client = new WebClient())
                 {
+                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
                     client.Headers.Add("Authorization", $"Bearer {accessToken}");
                     string raw = client.DownloadString(new Uri($"{KeyVaultPrivateKeyPasswordUrl}?api-version=7.0"));
                     dynamic json = JObject.Parse(raw);
@@ -243,6 +245,7 @@ public class TokenIssuer
                 // get the private key
                 using (var client = new WebClient())
                 {
+                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
                     client.Headers.Add("Authorization", $"Bearer {accessToken}");
                     string raw = client.DownloadString(new Uri($"{KeyVaultPrivateKeyUrl}?api-version=7.0"));
                     dynamic json = JObject.Parse(raw);
@@ -274,6 +277,7 @@ public class TokenIssuer
                 // get the certificate
                 using (var client = new WebClient())
                 {
+                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
                     client.Headers.Add("Authorization", $"Bearer {accessToken}");
                     string raw = client.DownloadString(new Uri($"{KeyVaultPublicCertUrl}?api-version=7.0"));
                     dynamic json = JObject.Parse(raw);
@@ -323,6 +327,7 @@ public class TokenIssuer
         // check for enabled
         using (var client = new WebClient())
         {
+            if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
             client.Headers.Add("Authorization", $"Bearer {accessToken}");
             string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{userId}?$select=accountEnabled"));
             dynamic json = JObject.Parse(raw);
@@ -341,6 +346,7 @@ public class TokenIssuer
         // get the user info
         using (var client = new WebClient())
         {
+            if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
             client.Headers.Add("Authorization", $"Bearer {accessToken}");
             string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users?$filter=mail eq '{email}'"));
             dynamic json = JObject.Parse(raw);
@@ -379,6 +385,7 @@ public class TokenIssuer
         List<AppRoles> apps = new List<AppRoles>();
         using (var client = new WebClient())
         {
+            if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
             client.Headers.Add("Authorization", $"Bearer {accessToken}");
             string filter = "$filter=" + string.Join(" or ", ApplicationIds.Select(appId => $"appId eq '{appId}'"));
             string select = "$select=appId,appRoles";
@@ -399,6 +406,7 @@ public class TokenIssuer
         // get the roles that the user is in
         using (var client = new WebClient())
         {
+            if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
             client.Headers.Add("Authorization", $"Bearer {accessToken}");
             string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{userId}/appRoleAssignments"));
             dynamic json = JObject.Parse(raw);
