@@ -198,7 +198,7 @@ public class TokenIssuer
         }
     }
 
-    private static string KeyVaultPublicCertUrl
+    public static string KeyVaultPublicCertUrl
     {
         get
         {

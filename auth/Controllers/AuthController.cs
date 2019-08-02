@@ -16,6 +16,7 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
+using Microsoft.Azure.Services.AppAuthentication;
 
 namespace authentication.Controllers
 {
@@ -274,6 +275,43 @@ namespace authentication.Controllers
         {
             Logger.LogDebug("/api/token/version service ping");
             return "v3.0.0";
+        }
+
+        [HttpGet, Route("verify")]
+        public async Task<ActionResult> Verify()
+        {
+            try
+            {
+
+                // this method allows you to test whether the appropriate permissions are assigned
+                var tokenProvider = new AzureServiceTokenProvider();
+
+                // test vault access
+                var vaultToken = await tokenProvider.GetAccessTokenAsync("https://vault.azure.net");
+                using (var client = new WebClient())
+                {
+                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
+                    client.Headers.Add("Authorization", $"Bearer {vaultToken}");
+                    client.DownloadString(new Uri($"{TokenIssuer.KeyVaultPublicCertUrl}?api-version=7.0"));
+                }
+
+                // test graph access
+                var graphToken = await tokenProvider.GetAccessTokenAsync("https://graph.microsoft.com");
+                using (var client = new WebClient())
+                {
+                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
+                    client.Headers.Add("Authorization", $"Bearer {graphToken}");
+                    string query = "https://graph.microsoft.com/beta/users?$top=1";
+                    client.DownloadString(new Uri(query));
+                }
+
+                return Ok("all tests passed");
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e, "verify failed");
+                return StatusCode(StatusCodes.Status500InternalServerError, e.Message);
+            }
         }
 
     }
