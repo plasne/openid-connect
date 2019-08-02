@@ -42,10 +42,10 @@ namespace tools
         {
 
             // ensure a command is specified
-            string[] cmds = new string[] { "issue", "validate", "user" };
+            string[] cmds = new string[] { "issue", "validate", "user", "config" };
             if (args.Length < 1 || !cmds.Contains(args[0]))
             {
-                throw new Exception("you must specify a command from \"issue\", \"validate\", or \"user\".");
+                throw new Exception("you must specify a command from \"issue\", \"validate\", \"user\", or \"config\".");
             }
 
             // get the configuration
@@ -91,6 +91,10 @@ namespace tools
                         {
                             cmd.GetUserFromGraph(o.Email).Wait();
                         });
+                    break;
+
+                case "config":
+                    cmd.GetAllConfig().Wait();
                     break;
 
             }

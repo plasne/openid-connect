@@ -277,6 +277,18 @@ namespace authentication.Controllers
             return "v3.0.0";
         }
 
+        [HttpGet, Route("type")]
+        public ActionResult<string> Type()
+        {
+            switch (AuthChooser.AuthType)
+            {
+                case "app":
+                    return "Application Identity / Service Principal";
+                default:
+                    return "Managed Identity / az CLI";
+            }
+        }
+
         [HttpGet, Route("verify")]
         public async Task<ActionResult> Verify()
         {

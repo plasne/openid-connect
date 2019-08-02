@@ -50,9 +50,7 @@ namespace dotnetauth
             }
         }
 
-        private class XsrfRequirement : IAuthorizationRequirement
-        {
-        }
+        private class XsrfRequirement : IAuthorizationRequirement { }
 
         private class XsrfHandler : AuthorizationHandler<XsrfRequirement>
         {
@@ -129,6 +127,7 @@ namespace dotnetauth
                     policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
                     policy.RequireAuthenticatedUser();
                     policy.Requirements.Add(new XsrfRequirement());
+
                 });
                 options.DefaultPolicy = options.GetPolicy("XSRF");
             });
@@ -257,7 +256,6 @@ namespace dotnetauth
             app.UseCors("origins");
             app.UseMiddleware<JwtCookieToHeader>();
             if (!string.IsNullOrEmpty(TokenValidator.ReissueUrl)) app.UseMiddleware<ReissueToken>();
-            //app.UseAuthentication();
             app.UseMvc();
         }
     }

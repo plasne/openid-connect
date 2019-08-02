@@ -100,8 +100,7 @@ public class Cmd
     {
 
         // get an access token to keyvault
-        var tokenProvider = new AzureServiceTokenProvider();
-        string accessToken = await tokenProvider.GetAccessTokenAsync("https://vault.azure.net");
+        string accessToken = await AuthChooser.GetAccessToken("https://vault.azure.net");
 
         // get the password for the private key
         string password;
@@ -171,8 +170,7 @@ public class Cmd
     {
 
         // get an access token for keyvault
-        var tokenProvider = new AzureServiceTokenProvider();
-        var accessToken = await tokenProvider.GetAccessTokenAsync("https://vault.azure.net");
+        string accessToken = await AuthChooser.GetAccessToken("https://vault.azure.net");
 
         // get the public certificate
         string pem;
@@ -226,8 +224,7 @@ public class Cmd
     {
 
         // get a token for the graph
-        var tokenProvider = new AzureServiceTokenProvider();
-        string accessToken = await tokenProvider.GetAccessTokenAsync("https://graph.microsoft.com");
+        string accessToken = await AuthChooser.GetAccessToken("https://graph.microsoft.com");
 
         // query for the user
         using (var client = new WebClient())
@@ -237,6 +234,18 @@ public class Cmd
             string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users?$filter=mail eq '{email}'"));
             dynamic json = JObject.Parse(raw);
             Console.WriteLine(json);
+        }
+
+    }
+
+    public async Task GetAllConfig()
+    {
+
+        // get all config
+        var kv = await Config.Load(new string[] { "*" }, useFullyQualifiedName: true);
+        foreach (var pair in kv)
+        {
+            Console.WriteLine($"{pair.Key} = \"{pair.Value}\"");
         }
 
     }

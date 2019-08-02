@@ -127,10 +127,9 @@ public class TokenIssuer
                 if (string.IsNullOrEmpty(KeyVaultClientSecretUrl)) throw new Exception("KEYVAULT_CLIENT_SECRET_URL must be defined");
 
                 // get an access token
-                var tokenProvider = new AzureServiceTokenProvider();
-                var tokenFetcher = tokenProvider.GetAccessTokenAsync("https://vault.azure.net");
-                tokenFetcher.Wait();
-                string accessToken = tokenFetcher.Result;
+                var fetcher = AuthChooser.GetAccessToken("https://vault.azure.net");
+                fetcher.Wait();
+                string accessToken = fetcher.Result;
 
                 // get the password
                 using (var client = new WebClient())
@@ -226,10 +225,9 @@ public class TokenIssuer
             {
 
                 // get an access token
-                var tokenProvider = new AzureServiceTokenProvider();
-                var tokenFetcher = tokenProvider.GetAccessTokenAsync("https://vault.azure.net");
-                tokenFetcher.Wait();
-                string accessToken = tokenFetcher.Result;
+                var fetcher = AuthChooser.GetAccessToken("https://vault.azure.net");
+                fetcher.Wait();
+                string accessToken = fetcher.Result;
 
                 // get the password
                 string pw;
@@ -269,10 +267,9 @@ public class TokenIssuer
             {
 
                 // get an access token
-                var tokenProvider = new AzureServiceTokenProvider();
-                var tokenFetcher = tokenProvider.GetAccessTokenAsync("https://vault.azure.net");
-                tokenFetcher.Wait();
-                string accessToken = tokenFetcher.Result; ;
+                var fetcher = AuthChooser.GetAccessToken("https://vault.azure.net");
+                fetcher.Wait();
+                string accessToken = fetcher.Result;
 
                 // get the certificate
                 using (var client = new WebClient())
@@ -321,8 +318,7 @@ public class TokenIssuer
     {
 
         // get an access token
-        var tokenProvider = new AzureServiceTokenProvider();
-        var accessToken = await tokenProvider.GetAccessTokenAsync("https://graph.microsoft.com");
+        var accessToken = await AuthChooser.GetAccessToken("https://graph.microsoft.com");
 
         // check for enabled
         using (var client = new WebClient())
@@ -340,8 +336,7 @@ public class TokenIssuer
     {
 
         // get an access token
-        var tokenProvider = new AzureServiceTokenProvider();
-        var accessToken = await tokenProvider.GetAccessTokenAsync("https://graph.microsoft.com");
+        var accessToken = await AuthChooser.GetAccessToken("https://graph.microsoft.com");
 
         // get the user info
         using (var client = new WebClient())
@@ -378,8 +373,7 @@ public class TokenIssuer
         if (appIds.Count() < 1) return assignments;
 
         // get an access token
-        var tokenProvider = new AzureServiceTokenProvider();
-        var accessToken = await tokenProvider.GetAccessTokenAsync("https://graph.microsoft.com");
+        var accessToken = await AuthChooser.GetAccessToken("https://graph.microsoft.com");
 
         // lookup all specified applications
         List<AppRoles> apps = new List<AppRoles>();

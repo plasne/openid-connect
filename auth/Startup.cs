@@ -17,6 +17,10 @@ namespace dotnetauth
             // set the logger so it can be used in services
             this.LoggerFactory = factory;
 
+            // determine the authentication type
+            if (AuthChooser.AuthType == "app") logger.LogInformation("authentication: application ClientId and ClientSecret (service principal).");
+            if (AuthChooser.AuthType == "mi") logger.LogInformation("authentication: managed identity with failback to az cli.");
+
             // load the configuration
             logger.LogInformation("Loading configuration...");
             Config.Apply(null, factory).Wait();

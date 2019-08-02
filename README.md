@@ -127,8 +127,16 @@ alternatively could write IP address to JWT
 
 https://publicsuffix.org/list/effective_tld_names.dat
 
-Notes:
+# Notes
 
-https://github.com/projectkudu/kudu/wiki/Configurable-settings#the-system-cannot-find-the-file-specified-issue-with-x509certificate2
+-   https://github.com/projectkudu/kudu/wiki/Configurable-settings#the-system-cannot-find-the-file-specified-issue-with-x509certificate2
 
-https://gist.github.com/crpietschmann/35024f1da2a5beb0466e616ce1d7a876
+-   https://gist.github.com/crpietschmann/35024f1da2a5beb0466e616ce1d7a876
+
+-   https://blog.bredvid.no/accessing-apis-using-azure-managed-service-identity-ff7802b887d
+
+# Improvements
+
+-   Move JwtCookieToHeader and ReissueToken so they are only called if [Authorize]
+
+-   Key rotation

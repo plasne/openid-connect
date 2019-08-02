@@ -9,7 +9,6 @@ using System.Text;
 using System.Security.Cryptography;
 using System.Net.Http.Headers;
 using System.IO;
-using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Extensions.Logging;
 
 public class Config
@@ -20,6 +19,14 @@ public class Config
         get
         {
             return System.Environment.GetEnvironmentVariable("PROXY");
+        }
+    }
+
+    private static string AppConfigResourceId
+    {
+        get
+        {
+            return System.Environment.GetEnvironmentVariable("APPCONFIG_RESOURCE_ID");
         }
     }
 
@@ -86,7 +93,7 @@ public class Config
         }
     }
 
-    public async static Task<Dictionary<string, string>> Load(string[] filters, ILoggerFactory factory = null)
+    public async static Task<Dictionary<string, string>> Load(string[] filters, ILoggerFactory factory = null, bool useFullyQualifiedName = false)
     {
         Dictionary<string, string> kv = new Dictionary<string, string>();
 
@@ -102,29 +109,22 @@ public class Config
         ILogger logger = (factory != null) ? factory.CreateLogger<Config>() : null;
 
         // get a token
-        var tokenProvider = new AzureServiceTokenProvider();
-        var accessToken = await tokenProvider.GetAccessTokenAsync("https://vault.azure.net").ConfigureAwait(false);
+        string accessToken = await AuthChooser.GetAccessToken("https://management.azure.com");
 
-        // get the APPCONFIG-ID
-        string AppConfigId;
+        // get the id and secret
+        string appConfigId, appConfigSecret;
         using (var client = new WebClient())
         {
             if (!string.IsNullOrEmpty(Proxy)) client.Proxy = new WebProxy(Proxy);
             client.Headers.Add("Authorization", $"Bearer {accessToken}");
-            string raw = client.DownloadString(new Uri($"{KeyVaultAppConfigPrefixUrl}ID?api-version=7.0"));
+            string url = $"https://management.azure.com{AppConfigResourceId}/ListKeys?api-version=2019-02-01-preview";
+            byte[] bytes = client.UploadData(new Uri(url), Encoding.UTF8.GetBytes(string.Empty));
+            string raw = Encoding.UTF8.GetString(bytes);
             dynamic json = JObject.Parse(raw);
-            AppConfigId = (string)json.value;
-        }
-
-        // get the APPCONFIG-SECRET
-        string AppConfigSecret;
-        using (var client = new WebClient())
-        {
-            if (!string.IsNullOrEmpty(Proxy)) client.Proxy = new WebProxy(Proxy);
-            client.Headers.Add("Authorization", $"Bearer {accessToken}");
-            string raw = client.DownloadString(new Uri($"{KeyVaultAppConfigPrefixUrl}SECRET?api-version=7.0"));
-            dynamic json = JObject.Parse(raw);
-            AppConfigSecret = (string)json.value;
+            JArray values = json.value;
+            dynamic pri = values.First();
+            appConfigId = (string)pri.id;
+            appConfigSecret = (string)pri.value;
         }
 
         // process each key filter request
@@ -140,14 +140,15 @@ public class Config
             {
 
                 // create the request message
+                string appConfigName = AppConfigResourceId.Split("/").Last();
                 var request = new HttpRequestMessage()
                 {
-                    RequestUri = new Uri($"https://pelasne-config.azconfig.io/kv?key={filter}"),
+                    RequestUri = new Uri($"https://{appConfigName}.azconfig.io/kv?key={filter}"),
                     Method = HttpMethod.Get
                 };
 
                 // sign the message
-                Sign(request, AppConfigId, Convert.FromBase64String(AppConfigSecret));
+                Sign(request, appConfigId, Convert.FromBase64String(appConfigSecret));
 
                 // get the response
                 var response = await client.SendAsync(request);
@@ -158,7 +159,7 @@ public class Config
                 dynamic json = JObject.Parse(raw);
                 foreach (dynamic item in json.items)
                 {
-                    var key = ((string)item.key).Split(":").Last().ToUpper();
+                    var key = (useFullyQualifiedName) ? (string)item.key : ((string)item.key).Split(":").Last().ToUpper();
                     var val = (string)item.value;
                     kv[key] = val;
                 }
