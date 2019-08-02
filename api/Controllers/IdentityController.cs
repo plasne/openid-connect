@@ -14,7 +14,7 @@ namespace authentication.Controllers
 
         [Authorize]
         [HttpGet, Route("me")]
-        public ActionResult<IEnumerable<string>> Me()
+        public ActionResult<dynamic> Me()
         {
             string authorization = Request.Headers["Authorization"];
             string token = authorization.Replace("Bearer ", "");

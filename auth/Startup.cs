@@ -4,15 +4,40 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using dotenv.net;
+using Microsoft.Extensions.Logging;
 
 namespace dotnetauth
 {
     public class Startup
     {
-        public Startup(IConfiguration configuration)
+        private ILoggerFactory LoggerFactory { get; }
+
+        public Startup(IConfiguration configuration, ILogger<Startup> logger, ILoggerFactory factory)
         {
-            DotEnv.Config(false);
+
+            // set the logger so it can be used in services
+            this.LoggerFactory = factory;
+
+            // load the configuration
+            logger.LogInformation("Loading configuration...");
+            Config.Load(factory).Wait();
+            Config.Require(new string[] {
+                "AUTHORITY",
+                "REDIRECT_URI",
+                "ISSUER",
+                "AUDIENCE",
+                "DEFAULT_REDIRECT_URL",
+                "ALLOWED_ORIGINS",
+                "BASE_DOMAIN",
+                "APPLICATION_ID",  // enable this to get role assignments
+                "CLIENT_ID",
+                // "KEYVAULT_CLIENT_SECRET_URL",  // enable this if obtaining an authorization code for the user
+                "KEYVAULT_PRIVATE_KEY_URL",
+                "KEYVAULT_PRIVATE_KEY_PASSWORD_URL",
+                "KEYVAULT_PUBLIC_CERT_URL"
+            });
+            logger.LogInformation("Configuration loaded.");
+
         }
 
         // This method gets called by the runtime. Use this method to add services to the container.
@@ -20,12 +45,12 @@ namespace dotnetauth
         {
 
             // add the issuer service
-            services.AddSingleton<TokenIssuer>(new TokenIssuer());
+            services.AddSingleton<TokenIssuer>(new TokenIssuer(LoggerFactory));
 
             // setup CORS policy
             services.AddCors(options =>
                {
-                   options.AddPolicy("apphome",
+                   options.AddPolicy("origins",
                    builder =>
                    {
                        builder.WithOrigins(TokenIssuer.AllowedOrigins)
@@ -43,7 +68,7 @@ namespace dotnetauth
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)
         {
-            app.UseCors("apphome");
+            app.UseCors("origins");
             app.UseMvc();
         }
     }

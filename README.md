@@ -126,3 +126,9 @@ I don't like that the nonce is stored in a cookie https://auth0.com/docs/api-aut
 alternatively could write IP address to JWT
 
 https://publicsuffix.org/list/effective_tld_names.dat
+
+Notes:
+
+https://github.com/projectkudu/kudu/wiki/Configurable-settings#the-system-cannot-find-the-file-specified-issue-with-x509certificate2
+
+https://gist.github.com/crpietschmann/35024f1da2a5beb0466e616ce1d7a876

@@ -19,7 +19,6 @@ namespace dotnetauth
 
         public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
             WebHost.CreateDefaultBuilder(args)
-                .UseUrls(new string[] { "http://localhost:5000" })
                 .UseUrls("http://localhost:5050")
                 .UseStartup<Startup>();
     }

@@ -1,7 +1,5 @@
 using System;
 using System.Linq;
-using Microsoft.Identity.Client;
-using dotenv.net;
 using System.Threading.Tasks;
 using System.Net;
 using Newtonsoft.Json.Linq;
@@ -10,26 +8,18 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Azure.Services.AppAuthentication;
+using Microsoft.Extensions.Logging;
 
 public class TokenIssuer
 {
 
-    public TokenIssuer()
+    public TokenIssuer(ILoggerFactory factory)
     {
-
-        // get the configuration
-        DotEnv.Config(false);
-
-        // create a builder to get permissions
-        this.App = ConfidentialClientApplicationBuilder
-            .Create(ClientId)
-            .WithTenantId(TenantId)
-            .WithClientSecret(ClientSecret)
-            .Build();
-
+        this.Logger = factory.CreateLogger<TokenIssuer>();
     }
 
-    private IConfidentialClientApplication App { get; set; }
+    private ILogger Logger { get; }
 
     public static string Authority
     {
@@ -116,19 +106,43 @@ public class TokenIssuer
         }
     }
 
-    public static string ClientSecret
+    public static string KeyVaultClientSecretUrl
     {
         get
         {
-            return System.Environment.GetEnvironmentVariable("CLIENT_SECRET");
+            return System.Environment.GetEnvironmentVariable("KEYVAULT_CLIENT_SECRET_URL");
         }
     }
 
-    public static string TenantId
+    private string _clientSecret;
+
+    public string ClientSecret
     {
         get
         {
-            return System.Environment.GetEnvironmentVariable("TENANT_ID");
+            if (string.IsNullOrEmpty(_clientSecret))
+            {
+
+                // check for a secret
+                if (string.IsNullOrEmpty(KeyVaultClientSecretUrl)) throw new Exception("KEYVAULT_CLIENT_SECRET_URL must be defined");
+
+                // get an access token
+                var tokenProvider = new AzureServiceTokenProvider();
+                var tokenFetcher = tokenProvider.GetAccessTokenAsync("https://vault.azure.net");
+                tokenFetcher.Wait();
+                string accessToken = tokenFetcher.Result;
+
+                // get the password
+                using (var client = new WebClient())
+                {
+                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
+                    string raw = client.DownloadString(new Uri($"{KeyVaultClientSecretUrl}?api-version=7.0"));
+                    dynamic json = JObject.Parse(raw);
+                    _clientSecret = (string)json.value;
+                }
+
+            }
+            return _clientSecret;
         }
     }
 
@@ -138,8 +152,7 @@ public class TokenIssuer
         {
             // value is provided in minutes
             string duration = System.Environment.GetEnvironmentVariable("JWT_DURATION");
-            int result;
-            if (int.TryParse(duration, out result))
+            if (int.TryParse(duration, out int result))
             {
                 return result;
             }
@@ -157,8 +170,7 @@ public class TokenIssuer
             // value is provided in minutes
             // only needed for AutoRenewJwt
             string duration = System.Environment.GetEnvironmentVariable("JWT_MAX_DURATION");
-            int result;
-            if (int.TryParse(duration, out result))
+            if (int.TryParse(duration, out int result))
             {
                 return result;
             }
@@ -169,7 +181,7 @@ public class TokenIssuer
         }
     }
 
-    public static string KeyVaultPrivateKeyUrl
+    private static string KeyVaultPrivateKeyUrl
     {
         get
         {
@@ -177,7 +189,7 @@ public class TokenIssuer
         }
     }
 
-    public static string KeyVaultPrivateKeyPasswordUrl
+    private static string KeyVaultPrivateKeyPasswordUrl
     {
         get
         {
@@ -185,11 +197,21 @@ public class TokenIssuer
         }
     }
 
-    public static string KeyVaultPublicCertUrl
+    private static string KeyVaultPublicCertUrl
     {
         get
         {
             return System.Environment.GetEnvironmentVariable("KEYVAULT_PUBLIC_CERT_URL");
+        }
+    }
+
+    public static bool RequireSecureForCookies
+    {
+        get
+        {
+            string v = System.Environment.GetEnvironmentVariable("REQUIRE_SECURE_FOR_COOKIES");
+            string[] negative = new string[] { "no", "false", "0" };
+            return (!negative.Contains(v));
         }
     }
 
@@ -203,16 +225,16 @@ public class TokenIssuer
             {
 
                 // get an access token
-                string[] scopes = new string[] { "offline_access https://vault.azure.net/.default" };
-                var acquire = this.App.AcquireTokenForClient(scopes).ExecuteAsync();
-                acquire.Wait();
-                string token = acquire.Result.AccessToken;
+                var tokenProvider = new AzureServiceTokenProvider();
+                var tokenFetcher = tokenProvider.GetAccessTokenAsync("https://vault.azure.net");
+                tokenFetcher.Wait();
+                string accessToken = tokenFetcher.Result;
 
                 // get the password
                 string pw;
                 using (var client = new WebClient())
                 {
-                    client.Headers.Add("Authorization", $"Bearer {token}");
+                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
                     string raw = client.DownloadString(new Uri($"{KeyVaultPrivateKeyPasswordUrl}?api-version=7.0"));
                     dynamic json = JObject.Parse(raw);
                     pw = (string)json.value;
@@ -221,7 +243,7 @@ public class TokenIssuer
                 // get the private key
                 using (var client = new WebClient())
                 {
-                    client.Headers.Add("Authorization", $"Bearer {token}");
+                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
                     string raw = client.DownloadString(new Uri($"{KeyVaultPrivateKeyUrl}?api-version=7.0"));
                     dynamic json = JObject.Parse(raw);
                     var bytes = Convert.FromBase64String((string)json.value);
@@ -244,15 +266,15 @@ public class TokenIssuer
             {
 
                 // get an access token
-                string[] scopes = new string[] { "offline_access https://vault.azure.net/.default" };
-                var acquire = this.App.AcquireTokenForClient(scopes).ExecuteAsync();
-                acquire.Wait();
-                string token = acquire.Result.AccessToken;
+                var tokenProvider = new AzureServiceTokenProvider();
+                var tokenFetcher = tokenProvider.GetAccessTokenAsync("https://vault.azure.net");
+                tokenFetcher.Wait();
+                string accessToken = tokenFetcher.Result; ;
 
                 // get the certificate
                 using (var client = new WebClient())
                 {
-                    client.Headers.Add("Authorization", $"Bearer {token}");
+                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
                     string raw = client.DownloadString(new Uri($"{KeyVaultPublicCertUrl}?api-version=7.0"));
                     dynamic json = JObject.Parse(raw);
                     _validationCertificate = (string)json.value;
@@ -294,24 +316,37 @@ public class TokenIssuer
     public async Task<bool> IsUserEnabled(string userId)
     {
 
-        // get the token
-        string[] scopes = new string[] { "offline_access https://graph.microsoft.com/.default" };
-        AuthenticationResult result = await this.App.AcquireTokenForClient(scopes).ExecuteAsync();
+        // get an access token
+        var tokenProvider = new AzureServiceTokenProvider();
+        var accessToken = await tokenProvider.GetAccessTokenAsync("https://graph.microsoft.com");
 
         // check for enabled
-        try
+        using (var client = new WebClient())
         {
-            using (var client = new WebClient())
-            {
-                client.Headers.Add("Authorization", $"Bearer {result.AccessToken}");
-                string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{userId}?$select=accountEnabled"));
-                dynamic json = JObject.Parse(raw);
-                return (bool)json.accountEnabled;
-            }
+            client.Headers.Add("Authorization", $"Bearer {accessToken}");
+            string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{userId}?$select=accountEnabled"));
+            dynamic json = JObject.Parse(raw);
+            return (bool)json.accountEnabled;
         }
-        catch (WebException e)
+
+    }
+
+    public async Task<dynamic> GetUserByEmail(string email)
+    {
+
+        // get an access token
+        var tokenProvider = new AzureServiceTokenProvider();
+        var accessToken = await tokenProvider.GetAccessTokenAsync("https://graph.microsoft.com");
+
+        // get the user info
+        using (var client = new WebClient())
         {
-            throw new Exception("user active status could not be determined", e);
+            client.Headers.Add("Authorization", $"Bearer {accessToken}");
+            string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users?$filter=mail eq '{email}'"));
+            dynamic json = JObject.Parse(raw);
+            JArray values = json.value;
+            if (values.Count != 1) throw new Exception("a single user could not be found with the supplied email address");
+            return values[0];
         }
 
     }
@@ -336,20 +371,19 @@ public class TokenIssuer
         var appIds = ApplicationIds;
         if (appIds.Count() < 1) return assignments;
 
-        // get the token
-        string[] scopes = new string[] { "offline_access https://graph.microsoft.com/.default" };
-        AuthenticationResult result = await this.App.AcquireTokenForClient(scopes).ExecuteAsync();
+        // get an access token
+        var tokenProvider = new AzureServiceTokenProvider();
+        var accessToken = await tokenProvider.GetAccessTokenAsync("https://graph.microsoft.com");
 
         // lookup all specified applications
         List<AppRoles> apps = new List<AppRoles>();
         using (var client = new WebClient())
         {
-            client.Headers.Add("Authorization", $"Bearer {result.AccessToken}");
+            client.Headers.Add("Authorization", $"Bearer {accessToken}");
             string filter = "$filter=" + string.Join(" or ", ApplicationIds.Select(appId => $"appId eq '{appId}'"));
             string select = "$select=appId,appRoles";
             string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/applications/?{filter}&{select}"));
             dynamic json = JObject.Parse(raw);
-            Console.WriteLine(json);
             var values = (JArray)json.value;
             foreach (dynamic value in values)
             {
@@ -365,7 +399,7 @@ public class TokenIssuer
         // get the roles that the user is in
         using (var client = new WebClient())
         {
-            client.Headers.Add("Authorization", $"Bearer {result.AccessToken}");
+            client.Headers.Add("Authorization", $"Bearer {accessToken}");
             string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{userId}/appRoleAssignments"));
             dynamic json = JObject.Parse(raw);
             var values = (JArray)json.value;
@@ -473,8 +507,7 @@ public class TokenIssuer
         // tokens are only eligible up to a defined age
         var old = jwt.Payload.FirstOrDefault(claim => claim.Key == "old");
         if (old.Value == null) return validatedJwt; // no max-age, so it is eligible
-        long oldAsLong;
-        if (!long.TryParse((string)old.Value, out oldAsLong)) throw new Exception("token max-age cannot be determined");
+        if (!long.TryParse((string)old.Value, out long oldAsLong)) throw new Exception("token max-age cannot be determined");
         var max = DateTimeOffset.FromUnixTimeSeconds(oldAsLong).UtcDateTime;
         if (DateTime.UtcNow < max)
         {

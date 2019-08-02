@@ -11,11 +11,11 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using dotenv.net;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Logging;
 
 namespace authentication.Controllers
 {
@@ -25,13 +25,14 @@ namespace authentication.Controllers
     public class AuthController : ControllerBase
     {
 
-        public AuthController()
+        public AuthController(ILogger<AuthController> logger)
         {
-            DotEnv.Config(false);
-            ConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>($"{TokenIssuer.Authority}/.well-known/openid-configuration", new OpenIdConnectConfigurationRetriever());
+            this.ConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>($"{TokenIssuer.Authority}/.well-known/openid-configuration", new OpenIdConnectConfigurationRetriever());
+            this.Logger = logger;
         }
 
         private ConfigurationManager<OpenIdConnectConfiguration> ConfigManager { get; }
+        private ILogger Logger { get; }
 
         private string GenerateSafeRandomString(int length)
         {
@@ -48,45 +49,55 @@ namespace authentication.Controllers
         private class AuthFlow
         {
             public string redirecturi { get; set; }
+            public string basedomain { get; set; }
             public string state { get; set; }
             public string nonce { get; set; }
         }
 
         [HttpGet, Route("authorize")]
-        public ActionResult Authorize(string redirecturi)
+        public ActionResult Authorize(string redirecturi, string basedomain)
         {
-
-            // get the necessary variables
-            string authority = TokenIssuer.Authority;
-            string clientId = WebUtility.UrlEncode(TokenIssuer.ClientId);
-            string redirectUri = WebUtility.UrlEncode(TokenIssuer.RedirectUri);
-            string scope = WebUtility.UrlEncode("openid"); // space sep (ex. https://graph.microsoft.com/user.read)
-            string response_type = WebUtility.UrlEncode("id_token"); // space sep, could include "code"
-            string domainHint = WebUtility.UrlEncode(TokenIssuer.DomainHint);
-
-            // generate state and nonce
-            AuthFlow flow = new AuthFlow()
+            try
             {
-                redirecturi = (string.IsNullOrEmpty(redirecturi)) ? TokenIssuer.DefaultRedirectUrl : redirecturi,
-                state = this.GenerateSafeRandomString(16),
-                nonce = this.GenerateSafeRandomString(16)
-            };
 
-            // store the authflow for validating state and nonce later
-            //  note: this has to be SameSite=none because it is being POSTed from login.microsoftonline.com
-            Response.Cookies.Append("authflow", JsonConvert.SerializeObject(flow), new CookieOptions()
+                // get the necessary variables
+                string authority = TokenIssuer.Authority;
+                string clientId = WebUtility.UrlEncode(TokenIssuer.ClientId);
+                string redirectUri = WebUtility.UrlEncode(TokenIssuer.RedirectUri);
+                string scope = WebUtility.UrlEncode("openid"); // space sep (ex. https://graph.microsoft.com/user.read)
+                string response_type = WebUtility.UrlEncode("id_token"); // space sep, could include "code"
+                string domainHint = WebUtility.UrlEncode(TokenIssuer.DomainHint);
+
+                // generate state and nonce
+                AuthFlow flow = new AuthFlow()
+                {
+                    redirecturi = (string.IsNullOrEmpty(redirecturi)) ? TokenIssuer.DefaultRedirectUrl : redirecturi,
+                    basedomain = (string.IsNullOrEmpty(basedomain)) ? TokenIssuer.BaseDomain : basedomain,
+                    state = this.GenerateSafeRandomString(16),
+                    nonce = this.GenerateSafeRandomString(16)
+                };
+
+                // store the authflow for validating state and nonce later
+                //  note: this has to be SameSite=none because it is being POSTed from login.microsoftonline.com
+                Response.Cookies.Append("authflow", JsonConvert.SerializeObject(flow), new CookieOptions()
+                {
+                    Expires = DateTimeOffset.Now.AddMinutes(10),
+                    HttpOnly = true,
+                    Secure = TokenIssuer.RequireSecureForCookies,
+                    SameSite = SameSiteMode.None
+                });
+
+                // build the URL
+                string url = $"{authority}/oauth2/v2.0/authorize?response_type={response_type}&client_id={clientId}&redirect_uri={redirectUri}&scope={scope}&response_mode=form_post&state={flow.state}&nonce={flow.nonce}";
+                if (!string.IsNullOrEmpty(domainHint)) url += $"&domain_hint={domainHint}";
+
+                return Redirect(url);
+            }
+            catch (Exception e)
             {
-                Expires = DateTimeOffset.Now.AddMinutes(10),
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None
-            });
-
-            // build the URL
-            string url = $"{authority}/oauth2/v2.0/authorize?response_type={response_type}&client_id={clientId}&redirect_uri={redirectUri}&scope={scope}&response_mode=form_post&state={flow.state}&nonce={flow.nonce}";
-            if (!string.IsNullOrEmpty(domainHint)) url += "&domain_hint ={ domainHint}";
-
-            return Redirect(url);
+                Logger.LogError(e, "exception on api/auth/authorize");
+                return StatusCode(StatusCodes.Status500InternalServerError, e.Message);
+            }
         }
 
         private async Task<JwtSecurityToken> VerifyIdToken(string token, string nonce)
@@ -122,7 +133,7 @@ namespace authentication.Controllers
             return validatedJwt;
         }
 
-        private string GetAccessToken(string code, string scope)
+        private string GetAccessToken(string code, string scope, [FromServices] TokenIssuer tokenIssuer)
         {
 
             // build the URL
@@ -133,7 +144,7 @@ namespace authentication.Controllers
             {
                 NameValueCollection data = new NameValueCollection();
                 data.Add("client_id", TokenIssuer.ClientId);
-                data.Add("client_secret", TokenIssuer.ClientSecret);
+                data.Add("client_secret", tokenIssuer.ClientSecret);
                 data.Add("scope", scope);
                 data.Add("code", code);
                 data.Add("redirect_uri", TokenIssuer.RedirectUri);
@@ -172,19 +183,20 @@ namespace authentication.Controllers
                 string xsrf = this.GenerateSafeRandomString(16);
                 Response.Cookies.Append("XSRF-TOKEN", xsrf, new CookieOptions()
                 {
-                    Secure = true,
-                    Domain = TokenIssuer.BaseDomain,
+                    Secure = TokenIssuer.RequireSecureForCookies,
+                    Domain = flow.basedomain,
                     Path = "/"
                 });
 
-                // populate the claims
+                // populate the claims from the id_token
                 List<Claim> claims = new List<Claim>();
                 var email = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "email");
                 if (email != null) claims.Add(new Claim("email", email.Value));
-                var displayName = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "displayName");
-                if (displayName != null) claims.Add(new Claim("displayName", displayName.Value));
-                var oid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
-                if (oid != null) claims.Add(new Claim("oid", oid.Value));
+
+                // populate the claims from the user's graph object
+                dynamic user = await tokenIssuer.GetUserByEmail(email.Value);
+                claims.Add(new Claim("displayName", (string)user.displayName));
+                claims.Add(new Claim("oid", (string)user.id));
 
                 // add the XSRF (cross-site request forgery) claim
                 claims.Add(new Claim("xsrf", xsrf));
@@ -194,8 +206,8 @@ namespace authentication.Controllers
                 Response.Cookies.Append("user", jwt, new CookieOptions()
                 {
                     HttpOnly = true,
-                    Secure = true,
-                    Domain = TokenIssuer.BaseDomain,
+                    Secure = TokenIssuer.RequireSecureForCookies,
+                    Domain = flow.basedomain,
                     Path = "/"
                 });
 
@@ -203,12 +215,13 @@ namespace authentication.Controllers
             }
             catch (Exception e)
             {
+                Logger.LogError(e, "exception on api/auth/token");
                 return StatusCode(StatusCodes.Status500InternalServerError, e.Message);
             }
         }
 
         [HttpPost, Route("reissue")]
-        public async Task<ActionResult> Reissue([FromForm] string token, [FromServices] TokenIssuer tokenIssuer)
+        public async Task<ActionResult> Reissue([FromForm] string token, [FromForm] string basedomain, [FromServices] TokenIssuer tokenIssuer)
         {
             try
             {
@@ -223,8 +236,8 @@ namespace authentication.Controllers
                 Response.Cookies.Append("user", reissued, new CookieOptions()
                 {
                     HttpOnly = true,
-                    Secure = true,
-                    Domain = TokenIssuer.BaseDomain,
+                    Secure = TokenIssuer.RequireSecureForCookies,
+                    Domain = string.IsNullOrEmpty(basedomain) ? TokenIssuer.BaseDomain : basedomain,
                     Path = "/"
                 });
 
@@ -232,8 +245,7 @@ namespace authentication.Controllers
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
-                if (e.InnerException != null) Console.WriteLine(e.InnerException.Message);
+                Logger.LogError(e, "exception on api/auth/reissue");
                 return BadRequest(e.Message);
             }
         }
@@ -259,6 +271,7 @@ namespace authentication.Controllers
         [HttpGet, Route("version")]
         public ActionResult<string> Version()
         {
+            Logger.LogDebug("/api/token/version service ping");
             return "v3.0.0";
         }
 
