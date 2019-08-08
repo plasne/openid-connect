@@ -32,7 +32,17 @@ namespace dotnetauth
                 "AUDIENCE",
                 "ALLOWED_ORIGINS",
                 "PUBLIC_CERTIFICATE_URL",
-                "REISSUE_URL"  // enable this to support reissuing tokens
+                "BASE_DOMAIN"
+            });
+            Config.Optional(new string[] {
+                "AUTH_TYPE",              // set to "app" to use an app service principal
+                "APPCONFIG_RESOURCE_ID",  // use to get settings from Azure App Config
+                "CONFIG_KEYS",            // specify the keys to get from Azure App Config
+                "TENANT_ID",              // required if using AUTH_TYPE=app
+                "CLIENT_ID",              // required if using AUTH_TYPE=app
+                "CLIENT_SECRET",          // required if using AUTH_TYPE=app
+                "REISSUE_URL",            // use to support token reissue
+                "PRESENT_CONFIG_*"        // you may specify configs that can be presented via the api/config/* endpoint
             });
             logger.LogInformation("Configuration loaded.");
 
@@ -226,6 +236,16 @@ namespace dotnetauth
                             {
                                 string reissued = TokenValidator.ReissueToken(token);
                                 context.Request.Headers.Append("Authorization", $"Bearer {reissued}");
+
+                                // rewrite the cookie
+                                context.Response.Cookies.Append("user", reissued, new CookieOptions()
+                                {
+                                    HttpOnly = true,
+                                    Secure = TokenValidator.RequireSecureForCookies,
+                                    Domain = TokenValidator.BaseDomain,
+                                    Path = "/"
+                                });
+
                                 Logger.LogDebug("reissued token successfully");
                             }
                             catch (Exception e)

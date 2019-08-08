@@ -50,13 +50,12 @@ namespace authentication.Controllers
         private class AuthFlow
         {
             public string redirecturi { get; set; }
-            public string basedomain { get; set; }
             public string state { get; set; }
             public string nonce { get; set; }
         }
 
         [HttpGet, Route("authorize")]
-        public ActionResult Authorize(string redirecturi, string basedomain)
+        public ActionResult Authorize(string redirecturi)
         {
             try
             {
@@ -73,7 +72,6 @@ namespace authentication.Controllers
                 AuthFlow flow = new AuthFlow()
                 {
                     redirecturi = (string.IsNullOrEmpty(redirecturi)) ? TokenIssuer.DefaultRedirectUrl : redirecturi,
-                    basedomain = (string.IsNullOrEmpty(basedomain)) ? TokenIssuer.BaseDomain : basedomain,
                     state = this.GenerateSafeRandomString(16),
                     nonce = this.GenerateSafeRandomString(16)
                 };
@@ -186,7 +184,7 @@ namespace authentication.Controllers
                 Response.Cookies.Append("XSRF-TOKEN", xsrf, new CookieOptions()
                 {
                     Secure = TokenIssuer.RequireSecureForCookies,
-                    Domain = flow.basedomain,
+                    Domain = TokenIssuer.BaseDomain,
                     Path = "/"
                 });
 
@@ -209,7 +207,7 @@ namespace authentication.Controllers
                 {
                     HttpOnly = true,
                     Secure = TokenIssuer.RequireSecureForCookies,
-                    Domain = flow.basedomain,
+                    Domain = TokenIssuer.BaseDomain,
                     Path = "/"
                 });
 
@@ -234,15 +232,6 @@ namespace authentication.Controllers
                 // see if it is eligible for reissue (an exception will be thrown if not)
                 var reissued = await tokenIssuer.ReissueToken(token);
 
-                // rewrite the cookie
-                Response.Cookies.Append("user", reissued, new CookieOptions()
-                {
-                    HttpOnly = true,
-                    Secure = TokenIssuer.RequireSecureForCookies,
-                    Domain = string.IsNullOrEmpty(basedomain) ? TokenIssuer.BaseDomain : basedomain,
-                    Path = "/"
-                });
-
                 return Ok(reissued);
             }
             catch (Exception e)
@@ -256,18 +245,6 @@ namespace authentication.Controllers
         public ActionResult<string> PublicValidationCertificate([FromServices] TokenIssuer tokenIssuer)
         {
             return tokenIssuer.ValidationCertificate;
-        }
-
-        [HttpGet, Route("issue")]
-        public async Task<ActionResult<string>> Issue([FromServices] TokenIssuer tokenIssuer)
-        {
-            var claims = new List<Claim>();
-            claims.Add(new Claim("oid", "d5c1d5d5-fa31-4ec3-9ad3-d520b7772ad7"));
-            claims.Add(new Claim("displayName", "Lasne, Peter"));
-            claims.Add(new Claim("uniqueName", "pelasne"));
-            claims.Add(new Claim("email", "pelasne@microsoft.com"));
-            claims.Add(new Claim("xsrf", "secret"));
-            return await tokenIssuer.IssueToken(claims);
         }
 
         [HttpGet, Route("version")]

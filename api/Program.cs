@@ -37,7 +37,7 @@ namespace dotnetauth
                 .ConfigureLogging(logging =>
                 {
                     logging.AddConsole();
-                    logging.AddAzureWebAppDiagnostics();
+                    // logging.AddAzureWebAppDiagnostics(); enable if hosting in Azure App Service
                     if (Enum.TryParse(LogLevel, out Microsoft.Extensions.Logging.LogLevel level))
                     {
                         logging.SetMinimumLevel(level);

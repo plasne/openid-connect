@@ -120,6 +120,14 @@ public class TokenIssuer
     {
         get
         {
+
+            // see if there is an env for CLIENT_SECRET
+            if (string.IsNullOrEmpty(_clientSecret))
+            {
+                _clientSecret = System.Environment.GetEnvironmentVariable("CLIENT_SECRET");
+            }
+
+            // see if there is an env for KEYVAULT_CLIENT_SECRET_URL
             if (string.IsNullOrEmpty(_clientSecret))
             {
 
@@ -142,6 +150,7 @@ public class TokenIssuer
                 }
 
             }
+
             return _clientSecret;
         }
     }
@@ -176,7 +185,7 @@ public class TokenIssuer
             }
             else
             {
-                return 0; // forever
+                return 60 * 24 * 7; // 7 days, 0 = forever
             }
         }
     }

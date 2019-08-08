@@ -60,6 +60,24 @@ public class TokenValidator
         }
     }
 
+    public static bool RequireSecureForCookies
+    {
+        get
+        {
+            string v = System.Environment.GetEnvironmentVariable("REQUIRE_SECURE_FOR_COOKIES");
+            string[] negative = new string[] { "no", "false", "0" };
+            return (!negative.Contains(v));
+        }
+    }
+
+    public static string BaseDomain
+    {
+        get
+        {
+            return System.Environment.GetEnvironmentVariable("BASE_DOMAIN");
+        }
+    }
+
     private X509SecurityKey _validationKey;
 
     public X509SecurityKey ValidationKey

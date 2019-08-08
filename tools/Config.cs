@@ -30,14 +30,6 @@ public class Config
         }
     }
 
-    private static string KeyVaultAppConfigPrefixUrl
-    {
-        get
-        {
-            return System.Environment.GetEnvironmentVariable("KEYVAULT_APPCONFIG_PREFIX_URL");
-        }
-    }
-
     private static string[] ConfigKeys
     {
         get
@@ -95,15 +87,10 @@ public class Config
 
     public async static Task<Dictionary<string, string>> Load(string[] filters, ILoggerFactory factory = null, bool useFullyQualifiedName = false)
     {
-        Dictionary<string, string> kv = new Dictionary<string, string>();
-
-        // check environment variables
-        if (string.IsNullOrEmpty("APPCONFIG_ID")) throw new Exception("missing required APPCONFIG_ID");
-        if (string.IsNullOrEmpty("APPCONFIG_SECRET")) throw new Exception("missing required APPCONFIG_SECRET");
-        if (string.IsNullOrEmpty("CONFIG_KEYS")) throw new Exception("missing required CONFIG_KEYS");
 
         // exit if there are no keys requested
-        if (ConfigKeys.Length < 1) return kv;
+        Dictionary<string, string> kv = new Dictionary<string, string>();
+        if (filters.Length < 1) return kv;
 
         // create a logger
         ILogger logger = (factory != null) ? factory.CreateLogger<Config>() : null;
@@ -224,6 +211,11 @@ public class Config
             }
         }
 
+    }
+
+    public static void Optional(IEnumerable<string> keys)
+    {
+        // this is just designed to clearly show the options, it doesn't do anything
     }
 
 }
