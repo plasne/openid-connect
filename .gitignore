@@ -11,3 +11,6 @@
 
 # env vars
 **/*.env
+
+# node
+**/node_modules

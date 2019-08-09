@@ -176,7 +176,7 @@ If you are going to use AUTH_TYPE=mi, the above settings are the only things you
 
 -   app:auth:env:DOMAIN_HINT - If you want to provide a domain hint when authenticating, you can specify it.
 
--   app:auth:env:APPLICATION_ID - You can optionally include a comma-delimited list of application IDs. If you do, the identity_token will contain the roles from those applications. If there is a single APPLICATION_ID, the roles will be added as a claim called "roles". If there are multiple APPLICATION_IDs, each will be projected as a claim named as the APPLICATION_ID. For this to work, the application specified by CLIENT_ID must have Directory.Read.All as a Microsoft Graph Application Permission (not Delegated) - this right requires administrative consent.
+-   app:auth:env:APPLICATION_ID - You can optionally include a comma-delimited list of application IDs. If you do, the identity_token will contain the roles from those applications. Each will be projected as a claim named as the APPLICATION_ID-roles. For this to work, the application specified by CLIENT_ID must have Directory.Read.All as a Microsoft Graph Application Permission (not Delegated) - this right requires administrative consent.
 
 -   app:auth:env:KEYVAULT_CLIENT_SECRET_URL - If you are going to use AuthCode, then you need to specify this parameter unless you have already specified CLIENT_SECRET. This would be the URL from step 7 under the Azure Key Vault section above.
 
@@ -252,6 +252,23 @@ You can test the following (use your URL, this is a sample):
 
 -   https://api.plasne.com/api/identity/version - If this is displayed, the AuthChooser is working and the account has access to the Key Vault.
 
+### WFE
+
+You need to define an environment variable of CONFIG_URL pointing to the URL where the configuration will be obtained, for example:
+
+```bash
+CONFIG_URL=https://api.plasne.com/api/config/wfe
+```
+
+The WFE sample only has 2 parameters:
+
+```json
+{
+    "sample:wfe:local:LOGIN_URL": "https://auth.plasne.com/api/auth/authorize",
+    "sample:wfe:local:ME_URL": "https://api.plasne.com/api/identity/me"
+}
+```
+
 ## Using the Auth Service
 
 To start a login, the browser should navigate to the auth/authorize endpoint (ex. https://auth.plasne.com/api/auth/authorize). If you want to do an automatic login, you can make a REST call to the api/identity/me endpoint (ex. https://api.plasne.com/api/identity/me), if you receive a 401 Unauthorized, you can then redirect the browser to the auth/authorize endpoint.
@@ -275,3 +292,9 @@ $.ajax({
     xhrFields: { withCredentials: true }
 });
 ```
+
+## Tools
+
+TODO
+
+document stuff in API

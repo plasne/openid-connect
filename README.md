@@ -2,6 +2,14 @@
 
 While this repository is named "openid-connect", this sample will actually encompass OpenID Connect (OIDC), AuthCode, and Service-to-Service (S2S) authentication and authorization techniques.
 
+While there are many other ways to authenticate users, this solution was developed to allow for the following special features:
+
+-   It does not require any session state
+
+-   It allows for claims to be asserted from multiple sources (id_token, Microsoft Graph, databases, etc.)
+
+-   Multiple applications can use this authentication solution as a centralized service
+
 ## Design
 
 This sample is composed of these pieces:
@@ -21,6 +29,8 @@ There are multiple methods of authentication shown in this sample:
     -   The access_token must never be exposed to the client.
 
     -   The access_token will expire. If it is needed for longer, a refresh_token must be kept to extend access.
+
+    -   The refresh_token can also be used to get an access_token for a different resource.
 
 -   S2S authentication flows can be used to get access_tokens under a shared principal.
 
@@ -91,6 +101,8 @@ AuthCode (this is optional and commonly not necessary)
     -   The access_token should never be revealed to the client, so it should be used immediately to build the JWT or it should be cached server-side.
 
     -   If the access_token is going to be used later, the refresh_token should also be cached as the access_token is only good for a short period of time.
+
+    -   You can also use the refresh_token to obtain an access_token for a different resource.
 
 Service-to-Service (this is an example of getting more information from the Microsoft Graph)
 
@@ -228,6 +240,10 @@ The following procedure is used for the reissuing of an access_token:
 
 1. The API writes the new cookie to the response stream.
 
+## Roles Claims
+
+TODO
+
 ## XSS and XSRF Protection
 
 This pattern is designed to address Cross-Site Scripting (XSS) and Cross-Site Request Forgery (XSRF). An example of each attack is below. Keep in mind that there is never perfect security, but the techniques employed here can mitigate the common concerns.
@@ -265,6 +281,60 @@ dfsafssadfsd
 1. The attacker uses a phishing attack to get the user to click on a link that will initiate an API REST call to your service.
 
 1. The cookie with authentication is sent to your service and an unintended action is performed under the user's authority.
+
+## Token Lifetimes
+
+These are the current lifetimes for tokens, but of course that could change.
+
+-   id_token - 1 hour
+
+-   access_token - 1 hour
+
+-   refresh_token - 90 days
+
+-   identity_token - user-determined; 4 hours by default
+
+## Debugging Locally
+
+You should create a .env file in the folder you will be running "dotnet run" from for each service (API and auth). You should include in that file a setting called HOST_URL that specifies the protocol and port that you want to run that service on. You might also include a more granular LOG_LEVEL and a PROXY if needed. These 3 settings must be set in the .env file (or by some other means to create an environment variable) as they are utilized prior to getting the configuration from Azure App Service. For example:
+
+```bash
+HOST_URL=http://localhost:5100
+LOG_LEVEL=Debug
+PROXY=http://proxy
+```
+
+If you are are going to host the WFE sample from this project, you also need to create a .env file where you will be running "node server.js" from. It should contain the HOST_URL (only the port is actually used) and CONFIG_URL:
+
+```bash
+HOST_URL=http://localhost:5000
+CONFIG_URL=http://localhost:5200/api/config/wfe
+```
+
+There will be some settings that are different for a local configuration. You can create additional configuration items in Azure App Configuration specifically for the local environment. You can specify all settings or you can simply override some settings. The environment variables are favored from left-to-right, so where there are local settings they would take precident and the dev settings would fill in the gaps if you did something like this:
+
+```bash
+CONFIG_KEYS=sample:auth:local:\*, sample:common:local:\*, sample:auth:dev:\*, sample:common:dev:\*
+```
+
+As an example, these were the settings I overwrote for my local environment:
+
+```json
+{
+    "sample:api:local:PRESENT_CONFIG_wfe": "sample:wfe:local:*, sample:wfe:dev:*",
+    "sample:api:local:PUBLIC_CERTIFICATE_URL": "http://localhost:5100/api/auth/certificate",
+    "sample:api:local:REISSUE_URL": "http://localhost:5100/api/auth/reissue",
+    "sample:auth:local:DEFAULT_REDIRECT_URL": "http://localhost:5000",
+    "sample:auth:local:REDIRECT_URI": "http://localhost:5100/api/auth/token",
+    "sample:common:local:ALLOWED_ORIGINS": "http://localhost:5000",
+    "sample:common:local:BASE_DOMAIN": "localhost",
+    "sample:common:local:REQUIRE_SECURE_FOR_COOKIES": "false",
+    "sample:wfe:local:LOGIN_URL": "http://localhost:5100/api/auth/authorize",
+    "sample:wfe:local:ME_URL": "http://localhost:5200/api/identity/me"
+}
+```
+
+One warning, at least in Chrome and Firefox, cookies without the Secure flag will not replace cookies with the Secure flag. Therefore, if you run with REQUIRE_SECURE_FOR_COOKIES with the default of "true" and then change it to "false", cookies could have been created that wouldn't get replaced and you will get errors that the state and nonce values don't match. You can manually delete those cookies should that happen.
 
 ## Limitations
 

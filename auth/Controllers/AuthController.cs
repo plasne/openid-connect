@@ -65,8 +65,8 @@ namespace authentication.Controllers
                 string clientId = WebUtility.UrlEncode(TokenIssuer.ClientId);
                 string redirectUri = WebUtility.UrlEncode(TokenIssuer.RedirectUri);
                 // REF: https://docs.microsoft.com/en-us/azure/active-directory/develop/id-tokens
-                string scope = WebUtility.UrlEncode("openid profile email https://graph.microsoft.com/user.read"); // space sep (ex. https://graph.microsoft.com/user.read)
-                string response_type = WebUtility.UrlEncode("id_token code"); // space sep, could include "code"
+                string scope = WebUtility.UrlEncode("openid profile email"); // space sep (ex. https://graph.microsoft.com/user.read)
+                string response_type = WebUtility.UrlEncode("id_token"); // space sep, could include "code"
                 string domainHint = WebUtility.UrlEncode(TokenIssuer.DomainHint);
 
                 // generate state and nonce
@@ -216,7 +216,7 @@ namespace authentication.Controllers
                 string code = Request.Form["code"];
                 var tokens1 = GetAccessTokenFromAuthCode(code, "offline_access https://graph.microsoft.com/user.read", tokenIssuer);
                 Console.WriteLine("access_token[0]: " + tokens1.accessToken);
-                var tokens2 = GetAccessTokenFromRefreshToken(tokens1.refreshToken, "offline_access https://graph.microsoft.com/user.read", tokenIssuer);
+                var tokens2 = GetAccessTokenFromRefreshToken(tokens1.refreshToken, "offline_access https://analysis.windows.net/powerbi/api/dataset.read", tokenIssuer);
                 Console.WriteLine("access_token[1]: " + tokens2.accessToken);
                 */
 
@@ -239,10 +239,17 @@ namespace authentication.Controllers
                 var oid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
                 if (oid != null) claims.Add(new Claim("oid", oid.Value));
 
+                // attempt to propogate roles
+                var roles = idToken.Payload.Claims.Where(c => c.Type == "roles");
+                foreach (var role in roles)
+                {
+                    claims.Add(new Claim("roles", role.Value));
+                }
+
                 // Service-to-Service: get other claims from the graph (req. Directory.Read.All)
                 /*
                 dynamic user = await tokenIssuer.GetUserById(oid.Value);
-                claims.Add(new Claim("displayName", (string)user.displayName));
+                claims.Add(new Claim("displayName2", (string)user.displayName));
                 */
 
                 // add the XSRF (cross-site request forgery) claim

@@ -23,8 +23,8 @@ namespace dotnetauth
 
             // load the configuration
             logger.LogInformation("Loading configuration...");
-            Config.Apply(null, factory).Wait();
-            Config.Require(new string[] {
+            Config.Apply().Wait();
+            Config.Ensure(new string[] { // required
                 "AUTHORITY",
                 "REDIRECT_URI",
                 "ISSUER",
@@ -36,18 +36,17 @@ namespace dotnetauth
                 "KEYVAULT_PRIVATE_KEY_URL",
                 "KEYVAULT_PRIVATE_KEY_PASSWORD_URL",
                 "KEYVAULT_PUBLIC_CERT_URL"
-            });
-            Config.Optional(new string[] {
-
-                "AUTH_TYPE",                 // set to "app" to use an app service principal
-                "APPCONFIG_RESOURCE_ID",     // use to get settings from Azure App Config
-                "CONFIG_KEYS",               // specify the keys to get from Azure App Config
-                "TENANT_ID",                 // required if using AUTH_TYPE=app
-                "CLIENT_ID",                 // required if using AUTH_TYPE=app
-                "CLIENT_SECRET",             // required if using AUTH_TYPE=app
-                "APPLICATION_ID",            // use to assert roles
-                "KEYVAULT_CLIENT_SECRET_URL" // use for AuthCode flow with AUTH_TYPE=mi
-            });
+            }, new string[] {  // optional
+                "AUTH_TYPE",                  // set to "app" to use an app service principal
+                "APPCONFIG_RESOURCE_ID",      // use to get settings from Azure App Config
+                "CONFIG_KEYS",                // specify the keys to get from Azure App Config
+                "TENANT_ID",                  // required if using AUTH_TYPE=app
+                "CLIENT_ID",                  // required if using AUTH_TYPE=app
+                "CLIENT_SECRET",              // required if using AUTH_TYPE=app
+                "APPLICATION_ID",             // use to assert roles
+                "KEYVAULT_CLIENT_SECRET_URL", // use for AuthCode flow with AUTH_TYPE=mi
+                "REQUIRE_SECURE_FOR_COOKIES"  // set to "false" if you don't want cookies marked "secure"
+            }, factory);
             logger.LogInformation("Configuration loaded.");
 
         }

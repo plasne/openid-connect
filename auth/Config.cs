@@ -85,15 +85,12 @@ public class Config
         }
     }
 
-    public async static Task<Dictionary<string, string>> Load(string[] filters, ILoggerFactory factory = null, bool useFullyQualifiedName = false)
+    public async static Task<Dictionary<string, string>> Load(string[] filters, bool useFullyQualifiedName = false)
     {
 
         // exit if there are no keys requested
         Dictionary<string, string> kv = new Dictionary<string, string>();
         if (filters.Length < 1) return kv;
-
-        // create a logger
-        ILogger logger = (factory != null) ? factory.CreateLogger<Config>() : null;
 
         // get a token
         string accessToken = await AuthChooser.GetAccessToken("https://management.azure.com");
@@ -148,7 +145,7 @@ public class Config
                 {
                     var key = (useFullyQualifiedName) ? (string)item.key : ((string)item.key).Split(":").Last().ToUpper();
                     var val = (string)item.value;
-                    kv[key] = val;
+                    if (!kv.ContainsKey(key)) kv.Add(key, val);
                 }
 
             }
@@ -158,64 +155,65 @@ public class Config
         return kv;
     }
 
-    public async static Task Apply(string[] filters = null, ILoggerFactory factory = null)
+    public async static Task Apply(string[] filters = null)
+    {
+
+        // load the config
+        if (filters == null) filters = ConfigKeys;
+        Dictionary<string, string> kv = await Config.Load(filters);
+
+        // apply the config
+        foreach (var pair in kv)
+        {
+            System.Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+        }
+
+    }
+
+    public static void Ensure(IEnumerable<string> required, IEnumerable<string> optional = null, ILoggerFactory factory = null)
     {
 
         // create a logger
         ILogger logger = (factory != null) ? factory.CreateLogger<Config>() : null;
 
-        // load the config
-        if (filters == null) filters = ConfigKeys;
-        Dictionary<string, string> kv = await Config.Load(filters, factory);
-
-        // apply the config
-        foreach (var pair in kv)
+        // verify that all required parameters are provided or don't start up
+        foreach (var key in required)
         {
-            var cur = System.Environment.GetEnvironmentVariable(pair.Key);
-            if (string.IsNullOrEmpty(cur))
+            string val = System.Environment.GetEnvironmentVariable(key);
+            if (string.IsNullOrEmpty(val))
             {
-                System.Environment.SetEnvironmentVariable(pair.Key, pair.Value);
-                if (logger != null)
-                {
-                    logger.LogDebug($"config: {pair.Key} = \"{pair.Value}\"");
-                }
-                else
-                {
-                    Console.WriteLine($"config: {pair.Key} = \"{pair.Value}\"");
-                }
+                throw new Exception($"config: \"{key}\" is REQUIRED BUT MISSING!!!!!");
             }
             else
             {
                 if (logger != null)
                 {
-                    logger.LogDebug($"config: [already set] {pair.Key} = \"{pair.Value}\"");
+                    logger.LogDebug($"config: {key} = \"{val}\"");
                 }
                 else
                 {
-                    Console.WriteLine($"config: [already set] {pair.Key} = \"{pair.Value}\"");
+                    Console.WriteLine($"config: {key} = \"{val}\"");
                 }
             }
         }
 
-    }
-
-    public static void Require(IEnumerable<string> keys)
-    {
-
-        // verify that all required parameters are provided or don't start up
-        foreach (var key in keys)
+        // report about optional
+        foreach (var key in required)
         {
-            if (string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable(key)))
+            string val = System.Environment.GetEnvironmentVariable(key);
+            if (!string.IsNullOrEmpty(val))
             {
-                throw new Exception($"config: missing required parameter \"{key}\"");
+                if (logger != null)
+                {
+                    logger.LogDebug($"config: {key} = \"{val}\"");
+                }
+                else
+                {
+                    Console.WriteLine($"config: {key} = \"{val}\"");
+                }
             }
         }
 
-    }
-
-    public static void Optional(IEnumerable<string> keys)
-    {
-        // this is just designed to clearly show the options, it doesn't do anything
     }
 
 }

@@ -459,10 +459,9 @@ public class TokenIssuer
             var numApps = ApplicationIds.Count();
             foreach (var assignment in assignments)
             {
-                var appId = (numApps == 1) ? "roles" : assignment.AppId;
                 foreach (var role in assignment.Roles)
                 {
-                    claims.Add(new Claim(appId + "-roles", role));
+                    claims.Add(new Claim(assignment.AppId + "-roles", role));
                 }
             }
         }
@@ -557,7 +556,7 @@ public class TokenIssuer
 
         // strip inappropriate claims
         var filter = new string[] { "iss", "aud", "exp" };
-        var claims = jwt.Claims.Where(c => !filter.Contains(c.Type)).ToList();
+        var claims = jwt.Claims.Where(c => !filter.Contains(c.Type) && !c.Type.EndsWith("-roles")).ToList();
 
         // reissue the token
         return await IssueToken(claims);

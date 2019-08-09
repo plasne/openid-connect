@@ -34,7 +34,7 @@ $(document).ready(function() {
     // get configuration
     $.ajax({
         method: 'GET',
-        url: 'https://api.plasne.com/api/config/wfe'
+        url: '/config'
     }).done(function(data) {
         config = data;
         $('#loading').css('display', 'none');

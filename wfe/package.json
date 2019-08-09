@@ -1,0 +1,9 @@
+{
+  "name": "wfe",
+  "version": "1.0.0",
+  "dependencies": {
+    "axios": "^0.19.0",
+    "dotenv": "^8.0.0",
+    "express": "^4.17.1"
+  }
+}
