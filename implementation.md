@@ -126,6 +126,10 @@ Generally you need to specify local environment variables (this will also work i
 
 -   CONFIG_KEYS - This is a comma-delimited list of configuration keys to pull for the specific service. All keys matching the pattern will be pulled. A setting that is already set is not replaced (so left-most patterns take precident). For example, the dev environment of the auth service might contain "app:auth:dev:\*, app:common:dev:\*". If you do not specify any CONFIG_KEYS, no variables will be set from App Configuration.
 
+-   LOG_LEVEL (default: Information) - Specify one of Critical, Debug, Error, Information, None, Trace, Warning. This determines the logging level.
+
+-   HOST_URL - You may specify a fully qualified URL (including protocol) to host the application on (ex. https://localhost:5000 if hosting locally).
+
 If you are going to use AUTH_TYPE=mi, the above settings are the only things you need to set. If you are going to use AUTH_TYPE=app, you must supply the following settings:
 
 -   TENANT_ID - This is the tenant ID of the Azure AD directory that contains the CLIENT_ID.
@@ -206,11 +210,68 @@ In this sample configuration, my application is named "sample" and this configur
 
 ## Deploy the Services
 
-How to deploy services in Azure is beyond the scope of this article.
+How to deploy services in Azure is beyond the scope of this article, however, there are some things to consider for each service deployment below.
 
-Make sure you configure local environment variables for at least APPCONFIG_RESOURCE_ID and CONFIG_KEYS.
+### Auth Service
+
+Make sure you configure local environment variables for at least APPCONFIG_RESOURCE_ID and CONFIG_KEYS. CONFIG_KEYS for an application named "sample" and a "dev" environment might look like this: "sample:auth:dev:\*, sample:common:dev:\*".
+
+If you intend to use Managed Identity (AUTH_TYPE=mi), make sure you follow these steps:
+
+1. Enable Managed Identity for the platform.
+
+2. Add an access policy to Key Vault for the Managed Identity that allows GET of SECRETs. You can typically search for the identity by the resource name; it should show as APPLICATION.
+
+3. Add an Access Control Role Assignment (IAM) in the Azure portal on the App Configuration resource for the Managed Identity. It must be an OWNER because it needs to read the security keys required to access App Configuration.
+
+If you are deploying on a Windows-based App Service, you must add WEBSITE_LOAD_USER_PROFILE=1 as per https://github.com/projectkudu/kudu/wiki/Configurable-settings#the-system-cannot-find-the-file-specified-issue-with-x509certificate2.
+
+If you deployed prior to applying the above configuation, you might need to restart your service; the configuration is only read when the application starts.
+
+You can test the following (use your URL, this is a sample):
+
+-   https://auth.plasne.com/api/auth/certificate - This should show the public certificate for validating the identity_token. If this is displayed, the AuthChooser is working and the account has access to the Key Vault.
+
+-   https://auth.plasne.com/api/auth/verify?scope=graph - This should return a 200 if the Microsoft Graph can be queried for all users (requires Directory.Read.All).
+
+### API Service
+
+Make sure you configure local environment variables for at least APPCONFIG_RESOURCE_ID and CONFIG_KEYS. CONFIG_KEYS for an application named "sample" and a "dev" environment might look like this: "sample:api:dev:\*, sample:common:dev:\*".
+
+If you intend to use Managed Identity (AUTH_TYPE=mi), make sure you follow these steps:
+
+1. Enable Managed Identity for the platform.
+
+2. Add an access policy to Key Vault for the Managed Identity that allows GET of SECRETs. You can typically search for the identity by the resource name; it should show as APPLICATION.
+
+3. Add an Access Control Role Assignment (IAM) in the Azure portal on the App Configuration resource for the Managed Identity. It must be an OWNER because it needs to read the security keys required to access App Configuration.
+
+If you deployed prior to applying the above configuation, you might need to restart your service; the configuration is only read when the application starts.
+
+You can test the following (use your URL, this is a sample):
+
+-   https://api.plasne.com/api/identity/version - If this is displayed, the AuthChooser is working and the account has access to the Key Vault.
 
 ## Using the Auth Service
 
-WFE must use XHR: withcredentials
-WFE must send X-XSRF-TOKEN
+To start a login, the browser should navigate to the auth/authorize endpoint (ex. https://auth.plasne.com/api/auth/authorize). If you want to do an automatic login, you can make a REST call to the api/identity/me endpoint (ex. https://api.plasne.com/api/identity/me), if you receive a 401 Unauthorized, you can then redirect the browser to the auth/authorize endpoint.
+
+Whenever you make a call to an endpoint that requires authentication, you must:
+
+-   read the value of the XSRF-TOKEN cookie and send it's contents as a header called X-XSRF-TOKEN
+
+-   instruct XHR to send credentials (this allows the cookies to be sent)
+
+Here is an example using jQuery:
+
+```javascript
+var xsrf = Cookies.get('XSRF-TOKEN');
+$.ajax({
+    method: 'GET',
+    url: config.ME_URL,
+    headers: {
+        'X-XSRF-TOKEN': xsrf
+    },
+    xhrFields: { withCredentials: true }
+});
+```

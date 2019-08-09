@@ -64,8 +64,9 @@ namespace authentication.Controllers
                 string authority = TokenIssuer.Authority;
                 string clientId = WebUtility.UrlEncode(TokenIssuer.ClientId);
                 string redirectUri = WebUtility.UrlEncode(TokenIssuer.RedirectUri);
-                string scope = WebUtility.UrlEncode("openid"); // space sep (ex. https://graph.microsoft.com/user.read)
-                string response_type = WebUtility.UrlEncode("id_token"); // space sep, could include "code"
+                // REF: https://docs.microsoft.com/en-us/azure/active-directory/develop/id-tokens
+                string scope = WebUtility.UrlEncode("openid profile email https://graph.microsoft.com/user.read"); // space sep (ex. https://graph.microsoft.com/user.read)
+                string response_type = WebUtility.UrlEncode("id_token code"); // space sep, could include "code"
                 string domainHint = WebUtility.UrlEncode(TokenIssuer.DomainHint);
 
                 // generate state and nonce
@@ -132,7 +133,13 @@ namespace authentication.Controllers
             return validatedJwt;
         }
 
-        private string GetAccessToken(string code, string scope, [FromServices] TokenIssuer tokenIssuer)
+        private class Tokens
+        {
+            public string accessToken { get; set; }
+            public string refreshToken { get; set; }
+        }
+
+        private Tokens GetAccessTokenFromAuthCode(string code, string scope, TokenIssuer tokenIssuer)
         {
 
             // build the URL
@@ -152,8 +159,39 @@ namespace authentication.Controllers
                 byte[] response = client.UploadValues(url, data);
                 string result = System.Text.Encoding.UTF8.GetString(response);
                 dynamic json = JObject.Parse(result);
-                // json.refresh_token is also available
-                return json.access_token;
+                return new Tokens()
+                {
+                    accessToken = json.access_token,
+                    refreshToken = json.refresh_token
+                };
+            }
+
+        }
+
+        private Tokens GetAccessTokenFromRefreshToken(string refreshToken, string scope, TokenIssuer tokenIssuer)
+        {
+
+            // build the URL
+            string url = $"{TokenIssuer.Authority}/oauth2/v2.0/token";
+
+            // get the response
+            using (WebClient client = new WebClient())
+            {
+                if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
+                NameValueCollection data = new NameValueCollection();
+                data.Add("client_id", TokenIssuer.ClientId);
+                data.Add("client_secret", tokenIssuer.ClientSecret);
+                data.Add("scope", scope);
+                data.Add("refresh_token", refreshToken);
+                data.Add("grant_type", "refresh_token");
+                byte[] response = client.UploadValues(url, data);
+                string result = System.Text.Encoding.UTF8.GetString(response);
+                dynamic json = JObject.Parse(result);
+                return new Tokens()
+                {
+                    accessToken = json.access_token,
+                    refreshToken = json.refresh_token
+                };
             }
 
         }
@@ -173,10 +211,13 @@ namespace authentication.Controllers
                 string idRaw = Request.Form["id_token"];
                 var idToken = await VerifyIdToken(idRaw, flow.nonce);
 
-                // use the code to get an access token
+                // AuthCode: use the code to get an access token
                 /*
                 string code = Request.Form["code"];
-                string token = GetAccessToken(code, "offline_access https://graph.microsoft.com/user.read");
+                var tokens1 = GetAccessTokenFromAuthCode(code, "offline_access https://graph.microsoft.com/user.read", tokenIssuer);
+                Console.WriteLine("access_token[0]: " + tokens1.accessToken);
+                var tokens2 = GetAccessTokenFromRefreshToken(tokens1.refreshToken, "offline_access https://graph.microsoft.com/user.read", tokenIssuer);
+                Console.WriteLine("access_token[1]: " + tokens2.accessToken);
                 */
 
                 // write the XSRF-TOKEN cookie
@@ -191,17 +232,23 @@ namespace authentication.Controllers
                 // populate the claims from the id_token
                 List<Claim> claims = new List<Claim>();
                 var email = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "email");
-                if (email != null) claims.Add(new Claim("email", email.Value));
+                if (email == null) throw new Exception("id_token does not contain email address");
+                claims.Add(new Claim("email", email.Value));
+                var displayName = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "name");
+                if (displayName != null) claims.Add(new Claim("displayName", displayName.Value));
+                var oid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
+                if (oid != null) claims.Add(new Claim("oid", oid.Value));
 
-                // populate the claims from the user's graph object
-                dynamic user = await tokenIssuer.GetUserByEmail(email.Value);
+                // Service-to-Service: get other claims from the graph (req. Directory.Read.All)
+                /*
+                dynamic user = await tokenIssuer.GetUserById(oid.Value);
                 claims.Add(new Claim("displayName", (string)user.displayName));
-                claims.Add(new Claim("oid", (string)user.id));
+                */
 
                 // add the XSRF (cross-site request forgery) claim
                 claims.Add(new Claim("xsrf", xsrf));
 
-                // issue the token
+                // issue the token cookie
                 string jwt = await tokenIssuer.IssueToken(claims);
                 Response.Cookies.Append("user", jwt, new CookieOptions()
                 {
@@ -210,6 +257,9 @@ namespace authentication.Controllers
                     Domain = TokenIssuer.BaseDomain,
                     Path = "/"
                 });
+
+                // revoke the authflow cookie
+                Response.Cookies.Delete("authflow");
 
                 return Redirect(flow.redirecturi);
             }
@@ -267,40 +317,64 @@ namespace authentication.Controllers
         }
 
         [HttpGet, Route("verify")]
-        public async Task<ActionResult> Verify()
+        public async Task<ActionResult> Verify(string scope)
         {
-            try
+            List<string> errors = new List<string>();
+            var tokenProvider = new AzureServiceTokenProvider();
+            scope = scope.ToLower();
+            if (string.IsNullOrEmpty(scope)) scope = "vault,graph";
+
+            // test vault access
+            if (scope.Contains("vault"))
             {
-
-                // this method allows you to test whether the appropriate permissions are assigned
-                var tokenProvider = new AzureServiceTokenProvider();
-
-                // test vault access
-                var vaultToken = await tokenProvider.GetAccessTokenAsync("https://vault.azure.net");
-                using (var client = new WebClient())
+                try
                 {
-                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
-                    client.Headers.Add("Authorization", $"Bearer {vaultToken}");
-                    client.DownloadString(new Uri($"{TokenIssuer.KeyVaultPublicCertUrl}?api-version=7.0"));
+                    var vaultToken = await tokenProvider.GetAccessTokenAsync("https://vault.azure.net");
+                    using (var client = new WebClient())
+                    {
+                        if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
+                        client.Headers.Add("Authorization", $"Bearer {vaultToken}");
+                        client.DownloadString(new Uri($"{TokenIssuer.KeyVaultPublicCertUrl}?api-version=7.0"));
+                    }
                 }
-
-                // test graph access
-                var graphToken = await tokenProvider.GetAccessTokenAsync("https://graph.microsoft.com");
-                using (var client = new WebClient())
+                catch (Exception e)
                 {
-                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
-                    client.Headers.Add("Authorization", $"Bearer {graphToken}");
-                    string query = "https://graph.microsoft.com/beta/users?$top=1";
-                    client.DownloadString(new Uri(query));
+                    Logger.LogError(e, "verify Key Vault failed");
+                    errors.Add($"keyvault - {e.Message}");
                 }
+            }
 
+            // test graph access
+            if (scope.Contains("graph"))
+            {
+                try
+                {
+                    var graphToken = await tokenProvider.GetAccessTokenAsync("https://graph.microsoft.com");
+                    using (var client = new WebClient())
+                    {
+                        if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
+                        client.Headers.Add("Authorization", $"Bearer {graphToken}");
+                        string query = "https://graph.microsoft.com/beta/users?$top=1";
+                        client.DownloadString(new Uri(query));
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.LogError(e, "verify Graph failed");
+                    errors.Add($"graph - {e.Message}");
+                }
+            }
+
+            // report on the verification
+            if (errors.Count < 1)
+            {
                 return Ok("all tests passed");
             }
-            catch (Exception e)
+            else
             {
-                Logger.LogError(e, "verify failed");
-                return StatusCode(StatusCodes.Status500InternalServerError, e.Message);
+                return StatusCode(StatusCodes.Status500InternalServerError, string.Join("; ", errors));
             }
+
         }
 
     }

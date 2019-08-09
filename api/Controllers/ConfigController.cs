@@ -5,10 +5,14 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Azure.Services.AppAuthentication;
+using Microsoft.Extensions.Logging;
+using System.Net;
 
 namespace authentication.Controllers
 {
     [Route("api/[controller]")]
+    [AllowAnonymous]
     [ApiController]
     public class ConfigController : ControllerBase
     {
@@ -23,7 +27,6 @@ namespace authentication.Controllers
             public NotFoundException(string message) : base(message) { }
         }
 
-        [AllowAnonymous]
         [HttpGet, Route("{name}")]
         public async Task<ActionResult<Dictionary<string, string>>> GetConfigByName(string name)
         {

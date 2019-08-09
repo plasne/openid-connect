@@ -1,3 +1,4 @@
+<meta charset="utf-8" />
 <html>
     <head>
         <script
@@ -7,25 +8,25 @@
         ></script>
         <script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js"></script>
         <script src="./default.js"></script>
+        <style>
+            td {
+                padding: 4px;
+            }
+        </style>
     </head>
     <body>
-        <h1>Welcome to my home page</h1>
-        <div style="margin-top: 16px">
-            <a href="https://pelasne-web.azurewebsites.net/api/auth/authorize"
-                >login</a
-            >
-            - goes through the login process (anonymous)
+        <div id="loading">Loading...</div>
+        <div id="interface" style="display: none">
+            <h1>Welcome to my home page</h1>
+            <div style="margin-top: 16px">
+                <a href="#" onclick="javascript:login()">login</a>
+                - goes through the login process
+            </div>
+            <div style="margin-top: 16px">
+                <a href="#" onclick="javascript:me()">me</a>
+                - shows information known about the current user
+            </div>
+            <table id="results" style="margin-top : 16px"></table>
         </div>
-        <div style="margin-top: 16px">
-            <a href="#" onclick="javascript:hello()">hello</a>
-            - shows information known about the user (authenticated)
-        </div>
-        <div style="margin-top: 16px">
-            <a href="https://pelasne-web.azurewebsites.net/api/auth/version"
-                >version</a
-            >
-            - shows version of API to ensure it is operational (anonymous)
-        </div>
-        <div style="margin-top: 16px" id="results"></div>
     </body>
 </html>

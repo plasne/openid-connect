@@ -341,7 +341,7 @@ public class TokenIssuer
 
     }
 
-    public async Task<dynamic> GetUserByEmail(string email)
+    public async Task<dynamic> GetUserById(string oid)
     {
 
         // get an access token
@@ -352,11 +352,9 @@ public class TokenIssuer
         {
             if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
             client.Headers.Add("Authorization", $"Bearer {accessToken}");
-            string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users?$filter=mail eq '{email}'"));
+            string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{oid}"));
             dynamic json = JObject.Parse(raw);
-            JArray values = json.value;
-            if (values.Count != 1) throw new Exception("a single user could not be found with the supplied email address");
-            return values[0];
+            return json;
         }
 
     }
@@ -464,7 +462,7 @@ public class TokenIssuer
                 var appId = (numApps == 1) ? "roles" : assignment.AppId;
                 foreach (var role in assignment.Roles)
                 {
-                    claims.Add(new Claim(appId, role));
+                    claims.Add(new Claim(appId + "-roles", role));
                 }
             }
         }
@@ -478,8 +476,22 @@ public class TokenIssuer
             signingCredentials: SigningCredentials);
 
         // serialize
-        JwtSecurityTokenHandler handler = new JwtSecurityTokenHandler();
-        return handler.WriteToken(jwt);
+        try
+        {
+            JwtSecurityTokenHandler handler = new JwtSecurityTokenHandler();
+            return handler.WriteToken(jwt);
+        }
+        catch (Exception e)
+        {
+            if (e.Message.Contains("The system cannot find the file specified"))
+            {
+                throw new Exception("The User Profile is not available - https://github.com/projectkudu/kudu/wiki/Configurable-settings#the-system-cannot-find-the-file-specified-issue-with-x509certificate2", e);
+            }
+            else
+            {
+                throw;
+            }
+        }
 
     }
 
