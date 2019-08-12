@@ -101,6 +101,8 @@ https://pelasne-keyvault.vault.azure.net/secrets/PUBLICCERT
 
 It is possible to configure settings using environment variables and/or a .env file and not use Azure App Configuration at all. If you don't specify CONFIG_KEYS, nothing will be pulled from Azure App Configuration. However, it is recommended given the number of settings that have to be coordinated and correct, that you use Azure App Configuration.
 
+You should never store a secret in this implementation of the Azure App Configuration, the values of the keys are written to the logs, displayed on the console, and potentially even made available by PRESENT*CONFIG*. Instead the configuration should contains URLs that point to secrets in Azure Key Vault.
+
 Settings are set in the following order:
 
 1. Environment variables, including...
@@ -301,6 +303,33 @@ $.ajax({
 ```
 
 ## Using the Tools
+
+There is a tools application that allows you do the following:
+
+-   Issue tokens
+
+-   Validate tokens
+
+-   Read user profiles from the Microsoft Graph
+
+This can be helpful for debugging problems, but also for testing. For instance you might
+
+There are only a handful of keys that are required...
+
+-   ISSUER
+
+-   AUDIENCE
+
+-   KEYVAULT_PRIVATE_KEY_URL
+
+-   KEYVAULT_PRIVATE_KEY_PASSWORD_URL
+
+-   KEYVAULT_PUBLIC_CERT_URL
+
+```bash
+APPCONFIG_RESOURCE_ID=/subscriptions/8e95e0bb-d7cc-4454-9443-75ca862d34c1/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config
+CONFIG_KEYS=sample:tools:local:*, sample:auth:local:*, sample:common:local:*, sample:tools:dev:*, sample:auth:dev:*, sample:common:dev:*
+```
 
 There is a tools project included
 

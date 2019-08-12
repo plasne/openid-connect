@@ -190,6 +190,10 @@ There is one condition that would require state...
 
 -   If you are using the AuthCode flow to get access_tokens/refresh_tokens on-behalf-of the user and you intend to keep them so that you can do things as the user later in your application, you will NEED to have some state because you need to cache those tokens somewhere server-side. I think this is an uncommon pattern, but it could drive a state requirement.
 
+## When is AuthCode Used?
+
+TODO
+
 ## Why Reissue?
 
 The reissue capability was added into this solution after the first implementation because the customer wanted the application authentication to potentially last for days. The identity_token is passed by cookie on every REST call and contains the information needed to validate the authentication.
