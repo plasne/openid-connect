@@ -6,9 +6,16 @@ This guide walks you through implementing this sample.
 
 When using Service-to-Service authentication (including reading configuration from Azure App Configuration and Azure Key Vault) you will need access_tokens issued. You should decide up-front how you will are going to get those access_tokens.
 
-Each service has an AuthChooser which selects the appropriate authentication method based on how you have configured AUTH_TYPE. It can be either "mi" (default) or "app". If set to "mi", the AuthChooser will use a Managed Identity (or failback to use az CLI when running locally) every time it needs an access_token. If set to "app", the AuthChooser will use an application service principal (the application created in the above section).
+Each service has an AuthChooser which selects the appropriate authentication method based on how you have configured AUTH_TYPE. It can be either "mi" (default) or "app". If set to "mi", the AuthChooser will use a Managed Identity (or failback to use az-cli when running locally) every time it needs an access_token. If set to "app", the AuthChooser will use an application service principal (the application created in the above section).
 
-Ideally you should use Managed Identity whenever possible since it will not require the CLIENT_SECRET to be set locally.
+There are PROs and CONs with each option:
+
+| Type                          | Pros                                                                                                                          | Cons                                                                                                                                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Managed Identity              | Execution of the code on the server and debugging locally are both easy because MI is used when possible and az-cli when not. | Debugging locally, automated testing on a build agent, and running on a server will all use different security principals making testing and reproduction of issues more difficult. |
+| Application Service Principal | The same credentials are used everywhere.                                                                                     | The CLIENT_SECRET must be provided to the auth and API services as an environment variable.                                                                                         |
+
+I am of the opinion that Managed Identity should be used because it is the safest method, but it also makes adequate testing more difficult.
 
 ## DNS and SSL
 

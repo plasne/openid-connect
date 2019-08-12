@@ -184,6 +184,12 @@ This solution was specifically designed so that it did not require any state. Ho
 
     -   The identity_token is sent in a cookie marked HttpOnly so it is not accessible via JavaScript, however, the information could still be accessible via a compromised browser or device. This should still be OK because any change to the information would invalidate the signature.
 
+-   In the next section about reissuing, the reason the more common refresh_token was not used for the renewal is because semantically it seemed inappropriate to issue a refresh_token without some way of revoking it. If the application did manage state, you could consider adding a revokable refresh_token and using that for reissue.
+
+There is one condition that would require state...
+
+-   If you are using the AuthCode flow to get access_tokens/refresh_tokens on-behalf-of the user and you intend to keep them so that you can do things as the user later in your application, you will NEED to have some state because you need to cache those tokens somewhere server-side. I think this is an uncommon pattern, but it could drive a state requirement.
+
 ## Why Reissue?
 
 The reissue capability was added into this solution after the first implementation because the customer wanted the application authentication to potentially last for days. The identity_token is passed by cookie on every REST call and contains the information needed to validate the authentication.
@@ -240,9 +246,41 @@ The following procedure is used for the reissuing of an access_token:
 
 1. The API writes the new cookie to the response stream.
 
+### Testing the Reissue Process
+
+You can test the reissue process by POSTing an expired token to the reissue service. If all is working properly, you should get a new token as the body of the response.
+
+```bash
+curl -i -X POST -d "token=ey...dQ" https://auth.plasne.com/api/auth/reissue
+```
+
 ## Roles Claims
 
-TODO
+You can define roles for Azure AD applications as defined here: https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-add-app-roles-in-azure-ad-apps.
+
+There are 2 types of roles claims that can be issued in the identity_token:
+
+-   If the application used for authentication (CLIENT_ID) contains roles and the user being authenticated is in one or more of those roles, the "roles" claim will be added with the roles the user is in.
+
+-   If one or more APPLICATION_IDs are specified and the id_token contains an "oid" claim, the roles for those applications will be queried and compared against the user's membership in those roles (determined by the oid). An "appId-roles" claim (where appId is the GUID application ID) will be issued for each containing the roles the user is in. If a user doesn't have a role in an application a claim will not be added for that application.
+
+Example:
+
+```json
+{
+    "email": "pelasne@microsoft.com",
+    "displayName": "Peter Lasne",
+    "oid": "00000000-0000-0000-0000-000000000000",
+    "roles": "user",
+    "xsrf": "bYicx4FtS6JdxPIRDylq7g",
+    "old": "1566221345",
+    "790c50cb-2350-4216-a7ef-4c179dde26db-roles": ["user", "admin"],
+    "95ed35ff-c531-4785-83f6-ed7470cf67e4-roles": "superuser",
+    "exp": 1565619573,
+    "iss": "https://auth.plasne.com",
+    "aud": "https://api.plasne.com"
+}
+```
 
 ## XSS and XSRF Protection
 
@@ -256,9 +294,7 @@ The approach used by this solution is two-fold. Two cookies are issued:
 
 -   XSRF-TOKEN - contained in a cookie readable by JavaScript
 
-Authentication is only accepted when the cookie containing the identity_token is passed AND there is an X-XSRF-TOKEN header (obtained by reading the cookie containing the XSRF-TOKEN value via JavaScript). This combination approach
-
-dfsafssadfsd
+Authentication is only accepted when the cookie containing the identity_token is passed AND there is an X-XSRF-TOKEN header (obtained by reading the cookie containing the XSRF-TOKEN value via JavaScript). This combination approach ensures that this solution is resilient versus these common attacks.
 
 ### Example of an XSS Hack
 
