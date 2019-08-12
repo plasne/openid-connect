@@ -8,7 +8,7 @@ When using Service-to-Service authentication (including reading configuration fr
 
 Each service has an AuthChooser which selects the appropriate authentication method based on how you have configured AUTH_TYPE. It can be either "mi" (default) or "app". If set to "mi", the AuthChooser will use a Managed Identity (or failback to use az-cli when running locally) every time it needs an access_token. If set to "app", the AuthChooser will use an application service principal (the application created in the above section).
 
-There are PROs and CONs with each option:
+There are pros and cons with each option:
 
 | Type                          | Pros                                                                                                                          | Cons                                                                                                                                                                                |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -300,7 +300,9 @@ $.ajax({
 });
 ```
 
-## Tools
+## Using the Tools
+
+There is a tools project included
 
 TODO
 
