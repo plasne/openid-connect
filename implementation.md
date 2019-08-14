@@ -308,6 +308,12 @@ The WFE sample only has 2 parameters:
 }
 ```
 
+2. You can start the node server by the following...
+
+```bash
+node index.js
+```
+
 ### Tools
 
 Follow these steps to configure the tools...

@@ -8,7 +8,7 @@ const app = express();
 app.use(express.static('www'));
 
 // startup on the appropriate port
-var port = 80;
+var port = process.env.PORT || 80;
 var hostUrl = process.env.HOST_URL;
 if (hostUrl) {
     var s = hostUrl.split(':');
