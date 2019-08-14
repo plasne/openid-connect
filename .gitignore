@@ -10,7 +10,7 @@
 **/obj/
 
 # env vars
-**/*.env
+**/.env
 
 # node
 **/node_modules

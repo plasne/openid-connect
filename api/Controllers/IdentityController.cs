@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Collections.Generic;
-using System.Security.Claims;
 
 namespace authentication.Controllers
 {
@@ -17,16 +16,10 @@ namespace authentication.Controllers
         public ActionResult<Dictionary<string, object>> Me()
         {
 
-            // read from the token instead of claims since it has the original claim names
-            string authorization = Request.Headers["Authorization"];
-            string token = authorization.Replace("Bearer ", "");
-            var handler = new JwtSecurityTokenHandler();
-            var jwt = handler.ReadJwtToken(token);
-
             // filter the claims
             var filter = new string[] { "xsrf", "old", "exp", "iss", "aud" };
-            var filtered = jwt.Payload.Claims.ToList();
-            filtered.RemoveAll(c => filter.Contains(c.Type));
+            var filtered = User.Claims.ToList();
+            filtered.RemoveAll(c => filter.Contains(c.Type) || c.Type.StartsWith("http://schemas.microsoft.com/"));
 
             // project to a dictionary
             var projected = new Dictionary<string, object>();

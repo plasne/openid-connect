@@ -8,7 +8,6 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
-using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Extensions.Logging;
 
 public class TokenIssuer
@@ -106,14 +105,6 @@ public class TokenIssuer
         }
     }
 
-    public static string KeyVaultClientSecretUrl
-    {
-        get
-        {
-            return System.Environment.GetEnvironmentVariable("KEYVAULT_CLIENT_SECRET_URL");
-        }
-    }
-
     private string _clientSecret;
 
     public string ClientSecret
@@ -130,25 +121,11 @@ public class TokenIssuer
             // see if there is an env for KEYVAULT_CLIENT_SECRET_URL
             if (string.IsNullOrEmpty(_clientSecret))
             {
-
-                // check for a secret
-                if (string.IsNullOrEmpty(KeyVaultClientSecretUrl)) throw new Exception("KEYVAULT_CLIENT_SECRET_URL must be defined");
-
-                // get an access token
-                var fetcher = AuthChooser.GetAccessToken("https://vault.azure.net");
-                fetcher.Wait();
-                string accessToken = fetcher.Result;
-
-                // get the password
-                using (var client = new WebClient())
-                {
-                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
-                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
-                    string raw = client.DownloadString(new Uri($"{KeyVaultClientSecretUrl}?api-version=7.0"));
-                    dynamic json = JObject.Parse(raw);
-                    _clientSecret = (string)json.value;
-                }
-
+                string url = System.Environment.GetEnvironmentVariable("KEYVAULT_CLIENT_SECRET_URL");
+                if (string.IsNullOrEmpty(url)) throw new Exception("either CLIENT_SECRET or KEYVAULT_CLIENT_SECRET_URL must be defined");
+                var pw = GetFromKeyVault(url);
+                pw.Wait();
+                _clientSecret = pw.Result;
             }
 
             return _clientSecret;
@@ -190,27 +167,11 @@ public class TokenIssuer
         }
     }
 
-    private static string KeyVaultPrivateKeyUrl
+    public static string PublicKeysUrl
     {
         get
         {
-            return System.Environment.GetEnvironmentVariable("KEYVAULT_PRIVATE_KEY_URL");
-        }
-    }
-
-    private static string KeyVaultPrivateKeyPasswordUrl
-    {
-        get
-        {
-            return System.Environment.GetEnvironmentVariable("KEYVAULT_PRIVATE_KEY_PASSWORD_URL");
-        }
-    }
-
-    public static string KeyVaultPublicCertUrl
-    {
-        get
-        {
-            return System.Environment.GetEnvironmentVariable("KEYVAULT_PUBLIC_CERT_URL");
+            return System.Environment.GetEnvironmentVariable("PUBLIC_KEYS_URL");
         }
     }
 
@@ -219,8 +180,101 @@ public class TokenIssuer
         get
         {
             string v = System.Environment.GetEnvironmentVariable("REQUIRE_SECURE_FOR_COOKIES");
+            if (string.IsNullOrEmpty(v)) return true;
             string[] negative = new string[] { "no", "false", "0" };
-            return (!negative.Contains(v));
+            return (!negative.Contains(v.ToLower()));
+        }
+    }
+
+    public static bool RequireUserEnabledOnReissue
+    {
+        get
+        {
+            string v = System.Environment.GetEnvironmentVariable("REQUIRE_USER_ENABLED_ON_REISSUE");
+            if (string.IsNullOrEmpty(v)) return true;
+            string[] negative = new string[] { "no", "false", "0" };
+            return (!negative.Contains(v.ToLower()));
+        }
+    }
+
+    private string _commandPassword;
+
+    public string CommandPassword
+    {
+        get
+        {
+
+            // see if there is an env for COMMAND_PASSWORD
+            if (string.IsNullOrEmpty(_commandPassword))
+            {
+                _commandPassword = System.Environment.GetEnvironmentVariable("COMMAND_PASSWORD");
+            }
+
+            // see if there is an env for KEYVAULT_COMMAND_PASSWORD_URL
+            if (string.IsNullOrEmpty(_commandPassword))
+            {
+                string url = System.Environment.GetEnvironmentVariable("KEYVAULT_COMMAND_PASSWORD_URL");
+                if (!string.IsNullOrEmpty(url))
+                {
+                    var pw = GetFromKeyVault(url);
+                    pw.Wait();
+                    _commandPassword = pw.Result;
+                }
+            }
+
+            return _commandPassword;
+        }
+    }
+
+    private string _privateKey;
+
+    public string PrivateKey
+    {
+        get
+        {
+
+            // see if there is an env for PRIVATE_KEY
+            if (string.IsNullOrEmpty(_privateKey))
+            {
+                _privateKey = System.Environment.GetEnvironmentVariable("PRIVATE_KEY");
+            }
+
+            if (string.IsNullOrEmpty(_privateKey))
+            {
+                string url = System.Environment.GetEnvironmentVariable("KEYVAULT_PRIVATE_KEY_URL");
+                if (string.IsNullOrEmpty(url)) throw new Exception("either PRIVATE_KEY or KEYVAULT_PRIVATE_KEY_URL must be defined");
+                var key = GetFromKeyVault(url);
+                key.Wait();
+                _privateKey = key.Result;
+            }
+
+            return _privateKey;
+        }
+    }
+
+    private string _privateKeyPw;
+
+    public string PrivateKeyPassword
+    {
+        get
+        {
+
+            // see if there is an env for PRIVATE_KEY
+            if (string.IsNullOrEmpty(_privateKeyPw))
+            {
+                _privateKeyPw = System.Environment.GetEnvironmentVariable("PRIVATE_KEY_PASSWORD");
+            }
+
+            if (string.IsNullOrEmpty(_privateKeyPw))
+            {
+                string url = System.Environment.GetEnvironmentVariable("KEYVAULT_PRIVATE_KEY_PASSWORD_URL");
+                if (string.IsNullOrEmpty(url)) throw new Exception("either PRIVATE_KEY_PASSWORD or KEYVAULT_PRIVATE_KEY_PASSWORD_URL must be defined");
+                var key = GetFromKeyVault(url);
+                key.Wait();
+                _privateKeyPw = key.Result;
+            }
+
+            return _privateKeyPw;
         }
     }
 
@@ -232,66 +286,99 @@ public class TokenIssuer
         {
             if (_signingCredentials == null)
             {
-
-                // get an access token
-                var fetcher = AuthChooser.GetAccessToken("https://vault.azure.net");
-                fetcher.Wait();
-                string accessToken = fetcher.Result;
-
-                // get the password
-                string pw;
-                using (var client = new WebClient())
-                {
-                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
-                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
-                    string raw = client.DownloadString(new Uri($"{KeyVaultPrivateKeyPasswordUrl}?api-version=7.0"));
-                    dynamic json = JObject.Parse(raw);
-                    pw = (string)json.value;
-                }
-
-                // get the private key
-                using (var client = new WebClient())
-                {
-                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
-                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
-                    string raw = client.DownloadString(new Uri($"{KeyVaultPrivateKeyUrl}?api-version=7.0"));
-                    dynamic json = JObject.Parse(raw);
-                    var bytes = Convert.FromBase64String((string)json.value);
-                    var certificate = new X509Certificate2(bytes, pw);
-                    _signingCredentials = new X509SigningCredentials(certificate, SecurityAlgorithms.RsaSha256);
-                }
-
+                var bytes = Convert.FromBase64String(PrivateKey);
+                var certificate = new X509Certificate2(bytes, PrivateKeyPassword);
+                _signingCredentials = new X509SigningCredentials(certificate, SecurityAlgorithms.RsaSha256);
             }
             return _signingCredentials;
         }
     }
 
-    private string _validationCertificate;
+    private List<X509Certificate2> _validationCertificates;
 
-    public string ValidationCertificate
+    public List<X509Certificate2> ValidationCertificates
     {
         get
         {
-            if (_validationCertificate == null)
+            if (_validationCertificates == null)
             {
+                _validationCertificates = new List<X509Certificate2>();
 
-                // get an access token
-                var fetcher = AuthChooser.GetAccessToken("https://vault.azure.net");
-                fetcher.Wait();
-                string accessToken = fetcher.Result;
-
-                // get the certificate
-                using (var client = new WebClient())
+                // attempt to read from environment variables
+                for (int i = 0; i < 4; i++)
                 {
-                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
-                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
-                    string raw = client.DownloadString(new Uri($"{KeyVaultPublicCertUrl}?api-version=7.0"));
-                    dynamic json = JObject.Parse(raw);
-                    _validationCertificate = (string)json.value;
+                    string raw = System.Environment.GetEnvironmentVariable($"PUBLIC_CERT_{i}");
+                    if (!string.IsNullOrEmpty(raw))
+                    {
+                        byte[] bytes = GetBytesFromPEM(raw, "CERTIFICATE");
+                        var x509 = new X509Certificate2(bytes);
+                        _validationCertificates.Add(x509);
+                    }
                 }
 
+                // attempt to get certificates indexed 0-3 at the same time
+                var tasks = new List<Task<string>>();
+                string url = System.Environment.GetEnvironmentVariable("KEYVAULT_PUBLIC_CERT_PREFIX_URL");
+                if (!string.IsNullOrEmpty(url))
+                {
+                    for (int i = 0; i < 4; i++)
+                    {
+                        var task = GetFromKeyVault($"{url}{i}", ignore404: true);
+                        tasks.Add(task);
+                    }
+                }
+
+                // wait for all the tasks to complete
+                Task.WaitAll(tasks.ToArray());
+
+                // add to certificates
+                foreach (var task in tasks)
+                {
+                    if (!string.IsNullOrEmpty(task.Result))
+                    {
+                        byte[] bytes = GetBytesFromPEM(task.Result, "CERTIFICATE");
+                        var x509 = new X509Certificate2(bytes);
+                        _validationCertificates.Add(x509);
+                    }
+                }
+
+                // make sure there is at least 1
+                if (_validationCertificates.Count() < 1) throw new Exception("there are no PUBLIC_CERT_# variables defined");
+
             }
-            return _validationCertificate;
+            return _validationCertificates;
+        }
+    }
+
+    private async Task<string> GetFromKeyVault(string url, bool ignore404 = false)
+    {
+        try
+        {
+
+            // get an access token
+            var accessToken = await AuthChooser.GetAccessToken("https://vault.azure.net");
+
+            // get from the keyvault
+            using (var client = new WebClient())
+            {
+                if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
+                client.Headers.Add("Authorization", $"Bearer {accessToken}");
+                string raw = client.DownloadString(new Uri($"{url}?api-version=7.0"));
+                dynamic json = JObject.Parse(raw);
+                return (string)json.value;
+            }
+
+        }
+        catch (WebException e)
+        {
+            if (ignore404 && e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.NotFound)
+            {
+                return string.Empty; // 404 Not Found is acceptible
+            }
+            else
+            {
+                throw;
+            }
         }
     }
 
@@ -304,23 +391,18 @@ public class TokenIssuer
         start += header.Length;
         var end = pemString.IndexOf(footer, start, StringComparison.Ordinal) - start;
         if (end < 0) return null;
-        return Convert.FromBase64String(pemString.Substring(start, end));
+        string body = pemString.Substring(start, end).Trim();
+        return Convert.FromBase64String(body);
     }
 
-    private X509SecurityKey _validationKey;
-
-    public X509SecurityKey ValidationKey
+    public void ClearSigningKey()
     {
-        get
-        {
-            if (_validationKey == null)
-            {
-                byte[] bytes = GetBytesFromPEM(ValidationCertificate, "CERTIFICATE");
-                var certificate = new X509Certificate2(bytes);
-                _validationKey = new X509SecurityKey(certificate);
-            }
-            return _validationKey;
-        }
+        _signingCredentials = null;
+    }
+
+    public void ClearValidationCertificates()
+    {
+        _validationCertificates = null;
     }
 
     public async Task<bool> IsUserEnabled(string userId)
@@ -456,7 +538,6 @@ public class TokenIssuer
         if (oid != null)
         {
             var assignments = await GetRoleAssignments(oid.Value);
-            var numApps = ApplicationIds.Count();
             foreach (var assignment in assignments)
             {
                 foreach (var role in assignment.Roles)
@@ -504,6 +585,9 @@ public class TokenIssuer
         // shortcut if not expired
         if (DateTime.UtcNow < jwt.Payload.ValidTo.ToUniversalTime()) throw new Exception("token is not expired");
 
+        // get keys from certificates
+        var keys = ValidationCertificates.Select(c => new X509SecurityKey(c));
+
         // validate everything but the expiry
         SecurityToken validatedSecurityToken = null;
         try
@@ -516,8 +600,9 @@ public class TokenIssuer
                 ValidIssuer = Issuer,
                 ValidateAudience = true,
                 ValidAudience = Audience,
+                ValidateIssuerSigningKey = true,
                 ValidateLifetime = false, // we want to validate everything but the lifetime
-                IssuerSigningKey = ValidationKey
+                IssuerSigningKeys = keys
             }, out validatedSecurityToken);
         }
         catch (Exception e)
@@ -551,11 +636,14 @@ public class TokenIssuer
         // make sure the user is eligible
         var oid = jwt.Payload.FirstOrDefault(claim => claim.Key == "oid");
         if (oid.Value == null) throw new Exception("oid is not specified in the token");
-        bool enabled = await IsUserEnabled((string)oid.Value);
-        if (!enabled) throw new Exception("user is not enabled");
+        if (RequireUserEnabledOnReissue)
+        {
+            bool enabled = await IsUserEnabled((string)oid.Value);
+            if (!enabled) throw new Exception("user is not enabled");
+        }
 
         // strip inappropriate claims
-        var filter = new string[] { "iss", "aud", "exp" };
+        var filter = new string[] { "iss", "aud", "exp" }; // note: the "roles" claim is left if that were pulled from the id_token
         var claims = jwt.Claims.Where(c => !filter.Contains(c.Type) && !c.Type.EndsWith("-roles")).ToList();
 
         // reissue the token

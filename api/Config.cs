@@ -170,50 +170,28 @@ public class Config
 
     }
 
-    public static void Ensure(IEnumerable<string> required, IEnumerable<string> optional = null, ILoggerFactory factory = null)
+    public static string Require(params string[] keys)
     {
-
-        // create a logger
-        ILogger logger = (factory != null) ? factory.CreateLogger<Config>() : null;
-
-        // verify that all required parameters are provided or don't start up
-        foreach (var key in required)
+        if (keys.Count() < 1) throw new Exception("config: Require() must be called with at least 1 key.");
+        foreach (var key in keys)
         {
             string val = System.Environment.GetEnvironmentVariable(key);
-            if (string.IsNullOrEmpty(val))
-            {
-                throw new Exception($"config: \"{key}\" is REQUIRED BUT MISSING!!!!!");
-            }
-            else
-            {
-                if (logger != null)
-                {
-                    logger.LogDebug($"config: {key} = \"{val}\"");
-                }
-                else
-                {
-                    Console.WriteLine($"config: {key} = \"{val}\"");
-                }
-            }
+            if (!string.IsNullOrEmpty(val)) return $"config: {key} = \"{val}\"";
         }
+        string all = string.Join(", ", keys);
+        throw new Exception($"config: one of {all} is REQUIRED BUT MISSING!!!!!");
+    }
 
-        // report about optional
-        foreach (var key in required)
+    public static string Optional(params string[] keys)
+    {
+        if (keys.Count() < 1) throw new Exception("config: Optional() must be called with at least 1 key.");
+        foreach (var key in keys)
         {
             string val = System.Environment.GetEnvironmentVariable(key);
-            if (!string.IsNullOrEmpty(val))
-            {
-                if (logger != null)
-                {
-                    logger.LogDebug($"config: {key} = \"{val}\"");
-                }
-                else
-                {
-                    Console.WriteLine($"config: {key} = \"{val}\"");
-                }
-            }
+            if (!string.IsNullOrEmpty(val)) return $"config: {key} = \"{val}\"";
         }
-
+        string all = string.Join(", ", keys);
+        return $"config: none of {all} is set";
     }
 
 }

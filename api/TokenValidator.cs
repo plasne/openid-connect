@@ -7,6 +7,9 @@ using System.Security.Cryptography.X509Certificates;
 using System.Collections.Specialized;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using System.Threading.Tasks;
 
 public class TokenValidator
 {
@@ -14,9 +17,13 @@ public class TokenValidator
     public TokenValidator(ILoggerFactory factory)
     {
         this.Logger = factory.CreateLogger<TokenValidator>();
+        this.ConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>(TokenValidator.WellKnownConfigUrl,
+            new OpenIdConnectConfigurationRetriever(),
+            new HttpDocumentRetriever() { RequireHttps = false });
     }
 
     private ILogger Logger { get; }
+    public ConfigurationManager<OpenIdConnectConfiguration> ConfigManager { get; }
 
     public static string Issuer
     {
@@ -34,11 +41,11 @@ public class TokenValidator
         }
     }
 
-    public static string PublicCertificateUrl
+    public static string WellKnownConfigUrl
     {
         get
         {
-            return System.Environment.GetEnvironmentVariable("PUBLIC_CERTIFICATE_URL");
+            return System.Environment.GetEnvironmentVariable("WELL_KNOWN_CONFIG_URL");
         }
     }
 
@@ -78,51 +85,61 @@ public class TokenValidator
         }
     }
 
-    private X509SecurityKey _validationKey;
-
-    public X509SecurityKey ValidationKey
+    public static bool AllowTokenInHeader
     {
         get
         {
-            if (_validationKey == null)
-            {
-
-                // get the certificate
-                using (var client = new WebClient())
-                {
-                    if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
-                    string raw = client.DownloadString(new Uri(PublicCertificateUrl));
-                    byte[] bytes = GetBytesFromPEM(raw, "CERTIFICATE");
-                    var certificate = new X509Certificate2(bytes);
-                    _validationKey = new X509SecurityKey(certificate);
-                }
-
-            }
-            return _validationKey;
+            string v = System.Environment.GetEnvironmentVariable("ALLOW_TOKEN_IN_HEADER");
+            if (string.IsNullOrEmpty(v)) return false;
+            string[] positive = new string[] { "yes", "true", "1" };
+            return (positive.Contains(v.ToLower()));
         }
     }
 
-    private static byte[] GetBytesFromPEM(string pemString, string section = "CERTIFICATE")
+    public static bool VerifyXsrfHeader
     {
-        var header = String.Format("-----BEGIN {0}-----", section);
-        var footer = String.Format("-----END {0}-----", section);
-        var start = pemString.IndexOf(header, StringComparison.Ordinal);
-        if (start < 0) return null;
-        start += header.Length;
-        var end = pemString.IndexOf(footer, start, StringComparison.Ordinal) - start;
-        if (end < 0) return null;
-        return Convert.FromBase64String(pemString.Substring(start, end));
+        get
+        {
+            string v = System.Environment.GetEnvironmentVariable("VERIFY_XSRF_HEADER");
+            if (string.IsNullOrEmpty(v)) return true;
+            string[] negative = new string[] { "no", "false", "0" };
+            return (!negative.Contains(v.ToLower()));
+        }
     }
 
     public static bool IsTokenExpired(string token)
     {
-
-        // read the token
         var handler = new JwtSecurityTokenHandler();
         var jwt = handler.ReadJwtToken(token);
-
         return (DateTime.UtcNow > jwt.Payload.ValidTo.ToUniversalTime());
+    }
 
+    public async Task<JwtSecurityToken> ValidateToken(string token)
+    {
+
+        // get the validation-certificates
+        var config = await ConfigManager.GetConfigurationAsync();
+
+        // parameters to validate
+        var handler = new JwtSecurityTokenHandler();
+        var validationParameters = new TokenValidationParameters
+        {
+            RequireExpirationTime = true,
+            RequireSignedTokens = true,
+            ValidateIssuer = true,
+            ValidIssuer = Issuer,
+            ValidateAudience = true,
+            ValidAudience = Audience,
+            ValidateLifetime = true,
+            IssuerSigningKeys = config.SigningKeys
+        };
+
+        // validate all previously defined parameters
+        SecurityToken validatedSecurityToken = null;
+        handler.ValidateToken(token, validationParameters, out validatedSecurityToken);
+        JwtSecurityToken validatedJwt = validatedSecurityToken as JwtSecurityToken;
+
+        return validatedJwt;
     }
 
     public static string ReissueToken(string token)

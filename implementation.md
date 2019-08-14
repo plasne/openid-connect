@@ -63,6 +63,8 @@ This solution supports a centralized authentication service that can be used acr
 
 ## Azure Key Vault
 
+It is possible to configure all settings in environment variables, .env files, or Azure App Configuration, so a Key Vault is not required, however, it is strongly recommended that all secrets be stored in the Key Vault.
+
 Follow these steps to configure the Azure Key Vault service...
 
 1. Deploy an Azure Key Vault resource. There are no specific SKUs or configuration options needed, anything should be fine.
@@ -76,16 +78,15 @@ openssl req -x509 -newkey rsa:4096 -keyout privatekey.pem -out certificate.pem -
 openssl pkcs12 -export -inkey privatekey.pem -in certificate.pem -out cert.pfx
 ```
 
-4. Store the PFX as a Base64-Encoded secret.
+4. Store the PFX as a base64-encoded secret.
 
 ```bash
-# output the PFX in base64
 openssl base64 -in cert.pfx
 ```
 
 5. Store the password for the PFX as a secret.
 
-6. Store the public certificate as a secret (it is already Base64-Encoded). Include the BEGIN and END certificate sections.
+6. Store the public certificate as a secret (it is already base64-encoded). Include the BEGIN and END certificate sections. The secret should end with a "0". You can have up to 4 certificates available for validation (0, 1, 2, and 3).
 
 7. Get the URLs for each secret, you will need them for later.
 
@@ -94,14 +95,14 @@ openssl base64 -in cert.pfx
 https://pelasne-keyvault.vault.azure.net/secrets/CLIENTSECRET (optional)
 https://pelasne-keyvault.vault.azure.net/secrets/PRIVATEKEY
 https://pelasne-keyvault.vault.azure.net/secrets/PRIVATEKEYPW
-https://pelasne-keyvault.vault.azure.net/secrets/PUBLICCERT
+https://pelasne-keyvault.vault.azure.net/secrets/PUBLIC-CERT-0
 ```
 
 ## Azure App Configuration
 
 It is possible to configure settings using environment variables and/or a .env file and not use Azure App Configuration at all. If you don't specify CONFIG_KEYS, nothing will be pulled from Azure App Configuration. However, it is recommended given the number of settings that have to be coordinated and correct, that you use Azure App Configuration.
 
-You should never store a secret in this implementation of the Azure App Configuration, the values of the keys are written to the logs, displayed on the console, and potentially even made available by PRESENT*CONFIG*. Instead the configuration should contains URLs that point to secrets in Azure Key Vault.
+You should never store a secret in this implementation of the Azure App Configuration, the values of the keys are written to the logs, displayed on the console, and potentially even made available by PRESENT_CONFIG_name. Instead the configuration should contains URLs that point to secrets in Azure Key Vault.
 
 Settings are set in the following order:
 
@@ -131,7 +132,7 @@ Generally you need to specify local environment variables (this will also work i
 
 -   AUTH_TYPE - This can be either "mi" (default) or "app". If set to "mi", the AuthChooser will use a Managed Identity (or failback to use az CLI when running locally) every time it needs an access_token. If set to "app", the AuthChooser will use an application service principal (the application created in the above section).
 
--   APPCONFIG_RESOURCE_ID - This is the Resource ID of the App Configuration instance. You can get this from the Properties tab of the App Configuration resource in the Azure portal. (ex. /subscriptions/8e95e0bb-d7cc-4454-9443-75ca862d34c1/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config)
+-   APPCONFIG_RESOURCE_ID - This is the Resource ID of the App Configuration instance. You can get this from the Properties tab of the App Configuration resource in the Azure portal. (ex. /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config)
 
 -   CONFIG_KEYS - This is a comma-delimited list of configuration keys to pull for the specific service. All keys matching the pattern will be pulled. A setting that is already set is not replaced (so left-most patterns take precident). For example, the dev environment of the auth service might contain "app:auth:dev:\*, app:common:dev:\*". If you do not specify any CONFIG_KEYS, no variables will be set from App Configuration.
 
@@ -149,9 +150,9 @@ If you are going to use AUTH_TYPE=mi, the above settings are the only things you
 
 ### Required
 
--   app:common:env:ISSUER - This denotes the identity of the service that is issuing the identity_token. You can put anything here, but I tend to use the URI of the centralized auth service.
+-   app:common:env:ISSUER - This denotes the identity of the service that is issuing the session_token. You can put anything here, but I tend to use the URI of the centralized auth service.
 
--   app:common:env:AUDIENCE - This denotes the identity of the service that the identity_token was generated for. You can put anything here, but I tend to use the URI of the application or a base URL if this is supporting more than one application.
+-   app:common:env:AUDIENCE - This denotes the identity of the service that the session_token was generated for. You can put anything here, but I tend to use the URI of the application or a base URL if this is supporting more than one application.
 
 -   app:common:env:BASE_DOMAIN - This should be the common domain shared by the WFE, API, and auth services. It will used when the cookies are created to ensure they can be shared by all services. In my example, wfe.plasne.com, api.plasne.com, and auth.plasne.com share "plasne.com" as the BASE_DOMAIN.
 
@@ -167,31 +168,49 @@ If you are going to use AUTH_TYPE=mi, the above settings are the only things you
 
 -   app:auth:env:KEYVAULT_PRIVATE_KEY_URL - This is the URL of the PFX file stored in step 4 of the Azure Key Vault section above.
 
+-   app:auth:env:PRIVATE_KEY - Rather than store the base64-encoded PFX file in the Key Vault, it is possible to specify PRIVATE_KEY as an environment variable instead. Generally, you should store this in the Key Vault.
+
 -   app:auth:env:KEYVAULT_PRIVATE_KEY_PASSWORD_URL - This is the URL of the PFX file password stored in step 5 of the Azure Key Vault section above.
 
--   app:auth:env:KEYVAULT_PUBLIC_CERT_URL - This is the URL of the public certificate stored in step 6 of the Azure Key Vault section above.
+-   app:auth:env:PRIVATE_KEY_PASSWORD - Rather than store the PFX password in the Key Vault, it is possible to specify PRIVATE_KEY_PASSWORD as an environment variable instead. Generally, you should store this in the Key Vault.
+
+-   app:auth:env:KEYVAULT_PUBLIC_CERT_PREFIX_URL - This is the URL prefix for the public certificate stored in step 6 of the Azure Key Vault section above. You can have up to 4 public certificates available for verification, they are indexed 0, 1, 2, and 3. The URL you will use here is everything up to the index. (ex. "https://pelasne-keyvault.vault.azure.net/secrets/PUBLIC-CERT-")
+
+-   app:auth:env:PUBLIC_CERT_index (0, 1, 2, 3) - Rather than store the public certificates in the Key Vault, it is possible to specify PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, and/or PUBLIC_CERT_3 as environment variables instead. Generally, you should store these in the Key Vault.
+
+-   app:auth:env:PUBLIC_KEYS_URL - This is the URL of the auth/keys endpoint. The auth service presents an auth/.well-known/openid-configuration that contains this endpoint so that the API can validate the JWT signature using the public keys.
 
 -   app:api:env:ALLOWED_ORIGINS - This should be a comma-delimited list of URLs that are allowed by CORS policy to access the API services. You could use app:common:env:ALLOWED_ORIGINS if the origins were the same for the auth service.
 
--   app:api:env:PUBLIC_CERTIFICATE_URL - This is the URL of the auth/certificate endpoint. The auth service presents that certificate so the API can use it to validate the identity_token's signature.
+-   app:api:env:WELL_KNOWN_CONFIG_URL - This is the URL of the auth/.well-known/openid-configuration endpoint.
 
 ### Optional
 
 -   app:common:env:REQUIRE_SECURE_FOR_COOKIES (default: true) - This determines whether cookies are marked "secure", meaning they will only be sent to HTTPS endpoints. If you are running the API and/or auth service locally without SSL, you need to set this to "false".
 
--   app:auth:env:JWT_DURATION (default: 240) - The number of minutes after an identity_token is issued before it expires. This defaults to 4 hours (240 minutes).
+-   app:auth:env:JWT_DURATION (default: 240) - The number of minutes after an session_token is issued before it expires. This defaults to 4 hours (240 minutes).
 
--   app:auth:env:JWT_MAX_DURATION (default: 10080) - You can specify a number of minutes that determines the maximum time for an identity_token is allowed to exist (including reissue). It defaults to 7 days (10080 minutes). You may also specify 0 to allow the token to be reissued forever.
+-   app:auth:env:JWT_MAX_DURATION (default: 10080) - You can specify a number of minutes that determines the maximum time for an session_token is allowed to exist (including reissue). It defaults to 7 days (10080 minutes). You may also specify 0 to allow the token to be reissued forever.
 
 -   app:auth:env:DOMAIN_HINT - If you want to provide a domain hint when authenticating, you can specify it.
 
--   app:auth:env:APPLICATION_ID - You can optionally include a comma-delimited list of application IDs. If you do, the identity_token will contain the roles from those applications. Each will be projected as a claim named as the APPLICATION_ID-roles. For this to work, the application specified by CLIENT_ID must have Directory.Read.All as a Microsoft Graph Application Permission (not Delegated) - this right requires administrative consent.
+-   app:auth:env:APPLICATION_ID - You can optionally include a comma-delimited list of application IDs. If you do, the session_token will contain the roles from those applications. Each will be projected as a claim named as the APPLICATION_ID-roles. For this to work, the application specified by CLIENT_ID must have Directory.Read.All as a Microsoft Graph Application Permission (not Delegated) - this right requires administrative consent.
 
 -   app:auth:env:KEYVAULT_CLIENT_SECRET_URL - If you are going to use AuthCode, then you need to specify this parameter unless you have already specified CLIENT_SECRET. This would be the URL from step 7 under the Azure Key Vault section above.
+
+-   app:auth:env:REQUIRE_USER_ENABLED_ON_REISSUE - Before a token is reissued, the "accountEnabled" status of the user is checked to ensure it is "true". However, if you set REQUIRE_USER_ENABLED_ON_REISSUE to "false", this check will be ignored. Querying the "accountEnabled" property of a user requires Directory.Read.All or User.Read.All.
+
+-   app:auth:env:KEYVAULT_COMMAND_PASSWORD_URL - You should specify a command password that must be sent to all command and control functions (like auth/clear-cache when reissuing tokens). You should prefer to store that in KeyVault and provide this URL, but you can also set it by COMMAND_PASSWORD.
+
+-   app:auth:env:COMMAND_PASSWORD - Rather than store the command password in the Key Vault, it is possible to specify COMMAND_PASSWORD as an environment variable instead. Generally, you should store this in the Key Vault.
 
 -   app:api:env:REISSUE_URL - If you are going to allow for tokens to be reissued, then you need to specify the URL of the auth/reissue endpoint.
 
 -   app:api:env:PRESENT_CONFIG_name - You may create one or more PRESENT_CONFIG_name keys that allow you to specify configurations that can be presented by your API at api/config/name. For example, you could create the following variable "PRESENT_CONFIG_wfedev=app:wfe:dev:\*". All keys under that filter would be returned when someone hit the /api/config/webdev endpoint. Primarily this is provided so your WFE can be configured by Azure App Configuration in the same way as the other services.
+
+-   app:api:local:ALLOW_TOKEN_IN_HEADER (default: false) - If set to "true", this allows the API to accept the session_token as an Authorization Bearer token if it exists and to only look for the "user" cookie if it doesn't (normal behavior is to only look for the "user" cookie). You should use this option anywhere but for local debug as this exposes the service to XSS attacks.
+
+-   app:api:local:VERIFY_XSRF_HEADER (default: true) - If set to "false", the API service will skip checking that the X-XSRF-TOKEN header matches the "xsrf" session_token claim. You should use this option anywhere but for local debug as this exposes the service to XSRF attacks.
 
 -   app:srv:env:PROXY - This solution uses REST APIs to communicate with Azure services. If you require a proxy to access HTTPS endpoints, then you should add the URL of the proxy as a setting for the right scope (ex. app:common:env:PROXY for every service).
 
@@ -201,14 +220,16 @@ In this sample configuration, my application is named "sample" and this configur
 
 ```json
 {
-    "sample:api:dev:PUBLIC_CERTIFICATE_URL": "https://auth.plasne.com/api/auth/certificate",
     "sample:api:dev:REISSUE_URL": "https://auth.plasne.com/api/auth/reissue",
+    "sample:api:dev:WELL_KNOWN_CONFIG_URL": "https://auth.plasne.com/api/auth/.well-known/openid-configuration",
     "sample:auth:dev:AUTHORITY": "https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47",
     "sample:auth:dev:CLIENT_ID": "a288039d-7569-4d16-af38-438d35a6e7b7",
+    "sample:auth:dev:KEYVAULT_COMMAND_PASSWORD_URL": "https://pelasne-keyvault.vault.azure.net/secrets/COMMANDPW",
     "sample:auth:dev:DEFAULT_REDIRECT_URL": "https://wfe.plasne.com",
     "sample:auth:dev:KEYVAULT_PRIVATE_KEY_PASSWORD_URL": "https://pelasne-keyvault.vault.azure.net/secrets/PRIVATEKEYPW",
     "sample:auth:dev:KEYVAULT_PRIVATE_KEY_URL": "https://pelasne-keyvault.vault.azure.net/secrets/PRIVATEKEY",
-    "sample:auth:dev:KEYVAULT_PUBLIC_CERT_URL": "https://pelasne-keyvault.vault.azure.net/secrets/PUBLICCERT",
+    "sample:auth:dev:KEYVAULT_PUBLIC_CERT_PREFIX_URL": "https://pelasne-keyvault.vault.azure.net/secrets/PUBLIC-CERT-",
+    "sample:auth:dev:PUBLIC_KEYS_URL": "https://auth.plasne.com/api/auth/keys",
     "sample:auth:dev:REDIRECT_URI": "https://auth.plasne.com/api/auth/token",
     "sample:common:dev:ALLOWED_ORIGINS": "https://wfe.plasne.com",
     "sample:common:dev:AUDIENCE": "https://api.plasne.com",
@@ -223,39 +244,45 @@ How to deploy services in Azure is beyond the scope of this article, however, th
 
 ### Auth Service
 
-Make sure you configure local environment variables for at least APPCONFIG_RESOURCE_ID and CONFIG_KEYS. CONFIG_KEYS for an application named "sample" and a "dev" environment might look like this: "sample:auth:dev:\*, sample:common:dev:\*".
+Follow these steps to configure the Auth service...
 
-If you intend to use Managed Identity (AUTH_TYPE=mi), make sure you follow these steps:
+1. Make sure you configure local environment variables for at least APPCONFIG_RESOURCE_ID and CONFIG_KEYS. CONFIG_KEYS for an application named "sample" and a "dev" environment might look like this: "sample:auth:dev:\*, sample:common:dev:\*".
 
-1. Enable Managed Identity for the platform.
+2. If you intend to use AUTH_TYPE=mi, enable Managed Identity for the platform.
 
-2. Add an access policy to Key Vault for the Managed Identity that allows GET of SECRETs. You can typically search for the identity by the resource name; it should show as APPLICATION.
+3. Add an access policy to Key Vault for the Managed Identity or Application Service Principal that allows GET of SECRETs. You can typically search for the identity by the resource name; it should show as APPLICATION.
 
-3. Add an Access Control Role Assignment (IAM) in the Azure portal on the App Configuration resource for the Managed Identity. It must be an OWNER because it needs to read the security keys required to access App Configuration.
+4. Add an Access Control Role Assignment (IAM) in the Azure portal on the App Configuration resource for the Managed Identity or Application Service Principal. It must be an OWNER because it needs to read the security keys required to access App Configuration.
 
-If you are deploying on a Windows-based App Service, you must add WEBSITE_LOAD_USER_PROFILE=1 as per https://github.com/projectkudu/kudu/wiki/Configurable-settings#the-system-cannot-find-the-file-specified-issue-with-x509certificate2.
+5. If using APPLICATION_ID or REQUIRE_USER_ENABLED_ON_REISSUE (which is a default), then the Managed Identity or Application Service Principal must be given rights to query all objects in the Microsoft Graph:
 
-If you deployed prior to applying the above configuation, you might need to restart your service; the configuration is only read when the application starts.
+    - Managed Identity - You should follow the steps outlined here: https://blog.bredvid.no/accessing-apis-using-azure-managed-service-identity-ff7802b887d?gi=f2307752395a. You should give Microsoft Graph Directory.Read.All rights. This will require consent of an Azure AD Global Administrator.
+
+    - Application Service Principal - You can give the Application (not Delegated) Microsoft Graph Directory.Read.All rights. This will require consent of an Azure AD Global Administrator.
+
+6. If you are deploying on a Windows-based App Service, you must add WEBSITE_LOAD_USER_PROFILE=1 as per https://github.com/projectkudu/kudu/wiki/Configurable-settings#the-system-cannot-find-the-file-specified-issue-with-x509certificate2.
+
+7. If you deployed prior to applying the above configuation, you might need to restart your service; the configuration is only read when the application starts.
 
 You can test the following (use your URL, this is a sample):
 
--   https://auth.plasne.com/api/auth/certificate - This should show the public certificate for validating the identity_token. If this is displayed, the AuthChooser is working and the account has access to the Key Vault.
+-   https://auth.plasne.com/api/auth/certificate - This should show the public certificate for validating the session_token. If this is displayed, the AuthChooser is working and the account has access to the Key Vault.
 
 -   https://auth.plasne.com/api/auth/verify?scope=graph - This should return a 200 if the Microsoft Graph can be queried for all users (requires Directory.Read.All).
 
 ### API Service
 
-Make sure you configure local environment variables for at least APPCONFIG_RESOURCE_ID and CONFIG_KEYS. CONFIG_KEYS for an application named "sample" and a "dev" environment might look like this: "sample:api:dev:\*, sample:common:dev:\*".
+Follow these steps to configure the API service...
 
-If you intend to use Managed Identity (AUTH_TYPE=mi), make sure you follow these steps:
+1. Make sure you configure local environment variables for at least APPCONFIG_RESOURCE_ID and CONFIG_KEYS. CONFIG_KEYS for an application named "sample" and a "dev" environment might look like this: "sample:api:dev:\*, sample:common:dev:\*".
 
-1. Enable Managed Identity for the platform.
+2. If you intend to use AUTH_TYPE=mi, enable Managed Identity for the platform.
 
-2. Add an access policy to Key Vault for the Managed Identity that allows GET of SECRETs. You can typically search for the identity by the resource name; it should show as APPLICATION.
+3. Add an access policy to Key Vault for the Managed Identity or Application Service Principal that allows GET of SECRETs. You can typically search for the identity by the resource name; it should show as APPLICATION.
 
-3. Add an Access Control Role Assignment (IAM) in the Azure portal on the App Configuration resource for the Managed Identity. It must be an OWNER because it needs to read the security keys required to access App Configuration.
+4. Add an Access Control Role Assignment (IAM) in the Azure portal on the App Configuration resource for the Managed Identity or Application Service Principal. It must be an OWNER because it needs to read the security keys required to access App Configuration.
 
-If you deployed prior to applying the above configuation, you might need to restart your service; the configuration is only read when the application starts.
+5. If you deployed prior to applying the above configuation, you might need to restart your service; the configuration is only read when the application starts.
 
 You can test the following (use your URL, this is a sample):
 
@@ -263,9 +290,12 @@ You can test the following (use your URL, this is a sample):
 
 ### WFE
 
-You need to define an environment variable of CONFIG_URL pointing to the URL where the configuration will be obtained, for example:
+Follow these steps to configure the WFE...
+
+1. You need to define an environment variable of HOST_URL and CONFIG_URL. The port from the HOST_URL will determine which port the WFE runs on. The CONFIG_URL should point to the URL where the configuration will be obtained, for example:
 
 ```bash
+HOST_URL=http://localhost:5000
 CONFIG_URL=https://api.plasne.com/api/config/wfe
 ```
 
@@ -278,61 +308,25 @@ The WFE sample only has 2 parameters:
 }
 ```
 
-## Using the Auth Service
+### Tools
 
-To start a login, the browser should navigate to the auth/authorize endpoint (ex. https://auth.plasne.com/api/auth/authorize). If you want to do an automatic login, you can make a REST call to the api/identity/me endpoint (ex. https://api.plasne.com/api/identity/me), if you receive a 401 Unauthorized, you can then redirect the browser to the auth/authorize endpoint.
+Follow these steps to configure the tools...
 
-Whenever you make a call to an endpoint that requires authentication, you must:
+1. Configure the following settings.
 
--   read the value of the XSRF-TOKEN cookie and send it's contents as a header called X-XSRF-TOKEN
+    - ISSUER
 
--   instruct XHR to send credentials (this allows the cookies to be sent)
+    - AUDIENCE
 
-Here is an example using jQuery:
+    - PRIVATE_KEY or KEYVAULT_PRIVATE_KEY_URL
 
-```javascript
-var xsrf = Cookies.get('XSRF-TOKEN');
-$.ajax({
-    method: 'GET',
-    url: config.ME_URL,
-    headers: {
-        'X-XSRF-TOKEN': xsrf
-    },
-    xhrFields: { withCredentials: true }
-});
-```
+    - PRIVATE_KEY_PASSWORD or KEYVAULT_PRIVATE_KEY_PASSWORD_URL
 
-## Using the Tools
+    - PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, PUBLIC_CERT_3, and/or KEYVAULT_PUBLIC_CERT_PREFIX_URL
 
-There is a tools application that allows you do the following:
-
--   Issue tokens
-
--   Validate tokens
-
--   Read user profiles from the Microsoft Graph
-
-This can be helpful for debugging problems, but also for testing. For instance you might
-
-There are only a handful of keys that are required...
-
--   ISSUER
-
--   AUDIENCE
-
--   KEYVAULT_PRIVATE_KEY_URL
-
--   KEYVAULT_PRIVATE_KEY_PASSWORD_URL
-
--   KEYVAULT_PUBLIC_CERT_URL
+You can probably just inherit them from the existing keys. Below is the configuration I used, but in keys were actually only used from "sample:auth:dev:\*" and "sample:common:dev:\*".
 
 ```bash
-APPCONFIG_RESOURCE_ID=/subscriptions/8e95e0bb-d7cc-4454-9443-75ca862d34c1/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config
+APPCONFIG_RESOURCE_ID=/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config
 CONFIG_KEYS=sample:tools:local:*, sample:auth:local:*, sample:common:local:*, sample:tools:dev:*, sample:auth:dev:*, sample:common:dev:*
 ```
-
-There is a tools project included
-
-TODO
-
-document stuff in API

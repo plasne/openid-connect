@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Azure.Services.AppAuthentication;
+using System.Security.Cryptography.X509Certificates;
 
 namespace authentication.Controllers
 {
@@ -105,7 +106,7 @@ namespace authentication.Controllers
 
             // get configuration info from OpenID Connect endpoint
             //  note: this is cached for 1 hour by default
-            OpenIdConnectConfiguration config = await this.ConfigManager.GetConfigurationAsync().ConfigureAwait(false);
+            OpenIdConnectConfiguration config = await this.ConfigManager.GetConfigurationAsync();
 
             // define the validation parameters
             var validationParameters = new TokenValidationParameters
@@ -278,7 +279,7 @@ namespace authentication.Controllers
         }
 
         [HttpPost, Route("reissue")]
-        public async Task<ActionResult> Reissue([FromForm] string token, [FromForm] string basedomain, [FromServices] TokenIssuer tokenIssuer)
+        public async Task<ActionResult> Reissue([FromForm] string token, [FromServices] TokenIssuer tokenIssuer)
         {
             try
             {
@@ -298,10 +299,96 @@ namespace authentication.Controllers
             }
         }
 
-        [HttpGet, Route("certificate")]
-        public ActionResult<string> PublicValidationCertificate([FromServices] TokenIssuer tokenIssuer)
+        public class WellKnownConfigPayload
         {
-            return tokenIssuer.ValidationCertificate;
+            public string jwks_uri { get; set; }
+        }
+
+        [HttpGet, Route(".well-known/openid-configuration")]
+        public ActionResult<dynamic> WellKnownConfig()
+        {
+            // REF: https://developer.byu.edu/docs/consume-api/use-api/implement-openid-connect/openid-connect-discovery
+            return new WellKnownConfigPayload()
+            {
+                jwks_uri = TokenIssuer.PublicKeysUrl
+            };
+        }
+
+        public class Key
+        {
+            public string kty { get { return "RSA"; } }
+            public string use { get { return "sig"; } }
+            public string kid { get; set; }
+            public string x5t { get; set; }
+            public string n { get; set; }
+            public string e { get; set; }
+            public List<string> x5c { get; set; } = new List<string>();
+
+            public Key(X509Certificate2 certificate)
+            {
+
+                // get the parameters of the public key
+                var pubkey = certificate.PublicKey.Key as dynamic;
+                var parameters = pubkey.ExportParameters(false);
+
+                // populate the info
+                kid = certificate.Thumbprint;
+                x5t = Convert.ToBase64String(certificate.GetCertHash()).Replace("=", "");
+                n = Convert.ToBase64String(parameters.Modulus).Replace("=", "");
+                e = Convert.ToBase64String(parameters.Exponent);
+                x5c.Add(Convert.ToBase64String(certificate.RawData));
+
+            }
+        }
+
+        public class KeysPayload
+        {
+            public List<Key> keys { get; set; } = new List<Key>();
+        }
+
+        [HttpGet, Route("keys")]
+        public ActionResult<KeysPayload> Keys([FromServices] TokenIssuer tokenIssuer)
+        {
+            var payload = new KeysPayload();
+            foreach (var certificate in tokenIssuer.ValidationCertificates)
+            {
+                var key = new Key(certificate);
+                payload.keys.Add(key);
+            }
+            return payload;
+        }
+
+        [HttpPost, Route("clear-cache")]
+        public ActionResult ClearCache([FromForm] string password, [FromForm] string scope, [FromServices] TokenIssuer tokenIssuer)
+        {
+            if (string.IsNullOrEmpty(tokenIssuer.CommandPassword) || tokenIssuer.CommandPassword == password)
+            {
+                if (!string.IsNullOrEmpty(scope))
+                {
+                    var scopes = scope.Split(',').Select(id => id.Trim());
+
+                    // clear signing-key
+                    if (scopes.Contains("signing-key"))
+                    {
+                        tokenIssuer.ClearSigningKey();
+                        Logger.LogDebug("The signing key cache was cleared.");
+                    }
+
+                    // clear validation-certificates
+                    if (scopes.Contains("validation-certificates"))
+                    {
+
+                        tokenIssuer.ClearValidationCertificates();
+                        Logger.LogDebug("The validation certificate cache was cleared.");
+                    }
+
+                }
+                return Ok();
+            }
+            else
+            {
+                return Unauthorized("password did not match COMMAND_PASSWORD");
+            }
         }
 
         [HttpGet, Route("version")]
@@ -329,27 +416,7 @@ namespace authentication.Controllers
             List<string> errors = new List<string>();
             var tokenProvider = new AzureServiceTokenProvider();
             scope = scope.ToLower();
-            if (string.IsNullOrEmpty(scope)) scope = "vault,graph";
-
-            // test vault access
-            if (scope.Contains("vault"))
-            {
-                try
-                {
-                    var vaultToken = await tokenProvider.GetAccessTokenAsync("https://vault.azure.net");
-                    using (var client = new WebClient())
-                    {
-                        if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
-                        client.Headers.Add("Authorization", $"Bearer {vaultToken}");
-                        client.DownloadString(new Uri($"{TokenIssuer.KeyVaultPublicCertUrl}?api-version=7.0"));
-                    }
-                }
-                catch (Exception e)
-                {
-                    Logger.LogError(e, "verify Key Vault failed");
-                    errors.Add($"keyvault - {e.Message}");
-                }
-            }
+            if (string.IsNullOrEmpty(scope)) scope = "graph";
 
             // test graph access
             if (scope.Contains("graph"))

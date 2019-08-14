@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
@@ -9,10 +10,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Linq;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Options;
+using System.Text.Encodings.Web;
+using System.Collections.Generic;
 
 namespace dotnetauth
 {
@@ -27,24 +29,25 @@ namespace dotnetauth
             // load the configuration
             logger.LogInformation("Loading configuration...");
             Config.Apply().Wait();
-            Config.Ensure(new string[] {  // required
-                "ISSUER",
-                "AUDIENCE",
-                "ALLOWED_ORIGINS",
-                "PUBLIC_CERTIFICATE_URL",
-                "BASE_DOMAIN"
-            }, new string[] {  // optional
-                "AUTH_TYPE",                  // set to "app" to use an app service principal
-                "APPCONFIG_RESOURCE_ID",      // use to get settings from Azure App Config
-                "CONFIG_KEYS",                // specify the keys to get from Azure App Config
-                "TENANT_ID",                  // required if using AUTH_TYPE=app
-                "CLIENT_ID",                  // required if using AUTH_TYPE=app
-                "CLIENT_SECRET",              // required if using AUTH_TYPE=app
-                "REISSUE_URL",                // use to support token reissue
-                "PRESENT_CONFIG_*",           // you may specify configs that can be presented via the api/config/* endpoint
-                "REQUIRE_SECURE_FOR_COOKIES"  // set to "false" if you don't want cookies marked "secure"
-            }, factory);
-            logger.LogInformation("Configuration loaded.");
+
+            // confirm and log the configuration
+            logger.LogDebug(Config.Require("ISSUER"));
+            logger.LogDebug(Config.Require("AUDIENCE"));
+            logger.LogDebug(Config.Require("ALLOWED_ORIGINS"));
+            logger.LogDebug(Config.Require("WELL_KNOWN_CONFIG_URL"));
+            logger.LogDebug(Config.Require("BASE_DOMAIN"));
+            logger.LogDebug(Config.Optional("AUTH_TYPE")); // set to "app" to use an app service principal
+            if (AuthChooser.AuthType == "app")
+            {
+                logger.LogDebug(Config.Require("TENANT_ID"));
+                logger.LogDebug(Config.Require("CLIENT_SECRET"));
+            }
+            logger.LogDebug(Config.Optional("APPCONFIG_RESOURCE_ID")); // use to get settings from Azure App Config
+            logger.LogDebug(Config.Optional("CONFIG_KEYS")); // specify the keys to get from Azure App Config
+
+            logger.LogDebug(Config.Optional("REISSUE_URL")); // use to support token reissue
+            // PRESENT_CONFIG_?
+            logger.LogDebug(Config.Optional("REQUIRE_SECURE_FOR_COOKIES")); // set to "false" if you don't want cookies marked "secure"
 
         }
 
@@ -74,31 +77,148 @@ namespace dotnetauth
 
             protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, XsrfRequirement requirement)
             {
-                if (context.Resource is AuthorizationFilterContext mvc)
+                if (TokenValidator.VerifyXsrfHeader)
                 {
-                    try
+                    if (context.Resource is AuthorizationFilterContext mvc)
                     {
-                        var identity = context.User.Identity as ClaimsIdentity;
-                        if (identity == null) throw new Exception("identity not found");
-                        string token = mvc.HttpContext.Request.Headers["X-XSRF-TOKEN"];
-                        if (string.IsNullOrEmpty(token)) throw new Exception("X-XSRF-TOKEN not sent");
-                        var claim = identity.FindFirst(c => c.Type == "xsrf");
-                        if (claim == null) throw new Exception("xsrf claim not found");
-                        if (token != claim.Value) throw new Exception("xsrf claim does not match X-XSRF-TOKEN");
-                        context.Succeed(requirement);
+                        try
+                        {
+                            var identity = context.User.Identity as ClaimsIdentity;
+                            if (identity == null) throw new Exception("identity not found");
+                            if (!identity.IsAuthenticated) throw new Exception("user is not authenticated");
+                            string token = mvc.HttpContext.Request.Headers["X-XSRF-TOKEN"];
+                            if (string.IsNullOrEmpty(token)) throw new Exception("X-XSRF-TOKEN not sent");
+                            var claim = identity.FindFirst(c => c.Type == "xsrf");
+                            if (claim == null) throw new Exception("xsrf claim not found");
+                            if (token != claim.Value) throw new Exception("xsrf claim does not match X-XSRF-TOKEN");
+                            context.Succeed(requirement);
+                        }
+                        catch (Exception e)
+                        {
+                            Logger.LogError(e, "authorization failure");
+                            context.Fail();
+                        }
                     }
-                    catch (Exception e)
+                    else
                     {
-                        Logger.LogError(e, "authorization failure");
+                        Logger.LogError("authorization failure - context.Resource is not AuthorizationFilterContext");
                         context.Fail();
                     }
                 }
                 else
                 {
-                    Logger.LogError("authorization failure - context.Resource is not AuthorizationFilterContext");
-                    context.Fail();
+                    // succeed if XSRF verification isn't required
+                    context.Succeed(requirement);
                 }
                 return Task.CompletedTask;
+            }
+        }
+
+        public class JwtCookieAuthenticationOptions : AuthenticationSchemeOptions
+        {
+            public string CookieName { get; set; } = "user";
+            public bool AllowAuthorizationHeader { get; set; } = false;
+        }
+
+        public class JwtCookieAuthenticationHandler : AuthenticationHandler<JwtCookieAuthenticationOptions>
+        {
+
+            public JwtCookieAuthenticationHandler(
+                IOptionsMonitor<JwtCookieAuthenticationOptions> options,
+                ILoggerFactory logger,
+                UrlEncoder encoder,
+                ISystemClock clock,
+                TokenValidator tokenValidator)
+                : base(options, logger, encoder, clock)
+            {
+                this.TokenValidator = tokenValidator;
+            }
+
+            private TokenValidator TokenValidator { get; }
+
+            protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
+            {
+                bool isTokenFromCookie = false;
+                try
+                {
+
+                    // check first for header
+                    string token = string.Empty;
+                    if (Options.AllowAuthorizationHeader)
+                    {
+                        var header = Request.Headers["Authorization"];
+                        if (header.Count() > 0)
+                        {
+                            token = header.First().Replace("Bearer ", "");
+                        }
+                    }
+
+                    // look next at the cookie
+                    if (string.IsNullOrEmpty(token))
+                    {
+                        token = Request.Cookies[Options.CookieName];
+                        isTokenFromCookie = true;
+                    }
+
+                    // shortcut if there is no token
+                    if (string.IsNullOrEmpty(token))
+                    {
+                        Logger.LogDebug("authorization was called, but no token was found");
+                        return AuthenticateResult.NoResult();
+                    }
+
+                    // see if the token has expired
+                    if (TokenValidator.IsTokenExpired(token))
+                    {
+
+                        // attempt to reissue
+                        Logger.LogDebug("attempted to reissue an expired token...");
+                        token = TokenValidator.ReissueToken(token);
+                        Logger.LogDebug("reissued token successfully");
+
+                        // rewrite the cookie
+                        if (isTokenFromCookie)
+                        {
+                            Response.Cookies.Append("user", token, new CookieOptions()
+                            {
+                                HttpOnly = true,
+                                Secure = TokenValidator.RequireSecureForCookies,
+                                Domain = TokenValidator.BaseDomain,
+                                Path = "/"
+                            });
+                        }
+
+                    }
+
+                    // validate the token
+                    var jwt = await this.TokenValidator.ValidateToken(token);
+
+                    // build the identity, principal, and ticket
+                    var claims = new List<Claim>();
+                    foreach (var claim in jwt.Payload.Claims)
+                    {
+                        claims.Add(claim);
+                        if (claim.Type == "roles") claims.Add(new Claim("http://schemas.microsoft.com/ws/2008/06/identity/claims/role", claim.Value));
+                    }
+                    var identity = new ClaimsIdentity(claims, Scheme.Name);
+                    var principal = new ClaimsPrincipal(identity);
+                    var ticket = new AuthenticationTicket(principal, Scheme.Name);
+                    return AuthenticateResult.Success(ticket);
+
+                }
+                catch (Exception e)
+                {
+                    Logger.LogError(e, "JwtCookieAuthenticationHandler exception");
+                    if (isTokenFromCookie) Response.Cookies.Delete("user"); // revoke the cookie
+                    return AuthenticateResult.Fail(e);
+                }
+
+            }
+
+            protected override async Task HandleChallengeAsync(AuthenticationProperties properties)
+            {
+                Response.Headers["WWW-Authenticate"] = $"Cookie realm=\"auth\", charset=\"UTF-8\"";
+                await base.HandleChallengeAsync(properties);
             }
         }
 
@@ -111,21 +231,11 @@ namespace dotnetauth
             services.AddSingleton<TokenValidator>(validator);
 
             // setup authentication
-            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
+            services.AddAuthentication("jwt-cookie")
+                .AddScheme<JwtCookieAuthenticationOptions, JwtCookieAuthenticationHandler>("jwt-cookie", options =>
                 {
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        RequireExpirationTime = true,
-                        RequireSignedTokens = true,
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        ValidIssuer = TokenValidator.Issuer,
-                        ValidAudience = TokenValidator.Audience,
-                        IssuerSigningKey = validator.ValidationKey
-                    };
+                    options.CookieName = "user";
+                    options.AllowAuthorizationHeader = TokenValidator.AllowTokenInHeader;
                 });
 
             // setup authorization
@@ -134,10 +244,17 @@ namespace dotnetauth
             {
                 options.AddPolicy("XSRF", policy =>
                 {
-                    policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                    policy.AddAuthenticationSchemes("jwt-cookie");
                     policy.RequireAuthenticatedUser();
                     policy.Requirements.Add(new XsrfRequirement());
 
+                });
+                options.AddPolicy("admin", policy =>
+                {
+                    policy.AddAuthenticationSchemes("jwt-cookie");
+                    policy.RequireAuthenticatedUser();
+                    policy.Requirements.Add(new XsrfRequirement());
+                    policy.RequireRole("admin");
                 });
                 options.DefaultPolicy = options.GetPolicy("XSRF");
             });
@@ -160,122 +277,10 @@ namespace dotnetauth
 
         }
 
-        public class JwtCookieToHeader
-        {
-
-            public JwtCookieToHeader(RequestDelegate next, ILoggerFactory loggerFactory)
-            {
-                this.Next = next;
-                this.Logger = loggerFactory.CreateLogger<JwtCookieToHeader>();
-            }
-
-            private RequestDelegate Next { get; }
-            private ILogger Logger { get; }
-
-            public async Task Invoke(HttpContext context)
-            {
-                try
-                {
-
-                    // remove any existing authorization header
-                    //  note: this ensures someone cannot send something with a madeup xsrf claim
-                    context.Request.Headers.Remove("Authorization");
-
-                    // add the authorization header from the user HttpOnly cookie
-                    string cookie = context.Request.Cookies["user"];
-                    if (!string.IsNullOrEmpty(cookie))
-                    {
-                        context.Request.Headers.Append("Authorization", "Bearer " + cookie);
-                    }
-
-                }
-                catch (Exception e)
-                {
-                    Logger.LogError(e, "exception in JwtCookieToHeader");
-                }
-
-                // next
-                await Next.Invoke(context);
-
-            }
-        }
-
-        public class ReissueToken
-        {
-
-            public ReissueToken(RequestDelegate next, ILoggerFactory loggerFactory)
-            {
-                this.Next = next;
-                this.Logger = loggerFactory.CreateLogger<ReissueToken>();
-            }
-
-            private RequestDelegate Next { get; }
-            private ILogger Logger { get; }
-
-            public async Task Invoke(HttpContext context)
-            {
-                try
-                {
-
-                    // see if the JWT is provided
-                    var header = context.Request.Headers["Authorization"];
-                    if (header.Count() > 0)
-                    {
-                        var token = header.First().Replace("Bearer ", "");
-
-                        // see if the token has expired
-                        if (TokenValidator.IsTokenExpired(token))
-                        {
-
-                            // remove the bad header
-                            context.Request.Headers.Remove("Authorization");
-
-                            // attempt to reissue
-                            Logger.LogDebug("attempted to reissue an expired token...");
-                            try
-                            {
-                                string reissued = TokenValidator.ReissueToken(token);
-                                context.Request.Headers.Append("Authorization", $"Bearer {reissued}");
-
-                                // rewrite the cookie
-                                context.Response.Cookies.Append("user", reissued, new CookieOptions()
-                                {
-                                    HttpOnly = true,
-                                    Secure = TokenValidator.RequireSecureForCookies,
-                                    Domain = TokenValidator.BaseDomain,
-                                    Path = "/"
-                                });
-
-                                Logger.LogDebug("reissued token successfully");
-                            }
-                            catch (Exception e)
-                            {
-                                context.Response.Cookies.Delete("user");
-                                Logger.LogError(e, "exception reissuing token, revoked user cookie");
-                            }
-
-                        }
-
-                    }
-
-                }
-                catch (Exception e)
-                {
-                    Logger.LogError(e, "exception in ReissueToken");
-                }
-
-                // next
-                await Next.Invoke(context);
-
-            }
-        }
-
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)
         {
             app.UseCors("origins");
-            app.UseMiddleware<JwtCookieToHeader>();
-            if (!string.IsNullOrEmpty(TokenValidator.ReissueUrl)) app.UseMiddleware<ReissueToken>();
             app.UseMvc();
         }
     }
