@@ -47,7 +47,7 @@ This solution supports a centralized authentication service that can be used acr
 
 3. If you need the AuthCode flow or plan on using AUTH_TYPE=app (both uncommon), you will need to generate a "Client secret" under the "Certificates & secrets" tab. If you generate one now, be sure and keep it somewhere as you won't be able to see it later.
 
-4. If you want to define roles for your application (the APPLICATION_ID setting), you should do so now in the "Manifest" tab under "appRoles".
+4. If you want to define roles for your application, you should do so now in the "Manifest" tab under "appRoles". https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-add-app-roles-in-azure-ad-apps
 
 5. If you have defined roles for your application, you must give the application permission (not delegated permission) of Microsoft Graph Directory.Read.All on the "API permissions" tab. This access right requires administrative consent - the link is provided on the same page.
 
