@@ -411,14 +411,31 @@ public class TokenIssuer
         // get an access token
         var accessToken = await AuthChooser.GetAccessToken("https://graph.microsoft.com");
 
-        // check for enabled
-        using (var client = new WebClient())
+        // catch the possible 403 Forbidden because access rights have not been granted
+        try
         {
-            if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
-            client.Headers.Add("Authorization", $"Bearer {accessToken}");
-            string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{userId}?$select=accountEnabled"));
-            dynamic json = JObject.Parse(raw);
-            return (bool)json.accountEnabled;
+
+            // check for enabled
+            using (var client = new WebClient())
+            {
+                if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
+                client.Headers.Add("Authorization", $"Bearer {accessToken}");
+                string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{userId}?$select=accountEnabled"));
+                dynamic json = JObject.Parse(raw);
+                return (bool)json.accountEnabled;
+            }
+
+        }
+        catch (WebException e)
+        {
+            if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.Forbidden)
+            {
+                throw new Exception("the auth identity does not have the Directory.Read.All right", e);
+            }
+            else
+            {
+                throw;
+            }
         }
 
     }
@@ -464,55 +481,72 @@ public class TokenIssuer
         // get an access token
         var accessToken = await AuthChooser.GetAccessToken("https://graph.microsoft.com");
 
-        // lookup all specified applications
-        List<AppRoles> apps = new List<AppRoles>();
-        using (var client = new WebClient())
+        // catch the possible 403 Forbidden because access rights have not been granted
+        try
         {
-            if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
-            client.Headers.Add("Authorization", $"Bearer {accessToken}");
-            string filter = "$filter=" + string.Join(" or ", ApplicationIds.Select(appId => $"appId eq '{appId}'"));
-            string select = "$select=appId,appRoles";
-            string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/applications/?{filter}&{select}"));
-            dynamic json = JObject.Parse(raw);
-            var values = (JArray)json.value;
-            foreach (dynamic value in values)
+
+            // lookup all specified applications
+            List<AppRoles> apps = new List<AppRoles>();
+            using (var client = new WebClient())
             {
-                var app = new AppRoles() { AppId = (string)value.appId };
-                apps.Add(app);
-                foreach (dynamic appRole in value.appRoles)
+                if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
+                client.Headers.Add("Authorization", $"Bearer {accessToken}");
+                string filter = "$filter=" + string.Join(" or ", ApplicationIds.Select(appId => $"appId eq '{appId}'"));
+                string select = "$select=appId,appRoles";
+                string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/applications/?{filter}&{select}"));
+                dynamic json = JObject.Parse(raw);
+                var values = (JArray)json.value;
+                foreach (dynamic value in values)
                 {
-                    app.Roles.Add((string)appRole.id, (string)appRole.value);
+                    var app = new AppRoles() { AppId = (string)value.appId };
+                    apps.Add(app);
+                    foreach (dynamic appRole in value.appRoles)
+                    {
+                        app.Roles.Add((string)appRole.id, (string)appRole.value);
+                    }
                 }
             }
-        }
 
-        // get the roles that the user is in
-        using (var client = new WebClient())
-        {
-            if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
-            client.Headers.Add("Authorization", $"Bearer {accessToken}");
-            string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{userId}/appRoleAssignments"));
-            dynamic json = JObject.Parse(raw);
-            var values = (JArray)json.value;
-            foreach (dynamic value in values)
+            // get the roles that the user is in
+            using (var client = new WebClient())
             {
-                var appRoleId = (string)value.appRoleId;
-                var app = apps.FirstOrDefault(a => a.Roles.ContainsKey(appRoleId));
-                if (app != null)
+                if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
+                client.Headers.Add("Authorization", $"Bearer {accessToken}");
+                string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{userId}/appRoleAssignments"));
+                dynamic json = JObject.Parse(raw);
+                var values = (JArray)json.value;
+                foreach (dynamic value in values)
                 {
-                    var roleName = app.Roles[appRoleId];
-                    var existingAssignment = assignments.FirstOrDefault(ra => ra.AppId == app.AppId);
-                    if (existingAssignment != null)
+                    var appRoleId = (string)value.appRoleId;
+                    var app = apps.FirstOrDefault(a => a.Roles.ContainsKey(appRoleId));
+                    if (app != null)
                     {
-                        existingAssignment.Roles.Add(roleName);
-                    }
-                    else
-                    {
-                        var assignment = new RoleAssignments() { AppId = (string)app.AppId };
-                        assignment.Roles.Add(roleName);
-                        assignments.Add(assignment);
+                        var roleName = app.Roles[appRoleId];
+                        var existingAssignment = assignments.FirstOrDefault(ra => ra.AppId == app.AppId);
+                        if (existingAssignment != null)
+                        {
+                            existingAssignment.Roles.Add(roleName);
+                        }
+                        else
+                        {
+                            var assignment = new RoleAssignments() { AppId = (string)app.AppId };
+                            assignment.Roles.Add(roleName);
+                            assignments.Add(assignment);
+                        }
                     }
                 }
+            }
+
+        }
+        catch (WebException e)
+        {
+            if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.Forbidden)
+            {
+                throw new Exception("the auth identity does not have the Directory.Read.All right", e);
+            }
+            else
+            {
+                throw;
             }
         }
 

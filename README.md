@@ -376,23 +376,30 @@ In a file called xsrf-injector.ts...
 
 ```typescript
 import { Injectable } from '@angular/core';
-import { HttpInterceptor, HttpHandler, HttpRequest, HttpXsrfTokenExtractor, HttpEvent } from '@angular/common/http';
+import {
+    HttpInterceptor,
+    HttpHandler,
+    HttpRequest,
+    HttpXsrfTokenExtractor,
+    HttpEvent
+} from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 @Injectable()
 export class HttpXsrfInterceptor implements HttpInterceptor {
+    constructor(private tokenExtractor: HttpXsrfTokenExtractor) {}
 
-  constructor(private tokenExtractor: HttpXsrfTokenExtractor) {
-  }
-
-  intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
-    const headerName = 'X-XSRF-TOKEN';
-    const token = this.tokenExtractor.getToken();
-    if (token !== null && !req.headers.has(headerName)) {
-      req = req.clone({ headers: req.headers.set(headerName, token) });
+    intercept(
+        req: HttpRequest<any>,
+        next: HttpHandler
+    ): Observable<HttpEvent<any>> {
+        const headerName = 'X-XSRF-TOKEN';
+        const token = this.tokenExtractor.getToken();
+        if (token !== null && !req.headers.has(headerName)) {
+            req = req.clone({ headers: req.headers.set(headerName, token) });
+        }
+        return next.handle(req);
     }
-    return next.handle(req);
-  }
 }
 ```
 
@@ -479,6 +486,8 @@ As an example, these were the settings I overwrote for my local environment:
     "sample:common:local:REQUIRE_SECURE_FOR_COOKIES": "false"
 }
 ```
+
+You must add your local auth/token endpoint to the Reply URLs for the application you created. For example, http://localhost:5100/api/auth/token.
 
 One warning, at least in Chrome and Firefox, cookies without the Secure flag will not replace cookies with the Secure flag. Therefore, if you run with REQUIRE_SECURE_FOR_COOKIES with the default of "true" and then change it to "false", cookies could have been created that wouldn't get replaced and you will get errors that the state and nonce values don't match. You can manually delete those cookies should that happen.
 

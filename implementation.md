@@ -49,7 +49,7 @@ This solution supports a centralized authentication service that can be used acr
 
 4. If you want to define roles for your application, you should do so now in the "Manifest" tab under "appRoles". https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-add-app-roles-in-azure-ad-apps
 
-5. If you have defined roles for your application, you must give the application permission (not delegated permission) of Microsoft Graph Directory.Read.All on the "API permissions" tab. This access right requires administrative consent - the link is provided on the same page.
+5. If you have defined roles for your application and you are using AUTH_TYPE=app, you must give the application permission (not delegated permission) of Microsoft Graph Directory.Read.All on the "API permissions" tab. This access right requires administrative consent - the link is provided on the same page.
 
 6. Make note of the "Application (client) ID" on the "Overview" tab, you will need it later for the CLIENT_ID setting (and possibly the APPLICATION_ID setting).
 
@@ -256,7 +256,7 @@ Follow these steps to configure the Auth service...
 
 5. If using APPLICATION_ID or REQUIRE_USER_ENABLED_ON_REISSUE (which is a default), then the Managed Identity or Application Service Principal must be given rights to query all objects in the Microsoft Graph:
 
-    - Managed Identity - You should follow the steps outlined here: https://blog.bredvid.no/accessing-apis-using-azure-managed-service-identity-ff7802b887d?gi=f2307752395a. You should give Microsoft Graph Directory.Read.All rights. This will require consent of an Azure AD Global Administrator.
+    - Managed Identity - You should follow the steps outlined here: https://blog.bredvid.no/accessing-apis-using-azure-managed-service-identity-ff7802b887d?gi=f2307752395a. You should give Microsoft Graph Directory.Read.All rights. This will require consent of an Azure AD Global Administrator. It will give an error per https://stackoverflow.com/questions/48013011/msi-permissions-for-graph-api/48014153#48014153, but give it an hour or so to propogate and it should work anyway.
 
     - Application Service Principal - You can give the Application (not Delegated) Microsoft Graph Directory.Read.All rights. This will require consent of an Azure AD Global Administrator.
 
@@ -311,6 +311,7 @@ The WFE sample only has 2 parameters:
 2. You can start the node server by the following...
 
 ```bash
+npm install
 node index.js
 ```
 

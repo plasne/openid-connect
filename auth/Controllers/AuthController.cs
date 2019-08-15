@@ -233,8 +233,7 @@ namespace authentication.Controllers
                 // populate the claims from the id_token
                 List<Claim> claims = new List<Claim>();
                 var email = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "email");
-                if (email == null) throw new Exception("id_token does not contain email address");
-                claims.Add(new Claim("email", email.Value));
+                if (email != null) claims.Add(new Claim("email", email.Value));
                 var displayName = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "name");
                 if (displayName != null) claims.Add(new Claim("displayName", displayName.Value));
                 var oid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
