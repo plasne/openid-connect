@@ -397,21 +397,19 @@ public class Cmd
 
     private string GetStringFromUser(string prompt, Regex pattern, string error)
     {
-        string value = null;
-        do
+        while (true)
         {
             Console.WriteLine(prompt);
             string response = Console.ReadLine();
             if (pattern == null || pattern.IsMatch(response))
             {
-                value = response;
+                return response;
             }
             else
             {
                 Console.WriteLine(error);
             }
-        } while (string.IsNullOrEmpty(value));
-        return value;
+        }
     }
 
     private bool GetBoolFromUser(string prompt)
@@ -442,13 +440,23 @@ public class Cmd
         }
     }
 
-    private string GetGuidFromUser(string prompt)
+    private string GetGuidFromUser(string prompt, bool allowEmpty = false, bool allowMultiple = false)
     {
-        string error = "Error: you must specify a GUID.";
+        string error = (allowMultiple) ?
+            "Error: you must specify one or more GUIDs separated by commas." :
+            "Error: you must specify a GUID.";
         while (true)
         {
             string response = GetStringFromUser(prompt, null, error).ToLower();
-            if (Guid.TryParse(response, out Guid guid)) return guid.ToString();
+            if (allowEmpty && string.IsNullOrEmpty(response)) return string.Empty;
+            if (allowMultiple)
+            {
+                if (response.Split(",").Select(s => s.Trim()).All(s => Guid.TryParse(s, out Guid guid))) return response;
+            }
+            else
+            {
+                if (Guid.TryParse(response, out Guid guid)) return guid.ToString();
+            }
             Console.WriteLine(error);
         }
     }
@@ -472,35 +480,40 @@ public class Cmd
 
         // collect responses from the user
         Dictionary<string, string> config = new Dictionary<string, string>();
-        string id = GetStringFromUser("[01/14] Please provide an identifier for your application (ex. sample)?",
+        int total = 16;
+        string id = GetStringFromUser("[01/{total}] Please provide an identifier for your application (ex. sample).",
             new Regex("^[a-zA-Z0-9-_]+$"),
             "Error: you may only use alphanumeric characters, dashes, or underscores.");
-        string baseDomain = GetStringFromUser("[02/14] Please provide a base domain (ex. plasne.com)?",
+        string baseDomain = GetStringFromUser("[02/{total}] Please provide a base domain (ex. plasne.com).",
             new Regex("^[a-zA-Z0-9-_.]+$"),
             "Error: you may only use alphanumeric characters, dashes, underscores, and periods.");
-        string wfeSubDomain = GetStringFromUser("[03/14] Please provide a subdomain name for the WFE (ex. wfe)?",
+        string wfeSubDomain = GetStringFromUser("[03/{total}] Please provide a subdomain name for the WFE (ex. wfe).",
             new Regex("^[a-zA-Z0-9-_]+$"),
             "Error: you may only use alphanumeric characters, dashes, and underscores.");
-        string authSubDomain = GetStringFromUser("[04/14] Please provide a subdomain name for the auth service (ex. auth)?",
+        string authSubDomain = GetStringFromUser("[04/{total}] Please provide a subdomain name for the auth service (ex. auth).",
             new Regex("^[a-zA-Z0-9-_]+$"),
             "Error: you may only use alphanumeric characters, dashes, and underscores.");
-        string apiSubDomain = GetStringFromUser("[05/14] Please provide a subdomain name for the API service (ex. api)?",
+        string apiSubDomain = GetStringFromUser("[05/{total}] Please provide a subdomain name for the API service (ex. api).",
             new Regex("^[a-zA-Z0-9-_]+$"),
             "Error: you may only use alphanumeric characters, dashes, and underscores.");
-        string tenantId = GetGuidFromUser("[06/14] What is the GUID of your Azure AD tenant that contains the authorization application?");
-        string clientId = GetGuidFromUser("[07/14] What is the Application ID (also called Client ID) of the authorization application?");
-        int duration = GetNumberFromUser("[08/14] How long (in minutes) do you want to sign the session_token for (ex. 240 minutes or 4 hours)?", 1, 60 * 24 * 30);
-        string keyVault = GetStringFromUser("[09/14] What is the name of your Azure Key Vault - the name before .vault.azure.net (ex. plasne-keyvault)?",
+        string tenantId = GetGuidFromUser("[06/{total}] What is the GUID of your Azure AD tenant that contains the authorization application?");
+        string clientId = GetGuidFromUser("[07/{total}] What is the Application ID (also called Client ID) of the authorization application?");
+        int duration = GetNumberFromUser("[08/{total}] How long (in minutes) do you want to sign the session_token for (ex. 240 minutes or 4 hours)?", 1, 60 * 24 * 30);
+        string keyVault = GetStringFromUser("[09/{total}] What is the name of your Azure Key Vault - the name before .vault.azure.net (ex. plasne-keyvault)?",
             new Regex("^[a-zA-Z0-9-_]+$"),
             "Error: you may only use alphanumeric characters, dashes, or underscores.");
-        bool allowReissue = GetBoolFromUser("[10/14] Do you want to allow tokens to be reissued (yes/no)?");
-        int wfePort = GetNumberFromUser("[11/14] For local debugging, what port do you want to host your WFE on (ex. 5000)?", 1024, 65535);
-        int authPort = GetNumberFromUser("[12/14] For local debugging, what port do you want to host your auth service on (ex. 5100)?", 1024, 65535);
-        int apiPort = GetNumberFromUser("[13/14] For local debugging, what port do you want to host your API service on (ex. 5200)?", 1024, 65535);
-        bool allowPermissiveDebug = GetBoolFromUser("[14/14] For local debugging, do you want to allow for a more permissive environment - ALLOW_TOKEN_IN_HEADER=true, VERIFY_XSRF_HEADER=false (yes/no)?");
+        bool allowReissue = GetBoolFromUser("[10/{total}] Do you want to allow tokens to be reissued (yes/no)?");
+        string appId = GetGuidFromUser("[11/{total}] Please specify a comma-delimited list of Application IDs (Client IDs) to get roles for or leave blank (ex. 00000000-0000-0000-0000-000000000000, 00000000-0000-0000-0000-000000000001).", allowEmpty: true, allowMultiple: true);
+        int wfePort = GetNumberFromUser("[12/{total}] For local debugging, what port do you want to host your WFE on (ex. 5000)?", 1024, 65535);
+        int authPort = GetNumberFromUser("[13/{total}] For local debugging, what port do you want to host your auth service on (ex. 5100)?", 1024, 65535);
+        int apiPort = GetNumberFromUser("[14/{total}] For local debugging, what port do you want to host your API service on (ex. 5200)?", 1024, 65535);
+        bool allowPermissiveDebug = GetBoolFromUser("[15/{total}] For local debugging, do you want to allow for a more permissive environment - ALLOW_TOKEN_IN_HEADER=true, VERIFY_XSRF_HEADER=false (yes/no)?");
+        bool needProxy = GetBoolFromUser("[16a/{total}] For local debugging, do you need to use a proxy (yes/no)?");
+        string proxy = null;
+        if (needProxy) proxy = GetUrlFromUser("[16b/{total}] What is the URL of the proxy (ex. http://proxy)?");
 
         // build out the config
-        config.Add($"{id}:auth:dev:AUTHORITY", "https://login.microsoftonline.com/{tenantId}");
+        config.Add($"{id}:auth:dev:AUTHORITY", $"https://login.microsoftonline.com/{tenantId}");
         config.Add($"{id}:auth:dev:CLIENT_ID", clientId);
         config.Add($"{id}:auth:dev:DEFAULT_REDIRECT_URL", $"https://{wfeSubDomain}.{baseDomain}");
         config.Add($"{id}:auth:local:DEFAULT_REDIRECT_URL", $"http://localhost:{wfePort}");
@@ -522,6 +535,7 @@ public class Cmd
             config.Add($"{id}:api:dev:REISSUE_URL", $"https://{authSubDomain}.{baseDomain}/api/auth/reissue");
             config.Add($"{id}:api:local:REISSUE_URL", $"http://localhost:{authPort}/api/auth/reissue");
         }
+        if (!string.IsNullOrEmpty(appId)) config.Add($"{id}:common:dev:APPLICATION_ID", appId);
         if (allowPermissiveDebug)
         {
             config.Add($"{id}:api:local:ALLOW_TOKEN_IN_HEADER", "true");
@@ -533,6 +547,8 @@ public class Cmd
         config.Add($"{id}:common:dev:ISSUER", $"https://{authSubDomain}.{baseDomain}");
         config.Add($"{id}:common:dev:BASE_DOMAIN", baseDomain);
         config.Add($"{id}:common:local:BASE_DOMAIN", "localhost");
+        config.Add($"{id}:common:local:REQUIRE_SECURE_FOR_COOKIES", "false");
+        if (needProxy) config.Add($"{id}:common:local:PROXY", proxy);
         config.Add($"{id}:wfe:dev:LOGIN_URL", $"https://{authSubDomain}.{baseDomain}/api/auth/authorize");
         config.Add($"{id}:wfe:local:LOGIN_URL", $"http://localhost:{authPort}/api/auth/authorize");
         config.Add($"{id}:wfe:dev:ME_URL", $"https://{apiSubDomain}.{baseDomain}/api/identity/me");
