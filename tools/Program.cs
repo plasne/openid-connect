@@ -44,20 +44,23 @@ namespace tools
         {
 
             // ensure a command is specified
-            string[] cmds = new string[] { "issue-token", "validate-token", "get-certificates", "get-user", "get-config" };
+            string[] cmds = new string[] { "issue-token", "validate-token", "get-certificates", "get-user", "get-config", "config-wizard" };
             if (args.Length < 1 || !cmds.Contains(args[0]))
             {
-                throw new Exception("you must specify a command from \"issue-token\", \"validate-token\", \"get-certificates\", \"get-user\", or \"get-config\".");
+                throw new Exception("you must specify a command from \"issue-token\", \"validate-token\", \"get-certificates\", \"get-user\", \"get-config\", or \"config-wizard\".");
             }
 
             // get the configuration
             DotEnv.Config(throwOnError: false);
-            Config.Apply().Wait();
-            Console.WriteLine(Config.Require("ISSUER"));
-            Console.WriteLine(Config.Require("AUDIENCE"));
-            Console.WriteLine(Config.Require("KEYVAULT_PRIVATE_KEY_URL", "KEYVAULT_PRIVATE_KEY_URL"));
-            Console.WriteLine(Config.Require("KEYVAULT_PRIVATE_KEY_PASSWORD_URL", "KEYVAULT_PRIVATE_KEY_PASSWORD_URL"));
-            Console.WriteLine(Config.Require("PUBLIC_CERT_0", "PUBLIC_CERT_1", "PUBLIC_CERT_2", "PUBLIC_CERT_3", "KEYVAULT_PUBLIC_CERT_PREFIX_URL"));
+            Action applyConfig = () =>
+            {
+                Config.Apply().Wait();
+                Console.WriteLine(Config.Require("ISSUER"));
+                Console.WriteLine(Config.Require("AUDIENCE"));
+                Console.WriteLine(Config.Require("KEYVAULT_PRIVATE_KEY_URL", "KEYVAULT_PRIVATE_KEY_URL"));
+                Console.WriteLine(Config.Require("KEYVAULT_PRIVATE_KEY_PASSWORD_URL", "KEYVAULT_PRIVATE_KEY_PASSWORD_URL"));
+                Console.WriteLine(Config.Require("PUBLIC_CERT_0", "PUBLIC_CERT_1", "PUBLIC_CERT_2", "PUBLIC_CERT_3", "KEYVAULT_PUBLIC_CERT_PREFIX_URL"));
+            };
 
             // create the cmd object
             var cmd = new Cmd();
@@ -67,6 +70,7 @@ namespace tools
             {
 
                 case "issue-token":
+                    applyConfig();
                     Parser.Default.ParseArguments<IssueOptions>(args)
                         .WithParsed<IssueOptions>(o =>
                         {
@@ -79,6 +83,7 @@ namespace tools
                     break;
 
                 case "validate-token":
+                    applyConfig();
                     Parser.Default.ParseArguments<ValidateOptions>(args)
                         .WithParsed<ValidateOptions>(o =>
                         {
@@ -87,10 +92,12 @@ namespace tools
                     break;
 
                 case "get-certificates":
+                    applyConfig();
                     cmd.GetCertificates();
                     break;
 
                 case "get-user":
+                    applyConfig();
                     Parser.Default.ParseArguments<UserOptions>(args)
                         .WithParsed<UserOptions>(o =>
                         {
@@ -111,6 +118,10 @@ namespace tools
 
                 case "get-config":
                     cmd.GetAllConfig().Wait();
+                    break;
+
+                case "config-wizard":
+                    cmd.RunConfigWizard();
                     break;
 
             }

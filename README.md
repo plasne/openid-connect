@@ -2,13 +2,29 @@
 
 While this repository is named "openid-connect", this sample will actually encompass OpenID Connect (OIDC), AuthCode, and Service-to-Service (S2S) authentication and authorization techniques.
 
-While there are many other ways to authenticate users, this solution was developed to allow for the following special features:
+There are many ways to authenticate users. Some of the advantages of this approach include:
+
+-   It is opinionated - there are lots of ways to do authentication, here is a prescriptive way to do it
 
 -   It does not require any session state
 
 -   It allows for claims to be asserted from multiple sources (id_token, Microsoft Graph, databases, etc.)
 
 -   Multiple applications can use this authentication solution as a centralized service
+
+-   You can control how long the token for access to your app is issued for
+
+-   The reissue process ensures that as roles change or users are deactivated, the access changes appropriately
+
+-   XSS and XSRF protection is provided in an industry-standard way
+
+-   Testing is made easier by allowing you to generate tokens with different roles
+
+-   Supports local debug configurations including proxy
+
+-   Addresses all 3 common auth flows in one sample (OpenID Connect, AuthCode, and Service-to-Service)
+
+-   Supports hosting your application across multiple subdomains (for instance, the WFE and API can be on different domains)
 
 To implement this service, check out the documentation [here](/implementation.md).
 

@@ -8,6 +8,8 @@ using System.Security.Cryptography.X509Certificates;
 using System.Net;
 using Newtonsoft.Json.Linq;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
+using Newtonsoft.Json;
 
 public class Cmd
 {
@@ -390,6 +392,159 @@ public class Cmd
         {
             Console.WriteLine($"{pair.Key} = \"{pair.Value}\"");
         }
+
+    }
+
+    private string GetStringFromUser(string prompt, Regex pattern, string error)
+    {
+        string value = null;
+        do
+        {
+            Console.WriteLine(prompt);
+            string response = Console.ReadLine();
+            if (pattern == null || pattern.IsMatch(response))
+            {
+                value = response;
+            }
+            else
+            {
+                Console.WriteLine(error);
+            }
+        } while (string.IsNullOrEmpty(value));
+        return value;
+    }
+
+    private bool GetBoolFromUser(string prompt)
+    {
+        string error = "Error: you must answer yes or no.";
+        var positive = new string[] { "yes", "y", "1", "true" };
+        var negative = new string[] { "no", "n", "0", "false" };
+        while (true)
+        {
+            string response = GetStringFromUser(prompt, null, error).ToLower();
+            if (positive.Contains(response)) return true;
+            if (negative.Contains(response)) return false;
+            Console.WriteLine(error);
+        }
+    }
+
+    private int GetNumberFromUser(string prompt, int min, int max)
+    {
+        string error = $"Error: you must specify a number between {min} and {max}.";
+        while (true)
+        {
+            string response = GetStringFromUser(prompt, new Regex("^[0-9]+$"), error).ToLower();
+            if (int.TryParse(response, out int port))
+            {
+                if (port >= min && port <= max) return port;
+            }
+            Console.WriteLine(error);
+        }
+    }
+
+    private string GetGuidFromUser(string prompt)
+    {
+        string error = "Error: you must specify a GUID.";
+        while (true)
+        {
+            string response = GetStringFromUser(prompt, null, error).ToLower();
+            if (Guid.TryParse(response, out Guid guid)) return guid.ToString();
+            Console.WriteLine(error);
+        }
+    }
+
+    private string GetUrlFromUser(string prompt)
+    {
+        string error = "Error: you must specify a valid, fully-qualified URL.";
+        while (true)
+        {
+            string response = GetStringFromUser(prompt, null, error).ToLower();
+            if (Uri.TryCreate(response, UriKind.Absolute, out Uri result)) return result.ToString();
+            Console.WriteLine(error);
+        }
+    }
+
+    public void RunConfigWizard()
+    {
+
+        // prelude
+        Console.WriteLine("This wizard will create a JSON configuration file for \"dev\" and \"local\" environments.");
+
+        // collect responses from the user
+        Dictionary<string, string> config = new Dictionary<string, string>();
+        string id = GetStringFromUser("[01/14] Please provide an identifier for your application (ex. sample)?",
+            new Regex("^[a-zA-Z0-9-_]+$"),
+            "Error: you may only use alphanumeric characters, dashes, or underscores.");
+        string baseDomain = GetStringFromUser("[02/14] Please provide a base domain (ex. plasne.com)?",
+            new Regex("^[a-zA-Z0-9-_.]+$"),
+            "Error: you may only use alphanumeric characters, dashes, underscores, and periods.");
+        string wfeSubDomain = GetStringFromUser("[03/14] Please provide a subdomain name for the WFE (ex. wfe)?",
+            new Regex("^[a-zA-Z0-9-_]+$"),
+            "Error: you may only use alphanumeric characters, dashes, and underscores.");
+        string authSubDomain = GetStringFromUser("[04/14] Please provide a subdomain name for the auth service (ex. auth)?",
+            new Regex("^[a-zA-Z0-9-_]+$"),
+            "Error: you may only use alphanumeric characters, dashes, and underscores.");
+        string apiSubDomain = GetStringFromUser("[05/14] Please provide a subdomain name for the API service (ex. api)?",
+            new Regex("^[a-zA-Z0-9-_]+$"),
+            "Error: you may only use alphanumeric characters, dashes, and underscores.");
+        string tenantId = GetGuidFromUser("[06/14] What is the GUID of your Azure AD tenant that contains the authorization application?");
+        string clientId = GetGuidFromUser("[07/14] What is the Application ID (also called Client ID) of the authorization application?");
+        int duration = GetNumberFromUser("[08/14] How long (in minutes) do you want to sign the session_token for (ex. 240 minutes or 4 hours)?", 1, 60 * 24 * 30);
+        string keyVault = GetStringFromUser("[09/14] What is the name of your Azure Key Vault - the name before .vault.azure.net (ex. plasne-keyvault)?",
+            new Regex("^[a-zA-Z0-9-_]+$"),
+            "Error: you may only use alphanumeric characters, dashes, or underscores.");
+        bool allowReissue = GetBoolFromUser("[10/14] Do you want to allow tokens to be reissued (yes/no)?");
+        int wfePort = GetNumberFromUser("[11/14] For local debugging, what port do you want to host your WFE on (ex. 5000)?", 1024, 65535);
+        int authPort = GetNumberFromUser("[12/14] For local debugging, what port do you want to host your auth service on (ex. 5100)?", 1024, 65535);
+        int apiPort = GetNumberFromUser("[13/14] For local debugging, what port do you want to host your API service on (ex. 5200)?", 1024, 65535);
+        bool allowPermissiveDebug = GetBoolFromUser("[14/14] For local debugging, do you want to allow for a more permissive environment - ALLOW_TOKEN_IN_HEADER=true, VERIFY_XSRF_HEADER=false (yes/no)?");
+
+        // build out the config
+        config.Add($"{id}:auth:dev:AUTHORITY", "https://login.microsoftonline.com/{tenantId}");
+        config.Add($"{id}:auth:dev:CLIENT_ID", clientId);
+        config.Add($"{id}:auth:dev:DEFAULT_REDIRECT_URL", $"https://{wfeSubDomain}.{baseDomain}");
+        config.Add($"{id}:auth:local:DEFAULT_REDIRECT_URL", $"http://localhost:{wfePort}");
+        config.Add($"{id}:auth:dev:JWT_DURATION", duration.ToString());
+        config.Add($"{id}:auth:dev:KEYVAULT_COMMAND_PASSWORD_URL", $"https://{keyVault}.vault.azure.net/secrets/COMMANDPW");
+        config.Add($"{id}:auth:dev:KEYVAULT_PRIVATE_KEY_PASSWORD_URL", $"https://{keyVault}.vault.azure.net/secrets/PRIVATEKEYPW");
+        config.Add($"{id}:auth:dev:KEYVAULT_PRIVATE_KEY_URL", $"https://{keyVault}.vault.azure.net/secrets/PRIVATEKEY");
+        config.Add($"{id}:auth:dev:KEYVAULT_PUBLIC_CERT_PREFIX_URL", $"https://{keyVault}.vault.azure.net/secrets/PUBLIC-CERT-");
+        config.Add($"{id}:auth:dev:PUBLIC_KEYS_URL", $"https://{authSubDomain}.{baseDomain}/api/auth/keys");
+        config.Add($"{id}:auth:local:PUBLIC_KEYS_URL", $"http://localhost:{authPort}/api/auth/keys");
+        config.Add($"{id}:auth:dev:REDIRECT_URI", $"https://{authSubDomain}.{baseDomain}/api/auth/token");
+        config.Add($"{id}:auth:local:REDIRECT_URI", $"http://localhost:{authPort}/api/auth/token");
+        config.Add($"{id}:api:dev:PRESENT_CONFIG_wfe", $"{id}:wfe:dev:*");
+        config.Add($"{id}:api:local:PRESENT_CONFIG_wfe", $"{id}:wfe:local:*, {id}:wfe:dev:*");
+        config.Add($"{id}:api:dev:WELL_KNOWN_CONFIG_URL", $"https://{authSubDomain}.{baseDomain}/api/auth/.well-known/openid-configuration");
+        config.Add($"{id}:api:local:WELL_KNOWN_CONFIG_URL", $"http://localhost:{authPort}/api/auth/.well-known/openid-configuration");
+        if (allowReissue)
+        {
+            config.Add($"{id}:api:dev:REISSUE_URL", $"https://{authSubDomain}.{baseDomain}/api/auth/reissue");
+            config.Add($"{id}:api:local:REISSUE_URL", $"http://localhost:{authPort}/api/auth/reissue");
+        }
+        if (allowPermissiveDebug)
+        {
+            config.Add($"{id}:api:local:ALLOW_TOKEN_IN_HEADER", "true");
+            config.Add($"{id}:api:local:VERIFY_XSRF_HEADER", "false");
+        }
+        config.Add($"{id}:common:dev:ALLOWED_ORIGINS", $"https://{wfeSubDomain}.{baseDomain}");
+        config.Add($"{id}:common:local:ALLOWED_ORIGINS", $"http://localhost:{wfePort}");
+        config.Add($"{id}:common:dev:AUDIENCE", $"https://{apiSubDomain}.{baseDomain}");
+        config.Add($"{id}:common:dev:ISSUER", $"https://{authSubDomain}.{baseDomain}");
+        config.Add($"{id}:common:dev:BASE_DOMAIN", baseDomain);
+        config.Add($"{id}:common:local:BASE_DOMAIN", "localhost");
+        config.Add($"{id}:wfe:dev:LOGIN_URL", $"https://{authSubDomain}.{baseDomain}/api/auth/authorize");
+        config.Add($"{id}:wfe:local:LOGIN_URL", $"http://localhost:{authPort}/api/auth/authorize");
+        config.Add($"{id}:wfe:dev:ME_URL", $"https://{apiSubDomain}.{baseDomain}/api/identity/me");
+        config.Add($"{id}:wfe:local:ME_URL", $"http://localhost:{apiPort}/api/identity/me");
+
+        // write out the config
+        string stringified = JsonConvert.SerializeObject(config, Formatting.Indented);
+        Console.WriteLine("");
+        Console.WriteLine(stringified);
+        Console.WriteLine("");
+        Console.WriteLine("Written to config.json.");
+        System.IO.File.WriteAllText("./config.json", stringified);
 
     }
 
