@@ -178,7 +178,7 @@ public class TokenIssuer
     public static bool RequireSecureForCookies
     {
         get
-        {
+        { // default is true
             string v = System.Environment.GetEnvironmentVariable("REQUIRE_SECURE_FOR_COOKIES");
             if (string.IsNullOrEmpty(v)) return true;
             string[] negative = new string[] { "no", "false", "0" };
@@ -186,10 +186,54 @@ public class TokenIssuer
         }
     }
 
+    public static bool RequireHttpOnlyOnUserCookie
+    {
+        get
+        { // default is true
+            string v = System.Environment.GetEnvironmentVariable("REQUIRE_HTTPONLY_ON_USER_COOKIE");
+            if (string.IsNullOrEmpty(v)) return true;
+            string[] negative = new string[] { "no", "false", "0" };
+            return (!negative.Contains(v.ToLower()));
+        }
+    }
+
+    public static bool RequireHttpOnlyOnXsrfCookie
+    {
+        get
+        { // default is false
+            string v = System.Environment.GetEnvironmentVariable("REQUIRE_HTTPONLY_ON_XSRF_COOKIE");
+            if (string.IsNullOrEmpty(v)) return false;
+            string[] positive = new string[] { "yes", "true", "1" };
+            return (positive.Contains(v.ToLower()));
+        }
+    }
+
+    public static bool VerifyXsrfInHeader
+    {
+        get
+        { // default is true
+            string v = System.Environment.GetEnvironmentVariable("VERIFY_XSRF_IN_HEADER");
+            if (string.IsNullOrEmpty(v)) return true;
+            string[] negative = new string[] { "no", "false", "0" };
+            return (!negative.Contains(v.ToLower()));
+        }
+    }
+
+    public static bool VerifyXsrfInCookie
+    {
+        get
+        { // default is false
+            string v = System.Environment.GetEnvironmentVariable("VERIFY_XSRF_IN_COOKIE");
+            if (string.IsNullOrEmpty(v)) return false;
+            string[] positive = new string[] { "yes", "true", "1" };
+            return (positive.Contains(v.ToLower()));
+        }
+    }
+
     public static bool RequireUserEnabledOnReissue
     {
         get
-        {
+        { // default is true
             string v = System.Environment.GetEnvironmentVariable("REQUIRE_USER_ENABLED_ON_REISSUE");
             if (string.IsNullOrEmpty(v)) return true;
             string[] negative = new string[] { "no", "false", "0" };
@@ -609,6 +653,68 @@ public class TokenIssuer
 
     }
 
+    public string IssueXsrfToken(string code)
+    {
+
+        // add the claims
+        List<Claim> claims = new List<Claim>();
+        claims.Add(new Claim("code", code));
+
+        // generate the token
+        var jwt = new JwtSecurityToken(
+            issuer: Issuer,
+            audience: Audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(JwtMaxDuration).AddMinutes(60), // good beyond the max-duration
+            signingCredentials: SigningCredentials);
+
+        // serialize
+        try
+        {
+            JwtSecurityTokenHandler handler = new JwtSecurityTokenHandler();
+            return handler.WriteToken(jwt);
+        }
+        catch (Exception e)
+        {
+            if (e.Message.Contains("The system cannot find the file specified"))
+            {
+                throw new Exception("The User Profile is not available - https://github.com/projectkudu/kudu/wiki/Configurable-settings#the-system-cannot-find-the-file-specified-issue-with-x509certificate2", e);
+            }
+            else
+            {
+                throw;
+            }
+        }
+
+    }
+
+    public JwtSecurityToken ValidateToken(string token)
+    {
+
+        // get keys from certificates
+        var keys = ValidationCertificates.Select(c => new X509SecurityKey(c));
+
+        // parameters to validate
+        var handler = new JwtSecurityTokenHandler();
+        var validationParameters = new TokenValidationParameters
+        {
+            RequireSignedTokens = true,
+            ValidateIssuer = true,
+            ValidIssuer = Issuer,
+            ValidateAudience = true,
+            ValidAudience = Audience,
+            ValidateLifetime = true,
+            IssuerSigningKeys = keys
+        };
+
+        // validate all previously defined parameters
+        SecurityToken validatedSecurityToken = null;
+        handler.ValidateToken(token, validationParameters, out validatedSecurityToken);
+        JwtSecurityToken validatedJwt = validatedSecurityToken as JwtSecurityToken;
+
+        return validatedJwt;
+    }
+
     private JwtSecurityToken IsTokenExpiredButEligibleForRenewal(string token)
     {
 
@@ -634,7 +740,6 @@ public class TokenIssuer
                 ValidIssuer = Issuer,
                 ValidateAudience = true,
                 ValidAudience = Audience,
-                ValidateIssuerSigningKey = true,
                 ValidateLifetime = false, // we want to validate everything but the lifetime
                 IssuerSigningKeys = keys
             }, out validatedSecurityToken);

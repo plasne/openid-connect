@@ -48,6 +48,11 @@ namespace dotnetauth
             logger.LogDebug(Config.Optional("REISSUE_URL")); // use to support token reissue
             // PRESENT_CONFIG_?
             logger.LogDebug(Config.Optional("REQUIRE_SECURE_FOR_COOKIES")); // set to "false" if you don't want cookies marked "secure"
+            logger.LogDebug(Config.Optional("REQUIRE_HTTPONLY_ON_USER_COOKIE"));
+            logger.LogDebug(Config.Optional("VERIFY_TOKEN_IN_COOKIE"));
+            logger.LogDebug(Config.Optional("VERIFY_TOKEN_IN_HEADER"));
+            logger.LogDebug(Config.Optional("VERIFY_XSRF_IN_COOKIE"));
+            logger.LogDebug(Config.Optional("VERIFY_XSRF_IN_HEADER"));
 
         }
 
@@ -68,29 +73,58 @@ namespace dotnetauth
         private class XsrfHandler : AuthorizationHandler<XsrfRequirement>
         {
 
-            public XsrfHandler(ILoggerFactory loggerFactory)
+            public XsrfHandler(ILoggerFactory loggerFactory, TokenValidator validator)
             {
                 this.Logger = loggerFactory.CreateLogger<XsrfHandler>();
+                this.Validator = validator;
             }
 
             private ILogger Logger { get; }
+            private TokenValidator Validator { get; }
 
             protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, XsrfRequirement requirement)
             {
-                if (TokenValidator.VerifyXsrfHeader)
+                if (TokenValidator.VerifyXsrfInHeader || TokenValidator.VerifyXsrfInCookie)
                 {
                     if (context.Resource is AuthorizationFilterContext mvc)
                     {
                         try
                         {
+
+                            // get the identity of the authenticated user
                             var identity = context.User.Identity as ClaimsIdentity;
                             if (identity == null) throw new Exception("identity not found");
                             if (!identity.IsAuthenticated) throw new Exception("user is not authenticated");
-                            string token = mvc.HttpContext.Request.Headers["X-XSRF-TOKEN"];
-                            if (string.IsNullOrEmpty(token)) throw new Exception("X-XSRF-TOKEN not sent");
-                            var claim = identity.FindFirst(c => c.Type == "xsrf");
-                            if (claim == null) throw new Exception("xsrf claim not found");
-                            if (token != claim.Value) throw new Exception("xsrf claim does not match X-XSRF-TOKEN");
+
+                            // get the XSRF-TOKEN (header, cookie)
+                            string code = null;
+                            if (TokenValidator.VerifyXsrfInHeader)
+                            {
+                                code = mvc.HttpContext.Request.Headers["X-XSRF-TOKEN"];
+                            }
+                            if (TokenValidator.VerifyXsrfInCookie && string.IsNullOrEmpty(code))
+                            {
+                                code = mvc.HttpContext.Request.Cookies["XSRF-TOKEN"];
+                            }
+                            if (string.IsNullOrEmpty(code)) throw new Exception("XSRF code not found");
+
+                            // validate the signature if signed
+                            //  NOTE: it will be signed if the source claim was accessible via JavaScript
+                            if (!TokenValidator.RequireHttpOnlyOnUserCookie)
+                            {
+                                var validate = this.Validator.ValidateToken(code);
+                                validate.Wait();
+                                var validated = validate.Result;
+                                var codeclaim = validated.Payload.Claims.FirstOrDefault(c => c.Type == "code");
+                                if (codeclaim == null) throw new Exception("xsrf signed token did not contain a code");
+                                code = codeclaim.Value;
+                            }
+
+                            // verify that it matches the XSRF claim
+                            var xsrfclaim = identity.FindFirst(c => c.Type == "xsrf");
+                            if (xsrfclaim == null) throw new Exception("xsrf claim not found");
+                            if (code != xsrfclaim.Value) throw new Exception("xsrf claim does not match code");
+
                             context.Succeed(requirement);
                         }
                         catch (Exception e)
@@ -118,6 +152,7 @@ namespace dotnetauth
         {
             public string CookieName { get; set; } = "user";
             public bool AllowAuthorizationHeader { get; set; } = false;
+            public bool AllowAuthorizationCookie { get; set; } = true;
         }
 
         public class JwtCookieAuthenticationHandler : AuthenticationHandler<JwtCookieAuthenticationOptions>
@@ -154,7 +189,7 @@ namespace dotnetauth
                     }
 
                     // look next at the cookie
-                    if (string.IsNullOrEmpty(token))
+                    if (Options.AllowAuthorizationCookie && string.IsNullOrEmpty(token))
                     {
                         token = Request.Cookies[Options.CookieName];
                         isTokenFromCookie = true;
@@ -181,7 +216,7 @@ namespace dotnetauth
                         {
                             Response.Cookies.Append("user", token, new CookieOptions()
                             {
-                                HttpOnly = true,
+                                HttpOnly = TokenValidator.RequireHttpOnlyOnUserCookie,
                                 Secure = TokenValidator.RequireSecureForCookies,
                                 Domain = TokenValidator.BaseDomain,
                                 Path = "/"
@@ -235,7 +270,8 @@ namespace dotnetauth
                 .AddScheme<JwtCookieAuthenticationOptions, JwtCookieAuthenticationHandler>("jwt-cookie", options =>
                 {
                     options.CookieName = "user";
-                    options.AllowAuthorizationHeader = TokenValidator.AllowTokenInHeader;
+                    options.AllowAuthorizationHeader = TokenValidator.VerifyTokenInHeader;
+                    options.AllowAuthorizationCookie = TokenValidator.VerifyTokenInCookie;
                 });
 
             // setup authorization

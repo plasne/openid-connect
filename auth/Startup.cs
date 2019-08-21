@@ -54,6 +54,10 @@ namespace dotnetauth
             logger.LogDebug(Config.Optional("REQUIRE_SECURE_FOR_COOKIES")); // set to "false" if you don't want cookies marked "secure"
             logger.LogDebug(Config.Optional("REQUIRE_USER_ENABLED_ON_REISSUE")); // set to "false" if you don't want to check for the user being enabled
             logger.LogDebug(Config.Optional("COMMAND_PASSWORD", "KEYVAULT_COMMAND_PASSWORD_URL")); // set a password required to send commands like clear-cache
+            logger.LogDebug(Config.Optional("REQUIRE_HTTPONLY_ON_USER_COOKIE"));
+            logger.LogDebug(Config.Optional("REQUIRE_HTTPONLY_ON_XSRF_COOKIE"));
+            logger.LogDebug(Config.Optional("VERIFY_XSRF_IN_HEADER"));
+            logger.LogDebug(Config.Optional("VERIFY_XSRF_IN_COOKIE"));
 
         }
 

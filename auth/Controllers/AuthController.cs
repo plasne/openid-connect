@@ -221,15 +221,6 @@ namespace authentication.Controllers
                 Console.WriteLine("access_token[1]: " + tokens2.accessToken);
                 */
 
-                // write the XSRF-TOKEN cookie
-                string xsrf = this.GenerateSafeRandomString(16);
-                Response.Cookies.Append("XSRF-TOKEN", xsrf, new CookieOptions()
-                {
-                    Secure = TokenIssuer.RequireSecureForCookies,
-                    Domain = TokenIssuer.BaseDomain,
-                    Path = "/"
-                });
-
                 // populate the claims from the id_token
                 List<Claim> claims = new List<Claim>();
                 var email = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "email");
@@ -252,14 +243,31 @@ namespace authentication.Controllers
                 claims.Add(new Claim("displayName2", (string)user.displayName));
                 */
 
-                // add the XSRF (cross-site request forgery) claim
-                claims.Add(new Claim("xsrf", xsrf));
+                // write the XSRF-TOKEN cookie (if it will be verified)
+                if (TokenIssuer.VerifyXsrfInHeader || TokenIssuer.VerifyXsrfInCookie)
+                {
+                    string xsrf = this.GenerateSafeRandomString(16);
+                    string signed = xsrf;
+                    if (!TokenIssuer.RequireHttpOnlyOnUserCookie)
+                    {
+                        // if the source claim is going to be in a cookie that is readable by JavaScript the XSRF must be signed
+                        signed = tokenIssuer.IssueXsrfToken(xsrf);
+                    }
+                    Response.Cookies.Append("XSRF-TOKEN", signed, new CookieOptions()
+                    {
+                        HttpOnly = TokenIssuer.RequireHttpOnlyOnXsrfCookie,
+                        Secure = TokenIssuer.RequireSecureForCookies,
+                        Domain = TokenIssuer.BaseDomain,
+                        Path = "/"
+                    });
+                    claims.Add(new Claim("xsrf", xsrf));
+                }
 
-                // issue the token cookie
+                // write the user cookie
                 string jwt = await tokenIssuer.IssueToken(claims);
                 Response.Cookies.Append("user", jwt, new CookieOptions()
                 {
-                    HttpOnly = true,
+                    HttpOnly = TokenIssuer.RequireHttpOnlyOnUserCookie,
                     Secure = TokenIssuer.RequireSecureForCookies,
                     Domain = TokenIssuer.BaseDomain,
                     Path = "/"
@@ -300,15 +308,18 @@ namespace authentication.Controllers
 
         public class WellKnownConfigPayload
         {
+            public string issuer { get; set; }
             public string jwks_uri { get; set; }
         }
 
         [HttpGet, Route(".well-known/openid-configuration")]
         public ActionResult<dynamic> WellKnownConfig()
         {
+            // REF: https://ldapwiki.com/wiki/Openid-configuration 
             // REF: https://developer.byu.edu/docs/consume-api/use-api/implement-openid-connect/openid-connect-discovery
             return new WellKnownConfigPayload()
             {
+                issuer = TokenIssuer.Issuer,
                 jwks_uri = TokenIssuer.PublicKeysUrl
             };
         }
@@ -355,6 +366,30 @@ namespace authentication.Controllers
                 payload.keys.Add(key);
             }
             return payload;
+        }
+
+        [HttpPost, Route("verify")]
+        public ActionResult Verify([FromServices] TokenIssuer tokenIssuer)
+        {
+            try
+            {
+                string sessionToken = Request.Headers["X-SESSION-TOKEN"];
+                if (string.IsNullOrEmpty(sessionToken)) throw new Exception("X-SESSION-TOKEN header not found");
+                string xsrfToken = Request.Headers["X-XSRF-TOKEN"];
+                if (string.IsNullOrEmpty(xsrfToken)) throw new Exception("X-XSRF-TOKEN header not found");
+                var validatedSessionToken = tokenIssuer.ValidateToken(sessionToken);
+                var xsrf = validatedSessionToken.Payload.Claims.FirstOrDefault(c => c.Type == "xsrf");
+                if (xsrf == null) throw new Exception("xsrf claim not found in X-SESSION-TOKEN");
+                var validatedXsrfToken = tokenIssuer.ValidateToken(xsrfToken);
+                var code = validatedXsrfToken.Payload.Claims.FirstOrDefault(c => c.Type == "code");
+                if (code == null) throw new Exception("code claim not found in X-XSRF-TOKEN");
+                if (xsrf.Value != code.Value) throw new Exception("xsrf claim does not match code claim");
+                return Ok();
+            }
+            catch (Exception e)
+            {
+                return BadRequest(e.Message);
+            }
         }
 
         [HttpPost, Route("clear-cache")]

@@ -208,11 +208,53 @@ If you are going to use AUTH_TYPE=mi, the above settings are the only things you
 
 -   app:api:env:PRESENT_CONFIG_name - You may create one or more PRESENT_CONFIG_name keys that allow you to specify configurations that can be presented by your API at api/config/name. For example, you could create the following variable "PRESENT_CONFIG_wfedev=app:wfe:dev:\*". All keys under that filter would be returned when someone hit the /api/config/webdev endpoint. Primarily this is provided so your WFE can be configured by Azure App Configuration in the same way as the other services.
 
--   app:api:local:ALLOW_TOKEN_IN_HEADER (default: false) - If set to "true", this allows the API to accept the session_token as an Authorization Bearer token if it exists and to only look for the "user" cookie if it doesn't (normal behavior is to only look for the "user" cookie). You should use this option anywhere but for local debug as this exposes the service to XSS attacks.
-
--   app:api:local:VERIFY_XSRF_HEADER (default: true) - If set to "false", the API service will skip checking that the X-XSRF-TOKEN header matches the "xsrf" session_token claim. You should use this option anywhere but for local debug as this exposes the service to XSRF attacks.
-
 -   app:srv:env:PROXY - This solution uses REST APIs to communicate with Azure services. If you require a proxy to access HTTPS endpoints, then you should add the URL of the proxy as a setting for the right scope (ex. app:common:env:PROXY for every service).
+
+### Use Authorization Bearer Mode
+
+The normal behavior is for the session_token to be stored in a user cookie marked HttpOnly and the XSRF code to be stored in a XSRF-TOKEN cookie that is readable by JavaScript. When a request goes to the server, it validates based on the user cookie and the X-XSRF-TOKEN header. This pattern was developed by looking at the common pattern for Angular applications. This configuration is the default, but includes the following settings:
+
+-   app:common:env:REQUIRE_HTTPONLY_ON_USER_COOKIE = true
+
+-   app:auth:env:REQUIRE_HTTPONLY_ON_XSRF_COOKIE = false
+
+-   app:api:env:VERIFY_TOKEN_IN_COOKIE = true
+
+-   app:api:env:VERIFY_TOKEN_IN_HEADER = false
+
+-   app:api:env:VERIFY_XSRF_IN_COOKIE = false
+
+-   app:api:env:VERIFY_XSRF_IN_HEADER = true
+
+You can reverse these settings if you want to send the session_token as an Authorization Bearer token and let the XSRF be validated by reading the cookie directly. That configuration would look like this:
+
+-   app:common:env:REQUIRE_HTTPONLY_ON_USER_COOKIE = false
+
+-   app:auth:env:REQUIRE_HTTPONLY_ON_XSRF_COOKIE = true
+
+-   app:api:env:VERIFY_TOKEN_IN_COOKIE = false
+
+-   app:api:env:VERIFY_TOKEN_IN_HEADER = true
+
+-   app:api:env:VERIFY_XSRF_IN_COOKIE = true
+
+-   app:api:env:VERIFY_XSRF_IN_HEADER = false
+
+It is important that you have one cookie HttpOnly to be validated by cookie and one cookie readable by JavaScript to be validated in the header. This combination is what gives you reasonable XSS and XSRF protection. For a local debug environment that is "permissive" and lets you test any combination, you can do this (don't do this in production):
+
+-   app:common:env:REQUIRE_HTTPONLY_ON_USER_COOKIE = false
+
+-   app:api:env:VERIFY_TOKEN_IN_COOKIE = true
+
+-   app:api:env:VERIFY_TOKEN_IN_HEADER = true
+
+-   app:common:env:VERIFY_XSRF_IN_COOKIE = false
+
+-   app:common:env:VERIFY_XSRF_IN_HEADER = false
+
+If verification allows for both a header and cookie, the header is always checked first. If the token is not allowed to be verified by header or cookie, authentication will always fail. If the XSRF is not allowed to be verified by header or cookie, it allow authentication anyway and will not even generate an XSRF-TOKEN cookie.
+
+Whenever REQUIRE_HTTPONLY_ON_USER_COOKIE is "false", the XSRF code will be converted into a JWT and signed so that we can be sure it has not been tampered with.
 
 ### Sample
 

@@ -70,10 +70,22 @@ public class TokenValidator
     public static bool RequireSecureForCookies
     {
         get
-        {
+        { // default is true
             string v = System.Environment.GetEnvironmentVariable("REQUIRE_SECURE_FOR_COOKIES");
+            if (string.IsNullOrEmpty(v)) return true;
             string[] negative = new string[] { "no", "false", "0" };
             return (!negative.Contains(v));
+        }
+    }
+
+    public static bool RequireHttpOnlyOnUserCookie
+    {
+        get
+        { // default is true
+            string v = System.Environment.GetEnvironmentVariable("REQUIRE_HTTPONLY_ON_USER_COOKIE");
+            if (string.IsNullOrEmpty(v)) return true;
+            string[] negative = new string[] { "no", "false", "0" };
+            return (!negative.Contains(v.ToLower()));
         }
     }
 
@@ -85,25 +97,47 @@ public class TokenValidator
         }
     }
 
-    public static bool AllowTokenInHeader
+    public static bool VerifyTokenInHeader
     {
         get
-        {
-            string v = System.Environment.GetEnvironmentVariable("ALLOW_TOKEN_IN_HEADER");
+        { // default is false
+            string v = System.Environment.GetEnvironmentVariable("VERIFY_TOKEN_IN_HEADER");
             if (string.IsNullOrEmpty(v)) return false;
             string[] positive = new string[] { "yes", "true", "1" };
             return (positive.Contains(v.ToLower()));
         }
     }
 
-    public static bool VerifyXsrfHeader
+    public static bool VerifyTokenInCookie
     {
         get
-        {
-            string v = System.Environment.GetEnvironmentVariable("VERIFY_XSRF_HEADER");
+        { // default is true
+            string v = System.Environment.GetEnvironmentVariable("VERIFY_TOKEN_IN_COOKIE");
+            if (string.IsNullOrEmpty(v)) return true;
+            string[] negative = new string[] { "no", "false", "0" };
+            return (!negative.Contains(v));
+        }
+    }
+
+    public static bool VerifyXsrfInHeader
+    {
+        get
+        { // default is true
+            string v = System.Environment.GetEnvironmentVariable("VERIFY_XSRF_IN_HEADER");
             if (string.IsNullOrEmpty(v)) return true;
             string[] negative = new string[] { "no", "false", "0" };
             return (!negative.Contains(v.ToLower()));
+        }
+    }
+
+    public static bool VerifyXsrfInCookie
+    {
+        get
+        { // default is false
+            string v = System.Environment.GetEnvironmentVariable("VERIFY_XSRF_IN_COOKIE");
+            if (string.IsNullOrEmpty(v)) return false;
+            string[] positive = new string[] { "yes", "true", "1" };
+            return (positive.Contains(v.ToLower()));
         }
     }
 
@@ -124,7 +158,6 @@ public class TokenValidator
         var handler = new JwtSecurityTokenHandler();
         var validationParameters = new TokenValidationParameters
         {
-            RequireExpirationTime = true,
             RequireSignedTokens = true,
             ValidateIssuer = true,
             ValidIssuer = Issuer,

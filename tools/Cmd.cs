@@ -507,7 +507,7 @@ public class Cmd
         int wfePort = GetNumberFromUser("[12/{total}] For local debugging, what port do you want to host your WFE on (ex. 5000)?", 1024, 65535);
         int authPort = GetNumberFromUser("[13/{total}] For local debugging, what port do you want to host your auth service on (ex. 5100)?", 1024, 65535);
         int apiPort = GetNumberFromUser("[14/{total}] For local debugging, what port do you want to host your API service on (ex. 5200)?", 1024, 65535);
-        bool allowPermissiveDebug = GetBoolFromUser("[15/{total}] For local debugging, do you want to allow for a more permissive environment - ALLOW_TOKEN_IN_HEADER=true, VERIFY_XSRF_HEADER=false (yes/no)?");
+        bool allowPermissiveDebug = GetBoolFromUser("[15/{total}] For local debugging, do you want to allow for a more permissive environment - allow  (yes/no)?");
         bool needProxy = GetBoolFromUser("[16a/{total}] For local debugging, do you need to use a proxy (yes/no)?");
         string proxy = null;
         if (needProxy) proxy = GetUrlFromUser("[16b/{total}] What is the URL of the proxy (ex. http://proxy)?");
@@ -538,8 +538,12 @@ public class Cmd
         if (!string.IsNullOrEmpty(appId)) config.Add($"{id}:common:dev:APPLICATION_ID", appId);
         if (allowPermissiveDebug)
         {
-            config.Add($"{id}:api:local:ALLOW_TOKEN_IN_HEADER", "true");
-            config.Add($"{id}:api:local:VERIFY_XSRF_HEADER", "false");
+            config.Add($"{id}:api:local:REQUIRE_HTTPONLY_ON_USER_COOKIE", "false");
+            config.Add($"{id}:api:local:REQUIRE_HTTPONLY_ON_XSRF_COOKIE", "false");
+            config.Add($"{id}:api:local:VERIFY_TOKEN_IN_COOKIE", "true");
+            config.Add($"{id}:api:local:VERIFY_TOKEN_IN_HEADER", "true");
+            config.Add($"{id}:api:local:VERIFY_XSRF_IN_COOKIE", "false");
+            config.Add($"{id}:api:local:VERIFY_XSRF_IN_HEADER", "false");
         }
         config.Add($"{id}:common:dev:ALLOWED_ORIGINS", $"https://{wfeSubDomain}.{baseDomain}");
         config.Add($"{id}:common:local:ALLOWED_ORIGINS", $"http://localhost:{wfePort}");

@@ -23,8 +23,18 @@
                 - goes through the login process
             </div>
             <div style="margin-top: 16px">
-                <a href="#" onclick="javascript:me()">me</a>
-                - shows information known about the current user
+                <a href="#" onclick="javascript:getUserByCookie()"
+                    >get user info</a
+                >
+                - (by user cookie) shows information known about the current
+                user
+            </div>
+            <div style="margin-top: 16px">
+                <a href="#" onclick="javascript:getUserByHeader()"
+                    >get user info</a
+                >
+                - (by Authorization Bearer header) shows information known about
+                the current user
             </div>
             <table id="results" style="margin-top : 16px"></table>
         </div>

@@ -85,6 +85,37 @@ public class Config
         }
     }
 
+    private async static Task<(string, string)> GetIdAndSecret()
+    {
+        try
+        {
+            string accessToken = await AuthChooser.GetAccessToken("https://management.azure.com");
+            using (var client = new WebClient())
+            {
+                if (!string.IsNullOrEmpty(Proxy)) client.Proxy = new WebProxy(Proxy);
+                client.Headers.Add("Authorization", $"Bearer {accessToken}");
+                string url = $"https://management.azure.com{AppConfigResourceId}/ListKeys?api-version=2019-02-01-preview";
+                byte[] bytes = client.UploadData(new Uri(url), Encoding.UTF8.GetBytes(string.Empty));
+                string raw = Encoding.UTF8.GetString(bytes);
+                dynamic json = JObject.Parse(raw);
+                JArray values = json.value;
+                dynamic pri = values.First();
+                return ((string)pri.id, (string)pri.value);
+            }
+        }
+        catch (WebException e)
+        {
+            if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.Unauthorized)
+            {
+                throw new Exception($"The identity is not authorized to get management keys for the AppConfig: {AppConfigResourceId}; make sure this is the right instance and that you have granted rights to the Managed Identity or Service Principal. If running locally, make sure you have run an \"az login\" with the correct account and subscription.", e);
+            }
+            else
+            {
+                throw;
+            }
+        }
+    }
+
     public async static Task<Dictionary<string, string>> Load(string[] filters, bool useFullyQualifiedName = false)
     {
 
@@ -92,24 +123,8 @@ public class Config
         Dictionary<string, string> kv = new Dictionary<string, string>();
         if (filters.Length < 1) return kv;
 
-        // get a token
-        string accessToken = await AuthChooser.GetAccessToken("https://management.azure.com");
-
         // get the id and secret
-        string appConfigId, appConfigSecret;
-        using (var client = new WebClient())
-        {
-            if (!string.IsNullOrEmpty(Proxy)) client.Proxy = new WebProxy(Proxy);
-            client.Headers.Add("Authorization", $"Bearer {accessToken}");
-            string url = $"https://management.azure.com{AppConfigResourceId}/ListKeys?api-version=2019-02-01-preview";
-            byte[] bytes = client.UploadData(new Uri(url), Encoding.UTF8.GetBytes(string.Empty));
-            string raw = Encoding.UTF8.GetString(bytes);
-            dynamic json = JObject.Parse(raw);
-            JArray values = json.value;
-            dynamic pri = values.First();
-            appConfigId = (string)pri.id;
-            appConfigSecret = (string)pri.value;
-        }
+        var (appConfigId, appConfigSecret) = await Config.GetIdAndSecret();
 
         // process each key filter request
         foreach (var filter in filters)
@@ -136,7 +151,8 @@ public class Config
 
                 // get the response
                 var response = await client.SendAsync(request);
-                if (response.StatusCode != HttpStatusCode.OK) throw new Exception("config could not be read from Azure AppConfig");
+                if (response.StatusCode == HttpStatusCode.Unauthorized) throw new Exception($"The identity is not authorized to get key/value pairs from the AppConfig: {AppConfigResourceId}; make sure this is the right instance and that you have granted rights to the Managed Identity or Service Principal. If running locally, make sure you have run an \"az login\" with the correct account and subscription.");
+                if (response.StatusCode != HttpStatusCode.OK) throw new Exception($"config could not be read from Azure AppConfig ({response.StatusCode}: {response.ReasonPhrase})");
                 var raw = await response.Content.ReadAsStringAsync();
 
                 // look for key/value pairs
