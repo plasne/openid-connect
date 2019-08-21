@@ -1,6 +1,6 @@
 # Implementation
 
-This guide walks you through implementing this sample.
+This guide walks you through implementing this sample. There is also a video showing the implementation [here](https://youtu.be/Sen7H1Uix2k).
 
 ## AUTH_TYPE
 

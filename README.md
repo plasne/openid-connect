@@ -26,7 +26,7 @@ There are many ways to authenticate users. Some of the advantages of this approa
 
 -   Supports hosting your application across multiple subdomains (for instance, the WFE and API can be on different domains)
 
-To implement this service, check out the documentation [here](/implementation.md).
+To implement this service, check out the documentation [here](/implementation.md) or the video [here](https://youtu.be/Sen7H1Uix2k).
 
 ## Design
 
