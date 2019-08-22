@@ -565,7 +565,7 @@ curl -i -X POST -d "password=my-secret-password&scope=signing-key" https://auth.
 
 ### Azure App Services include Easy Auth, why not just use that?
 
-You could use Easy Auth if: (1) you only needed an id_token, and (2) you had a way to store session state. While Easy Auth supports getting an access_token, this uses an implicit grant flow that is no longer recommended. In addition, an id_token expires after 1 hour, so it is typically too short lived to use for authentication, you would need to extract what you need from it into some session state system and then issue a cookie with a key to the session.
+You could use Easy Auth if: (1) you only needed an id_token, and (2) you had a way to store session state. While Easy Auth supports getting an access_token, this uses an implicit grant flow that is no longer recommended.
 
 Per the IETF's OAuth 2.0 Security Best Current Practise, you should no longer use implicit grants: https://tools.ietf.org/html/draft-ietf-oauth-security-topics-09#section-2.1.2.
 
@@ -573,7 +573,29 @@ The id_token issued by Easy Auth will be available to the backend service in a h
 
 ### Why not use aspnetcore auth?
 
-TODO
+You absolutely can - this auth service is built on aspnetcore. If you have a simple authentication scenario...
+
+-   all your claims are in Azure AD
+
+-   you are authenticating for a single application
+
+-   you can store session state server-side
+
+...then it probably is easier to aspnetcore. When you have more complex requirements and would need to write a bunch of code, consider that this service already provides a comprehensive solution.
+
+### Why do I keep saying you need session state if you are using the common patterns?
+
+By common patterns, I am talking about Easy Auth, aspnetcore auth, and similar patterns. If you are OK reauthenticating every 1 hour, then you don't need session state.
+
+Your session state must be server-side so the claims cannot be altered and your refresh_tokens are not exposed to the client. Keep in mind that almost all cloud implementations will have multiple instances of your API service running so the session state needs to be a standalone, shared service (like Azure Redis, Cosmos, Azure SQL DB, Azure Blob/Table Storage, or similar).
+
+If you do want to prevent having your users go back through authentication every 1 hour, there are several possible scenarios:
+
+-   You use OIDC to get an id_token. That id_token expires in 1 hour, so you need to extract the claims and store them in your state solution. Then you issue a session cookie that contains a key to get to the claims.
+
+-   You use OAuth2 or OIDC to get an access_token and refresh_token. You store the refresh_token in your state solution. Every hour when your access_token expires, you can use the refresh_token to get a new one.
+
+-   You can use the pattern that this auth service provides, the claims from the id_token are extracted into a self-signed JWT that you now control. You can validate the signature so you know it hasn't been tampered with and you can reissue by validating whatever you need to server-side without storing a refresh_token.
 
 ### Can I use this service to authenticate with APIM?
 
