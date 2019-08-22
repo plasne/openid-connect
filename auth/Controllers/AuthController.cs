@@ -373,17 +373,29 @@ namespace authentication.Controllers
         {
             try
             {
+
+                // find the tokens in the headers
                 string sessionToken = Request.Headers["X-SESSION-TOKEN"];
                 if (string.IsNullOrEmpty(sessionToken)) throw new Exception("X-SESSION-TOKEN header not found");
                 string xsrfToken = Request.Headers["X-XSRF-TOKEN"];
                 if (string.IsNullOrEmpty(xsrfToken)) throw new Exception("X-XSRF-TOKEN header not found");
+
+                // validate the session_token
                 var validatedSessionToken = tokenIssuer.ValidateToken(sessionToken);
-                var xsrf = validatedSessionToken.Payload.Claims.FirstOrDefault(c => c.Type == "xsrf");
-                if (xsrf == null) throw new Exception("xsrf claim not found in X-SESSION-TOKEN");
-                var validatedXsrfToken = tokenIssuer.ValidateToken(xsrfToken);
-                var code = validatedXsrfToken.Payload.Claims.FirstOrDefault(c => c.Type == "code");
-                if (code == null) throw new Exception("code claim not found in X-XSRF-TOKEN");
-                if (xsrf.Value != code.Value) throw new Exception("xsrf claim does not match code claim");
+                var xsrfclaim = validatedSessionToken.Payload.Claims.FirstOrDefault(c => c.Type == "xsrf");
+                if (xsrfclaim == null) throw new Exception("xsrf claim not found in X-SESSION-TOKEN");
+
+                // validate the xsrf_token (if it is signed)
+                string code = xsrfToken;
+                if (xsrfToken.Length > 32)
+                {
+                    var validatedXsrfToken = tokenIssuer.ValidateToken(xsrfToken);
+                    var codeclaim = validatedXsrfToken.Payload.Claims.FirstOrDefault(c => c.Type == "code");
+                    if (codeclaim == null) throw new Exception("code claim not found in X-XSRF-TOKEN");
+                    code = codeclaim.Value;
+                }
+
+                if (xsrfclaim.Value != code) throw new Exception("xsrf claim does not match code claim");
                 return Ok();
             }
             catch (Exception e)
