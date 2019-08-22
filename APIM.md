@@ -77,11 +77,9 @@ You can validate the Bearer token using the validate-jwt policy like so...
         <base />
         <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Access token is missing or invalid.">
             <openid-config url="https://auth2.plasne.com/api/auth/.well-known/openid-configuration" />
-            <required-claims>
-                <claim name="aud">
-                    <value>https://api2.plasne.com</value>
-                </claim>
-            </required-claims>
+            <audiences>
+                <audience>https://api2.plasne.com</audience>
+            </audiences>
         </validate-jwt>
     </inbound>
     <backend>
