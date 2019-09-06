@@ -480,7 +480,7 @@ public class Cmd
 
         // collect responses from the user
         Dictionary<string, string> config = new Dictionary<string, string>();
-        int total = 16;
+        int total = 15;
         string id = GetStringFromUser("[01/{total}] Please provide an identifier for your application (ex. sample).",
             new Regex("^[a-zA-Z0-9-_]+$"),
             "Error: you may only use alphanumeric characters, dashes, or underscores.");
@@ -508,9 +508,6 @@ public class Cmd
         int authPort = GetNumberFromUser("[13/{total}] For local debugging, what port do you want to host your auth service on (ex. 5100)?", 1024, 65535);
         int apiPort = GetNumberFromUser("[14/{total}] For local debugging, what port do you want to host your API service on (ex. 5200)?", 1024, 65535);
         bool allowPermissiveDebug = GetBoolFromUser("[15/{total}] For local debugging, do you want to allow for a more permissive environment - allow  (yes/no)?");
-        bool needProxy = GetBoolFromUser("[16a/{total}] For local debugging, do you need to use a proxy (yes/no)?");
-        string proxy = null;
-        if (needProxy) proxy = GetUrlFromUser("[16b/{total}] What is the URL of the proxy (ex. http://proxy)?");
 
         // build out the config
         config.Add($"{id}:auth:dev:AUTHORITY", $"https://login.microsoftonline.com/{tenantId}");
@@ -552,7 +549,6 @@ public class Cmd
         config.Add($"{id}:common:dev:BASE_DOMAIN", baseDomain);
         config.Add($"{id}:common:local:BASE_DOMAIN", "localhost");
         config.Add($"{id}:common:local:REQUIRE_SECURE_FOR_COOKIES", "false");
-        if (needProxy) config.Add($"{id}:common:local:PROXY", proxy);
         config.Add($"{id}:wfe:dev:LOGIN_URL", $"https://{authSubDomain}.{baseDomain}/api/auth/authorize");
         config.Add($"{id}:wfe:local:LOGIN_URL", $"http://localhost:{authPort}/api/auth/authorize");
         config.Add($"{id}:wfe:dev:ME_URL", $"https://{apiSubDomain}.{baseDomain}/api/identity/me");
