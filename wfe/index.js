@@ -23,6 +23,7 @@ app.get('/', (_, res) => {
     res.redirect('./default.html');
 });
 
+// get the config
 app.get('/config', (_, res) => {
     axios
         .get(process.env.CONFIG_URL)
