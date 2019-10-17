@@ -616,3 +616,7 @@ Yes, it turns out that Mozilla keeps a list of cloud provider domains that host 
 -   Cookies cannot be larger than 4K. If you had a bunch of claims or application roles it is possible you could exceed this limit. Consider implementing a storage system for state (ex. Redis) and keeping the JWT there.
 
 -   This solution sends cookies with each API REST call, if you have a bunch of cookies that are large in size this could significantly increase your payload size.
+
+## TODO
+
+- Reissue should requery the "role" claim as well.
