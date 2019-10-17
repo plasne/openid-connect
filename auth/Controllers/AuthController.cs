@@ -456,8 +456,8 @@ namespace authentication.Controllers
             }
         }
 
-        [HttpGet, Route("verify")]
-        public async Task<ActionResult> Verify(string scope)
+        [HttpGet, Route("check-requirements")]
+        public async Task<ActionResult> CheckRequirements(string scope)
         {
             List<string> errors = new List<string>();
             var tokenProvider = new AzureServiceTokenProvider();
