@@ -308,7 +308,7 @@ Follow these steps to configure the Auth service...
 
 You can test the following (use your URL, this is a sample):
 
--   https://auth.plasne.com/api/auth/certificate - This should show the public certificate for validating the session_token. If this is displayed, the AuthChooser is working and the account has access to the Key Vault.
+-   https://auth.plasne.com/api/auth/keys - This should show the public certificate for validating the session_token. If this is displayed, the AuthChooser is working and the account has access to the Key Vault.
 
 -   https://auth.plasne.com/api/auth/verify?scope=graph - This should return a 200 if the Microsoft Graph can be queried for all users (requires Directory.Read.All).
 
