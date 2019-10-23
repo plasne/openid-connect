@@ -44,7 +44,7 @@ This solution supports a centralized authentication service that can be used acr
 
 ### Single Application
 
-1. Create an Azure AD Application.
+1. Create an Azure AD Application. Hereafter this will be referred to as the "primary application".
 
     - The "Supported account type" option can be set as appropriate.
 
@@ -62,7 +62,7 @@ This solution supports a centralized authentication service that can be used acr
 
 ### Multiple Applications
 
-1. Follow steps 1, 2, 3, 5 (if you plan to use roles in any application), and 6 above to create the auth service application.
+1. Follow steps 1, 2, 3, 5 (if you plan to use roles in any application), and 6 above to create the primary application.
 
 2. Follow steps 1 and 4 above for each application you will be providing authentication for.
 
@@ -138,6 +138,12 @@ The setting options are described below with an example. You are encouraged to u
 Generally you need to specify local environment variables (this will also work in App Service Configuration) for each service to let the system know what to pull from Azure App Configuration.
 
 -   AUTH_TYPE - This can be either "mi" (default) or "app". If set to "mi", the AuthChooser will use a Managed Identity (or failback to use az CLI when running locally) every time it needs an access_token. If set to "app", the AuthChooser will use an application service principal (the application created in the above section).
+
+-   AUTH_TYPE_CONFIG - Generally, you just need to use AUTH_TYPE which applies to everything, but if you needed a different method for accessing Azure Configuration, you can specify it specifically.
+
+-   AUTH_TYPE_VAULT - Generally, you just need to use AUTH_TYPE which applies to everything, but if you needed a different method for accessing Azure Key Vault, you can specify it specifically.
+
+-   AUTH_TYPE_GRAPH - Generally, you just need to use AUTH_TYPE which applies to everything, but if you needed a different method for accessing the Microsoft Graph, you can specify it specifically.
 
 -   APPCONFIG_RESOURCE_ID - This is the Resource ID of the App Configuration instance. You can get this from the Properties tab of the App Configuration resource in the Azure portal. (ex. /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config)
 
@@ -386,3 +392,21 @@ You can probably just inherit them from the existing keys. Below is the configur
 APPCONFIG_RESOURCE_ID=/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config
 CONFIG_KEYS=sample:tools:local:*, sample:auth:local:*, sample:common:local:*, sample:tools:dev:*, sample:auth:dev:*, sample:common:dev:*
 ```
+
+### Multi-Tenant
+
+It is possible to configure this application to work for multi-tenant. You need to make the following changes:
+
+-   You need to specify an AUTHORITY of "https://login.microsoftonline.com/common".
+
+-   You need to change the main application registration to "multi-tenant". You can find that under "Auth" and then "Supported account types".
+
+You can invite users from other directories as guests into your AAD directory if you want to assign roles to the users in your applications. This is not a requirement if you don't need roles from AAD.
+
+When configured for multi-tenant the following changes can be observed:
+
+-   A "tenant" claim containing the Azure AD Tenant ID will be added to the session_token.
+
+-   The oid that comes in the id_token is the id in the user's home directory, not their B2B id in your application's directory. Since, that is not useful, the claim written to the session_token is fixed so it is the oid in the application's directory.
+
+-   If there would be a "roles" claim for the primary application, it will not be included. This is an unfortunate side effect of the oid claim asserted in the id_token not being the id for the user in the application's directory. However, you can still include that application in the APPLICATION_ID list and it will be included as a separate claim.

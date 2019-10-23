@@ -26,6 +26,8 @@ There are many ways to authenticate users. Some of the advantages of this approa
 
 -   Supports hosting your application across multiple subdomains (for instance, the WFE and API can be on different domains)
 
+-   Supports multi-tenant authentication
+
 To implement this service, check out the documentation [here](/implementation.md) or the video [here](https://youtu.be/Sen7H1Uix2k).
 
 ## Design
@@ -419,6 +421,22 @@ export class HttpXsrfInterceptor implements HttpInterceptor {
 }
 ```
 
+## Using the API
+
+The API code included with this project gives you a great starting place if you are using dotnetcore for your API. If you are not, you might look at the "node-api" sample that shows a very simple API written in Node.js. The bulk of the code is in the auth service on purpose, the intent is that the API is very easy to implement. The "node-api" sample is a sample, not production code.
+
+The steps that need to be implemented by the API are:
+
+1. Ensure the "user" cookie (session_token) was provided.
+1. Ensure the "X-XSRF-TOKEN" header was provided.
+1. See if the session_token is expired, if it is...
+    1. Ask the auth service for a new token
+    1. Write the new token as a "user" cookie to replace the previous one
+1. Get the public certificates from the auth service
+1. Use the correct public certificate to verify the session_token signature
+1. Make sure the "X-XSRF-TOKEN" header matches the "xsrf" claim in the session_token.
+1. Verify that the user has the appropriate roles claims.
+
 ## Using the Tools
 
 There is a tools application that allows you do the following:
@@ -619,4 +637,6 @@ Yes, it turns out that Mozilla keeps a list of cloud provider domains that host 
 
 ## TODO
 
-- Reissue should requery the "role" claim as well.
+-   Reissue should requery the "role" claim as well.
+
+-   Support service principal authentication via header and without XSRF protection

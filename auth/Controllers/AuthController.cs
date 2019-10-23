@@ -237,12 +237,15 @@ namespace authentication.Controllers
                 if (email != null) claims.Add(new Claim("email", email.Value));
                 var displayName = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "name");
                 if (displayName != null) claims.Add(new Claim("displayName", displayName.Value));
-                var tid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "tid");
-                if (tid != null) claims.Add(new Claim("tenant", tid.Value));
 
                 // get the oid
                 if (TokenIssuer.Authority.EndsWith("/common"))
                 {
+
+                    // add the tenant claim
+                    var tid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "tid");
+                    if (tid != null) claims.Add(new Claim("tenant", tid.Value));
+
                     // oids for external users are wrong, we need to query for them
                     var oid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
                     if (oid != null)
@@ -267,6 +270,7 @@ namespace authentication.Controllers
                             claims.Add(new Claim("oid", oid.Value));
                         }
                     }
+
                 }
                 else
                 {
