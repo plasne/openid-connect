@@ -103,10 +103,21 @@ namespace authentication.Controllers
 
         private async Task<JwtSecurityToken> VerifyIdToken(string token, string nonce)
         {
+            Logger.LogDebug($"id_token: {token}");
 
             // get configuration info from OpenID Connect endpoint
             //  note: this is cached for 1 hour by default
             OpenIdConnectConfiguration config = await this.ConfigManager.GetConfigurationAsync();
+
+            // determine the appropriate issuer
+            string issuer = $"{TokenIssuer.Authority}/v2.0";
+            var handler = new JwtSecurityTokenHandler();
+            if (TokenIssuer.Authority.EndsWith("/common"))
+            {
+                var unvalidatedJwt = handler.ReadJwtToken(token);
+                var tid = unvalidatedJwt.Payload.Claims.FirstOrDefault(c => c.Type == "tid");
+                if (tid != null) issuer = $"https://login.microsoftonline.com/{tid.Value}/v2.0";
+            }
 
             // define the validation parameters
             var validationParameters = new TokenValidationParameters
@@ -114,7 +125,7 @@ namespace authentication.Controllers
                 RequireExpirationTime = true,
                 RequireSignedTokens = true,
                 ValidateIssuer = true,
-                ValidIssuer = $"{TokenIssuer.Authority}/v2.0",
+                ValidIssuer = issuer,
                 ValidateAudience = true,
                 ValidAudience = TokenIssuer.ClientId,
                 ValidateLifetime = true,
@@ -123,7 +134,6 @@ namespace authentication.Controllers
 
             // validate all previously defined parameters
             SecurityToken validatedSecurityToken = null;
-            var handler = new JwtSecurityTokenHandler();
             handler.ValidateToken(token, validationParameters, out validatedSecurityToken);
             JwtSecurityToken validatedJwt = validatedSecurityToken as JwtSecurityToken;
 
@@ -227,8 +237,44 @@ namespace authentication.Controllers
                 if (email != null) claims.Add(new Claim("email", email.Value));
                 var displayName = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "name");
                 if (displayName != null) claims.Add(new Claim("displayName", displayName.Value));
-                var oid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
-                if (oid != null) claims.Add(new Claim("oid", oid.Value));
+                var tid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "tid");
+                if (tid != null) claims.Add(new Claim("tenant", tid.Value));
+
+                // get the oid
+                if (TokenIssuer.Authority.EndsWith("/common"))
+                {
+                    // oids for external users are wrong, we need to query for them
+                    var oid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
+                    if (oid != null)
+                    {
+                        if (await tokenIssuer.GetUserById(oid.Value) == null)
+                        {
+                            // query by userPrincipalName
+                            var username = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "preferred_username");
+                            if (username != null)
+                            {
+                                string userId = username.Value.Replace("@", "_");
+                                var users = await tokenIssuer.GetUserById($"/?$filter=startsWith(userPrincipalName, '{userId}%23EXT%23')");
+                                if (users != null && users.value.Count > 0)
+                                {
+                                    claims.Add(new Claim("oid", (string)users.value[0].id));
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // the oid was valid; the user is local
+                            claims.Add(new Claim("oid", oid.Value));
+                        }
+                    }
+                }
+                else
+                {
+                    // oids for 1st party users are fine
+                    var oid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
+                    if (oid != null) claims.Add(new Claim("oid", oid.Value));
+
+                }
 
                 // attempt to propogate roles
                 var roles = idToken.Payload.Claims.Where(c => c.Type == "roles");
@@ -238,6 +284,7 @@ namespace authentication.Controllers
                 }
 
                 // Service-to-Service: get other claims from the graph (req. Directory.Read.All)
+                //    or from a database
                 /*
                 dynamic user = await tokenIssuer.GetUserById(oid.Value);
                 claims.Add(new Claim("displayName2", (string)user.displayName));
@@ -447,7 +494,7 @@ namespace authentication.Controllers
         [HttpGet, Route("type")]
         public ActionResult<string> Type()
         {
-            switch (AuthChooser.AuthType)
+            switch (AuthChooser.AuthType())
             {
                 case "app":
                     return "Application Identity / Service Principal";

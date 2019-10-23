@@ -8,17 +8,6 @@ using Microsoft.Identity.Client;
 public class AuthChooser
 {
 
-    public static string AuthType
-    {
-        get
-        {
-            string type = System.Environment.GetEnvironmentVariable("AUTH_TYPE");
-            if (string.IsNullOrEmpty(type)) return "mi";
-            string[] app = new string[] { "app", "application", "service", "service_principal", "service-principal", "service principal" };
-            return (app.Contains(type.ToLower())) ? "app" : "mi";
-        }
-    }
-
     public static string ClientId
     {
         get
@@ -41,6 +30,15 @@ public class AuthChooser
         {
             return System.Environment.GetEnvironmentVariable("TENANT_ID");
         }
+    }
+
+    public static string AuthType(string key = "AUTH_TYPE")
+    {
+        string type = System.Environment.GetEnvironmentVariable(key);
+        if (string.IsNullOrEmpty(type) && key != "AUTH_TYPE") type = System.Environment.GetEnvironmentVariable("AUTH_TYPE");
+        if (string.IsNullOrEmpty(type)) return "mi";
+        string[] app = new string[] { "app", "application", "service", "service_principal", "service-principal", "service principal" };
+        return (app.Contains(type.ToLower())) ? "app" : "mi";
     }
 
     public static async Task<string> GetAccessTokenByApplication(string resourceId)
@@ -69,9 +67,9 @@ public class AuthChooser
         return await tokenProvider.GetAccessTokenAsync(resourceId);
     }
 
-    public static Task<string> GetAccessToken(string resourceId)
+    public static Task<string> GetAccessToken(string resourceId, string authTypeKey)
     {
-        if (AuthType == "app") return GetAccessTokenByApplication(resourceId);
+        if (AuthType(authTypeKey) == "app") return GetAccessTokenByApplication(resourceId);
         return GetAccessTokenByManagedIdentity(resourceId);
     }
 

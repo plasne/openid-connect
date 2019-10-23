@@ -2,6 +2,13 @@
 
 This guide walks you through implementing this sample. There is also a video showing the implementation [here](https://youtu.be/Sen7H1Uix2k).
 
+NOTE: The video shows publishing the auth, API, and WFE services to an Azure App Service using git, however, there are some steps that were not captured on the video that are important when using this method to publish. These are steps that were taken for publishing.
+
+1. I cloned the public git repo into a local folder.
+1. I deleted the .git subfolder in the new local folder.
+1. I copied the .gitignore file from the root into the auth, api, and wfe folders. This is very important because it keeps the .env files from being published.
+1. I ran "git init" in the auth, api, and wfe folders to create git repos that could be published separately.
+
 ## AUTH_TYPE
 
 When using Service-to-Service authentication (including reading configuration from Azure App Configuration and Azure Key Vault) you will need access_tokens issued. You should decide up-front how you will are going to get those access_tokens.

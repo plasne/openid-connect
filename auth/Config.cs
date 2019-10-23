@@ -89,7 +89,7 @@ public class Config
     {
         try
         {
-            string accessToken = await AuthChooser.GetAccessToken("https://management.azure.com");
+            string accessToken = await AuthChooser.GetAccessToken("https://management.azure.com", "AUTH_KEY_CONFIG");
             using (var client = new WebClient())
             {
                 if (!string.IsNullOrEmpty(Proxy)) client.Proxy = new WebProxy(Proxy);

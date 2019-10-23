@@ -18,8 +18,9 @@ namespace dotnetauth
             this.LoggerFactory = factory;
 
             // determine the authentication type
-            if (AuthChooser.AuthType == "app") logger.LogInformation("authentication: application ClientId and ClientSecret (service principal).");
-            if (AuthChooser.AuthType == "mi") logger.LogInformation("authentication: managed identity with failback to az cli.");
+            string authType = AuthChooser.AuthType();
+            if (authType == "app") logger.LogInformation("authentication: application ClientId and ClientSecret (service principal).");
+            if (authType == "mi") logger.LogInformation("authentication: managed identity with failback to az cli.");
 
             // load the configuration
             logger.LogInformation("Loading configuration...");
@@ -38,8 +39,9 @@ namespace dotnetauth
             logger.LogDebug(Config.Require("PRIVATE_KEY", "KEYVAULT_PRIVATE_KEY_URL"));
             logger.LogDebug(Config.Require("PRIVATE_KEY_PASSWORD", "KEYVAULT_PRIVATE_KEY_PASSWORD_URL"));
             logger.LogDebug(Config.Require("PUBLIC_CERT_0", "PUBLIC_CERT_1", "PUBLIC_CERT_2", "PUBLIC_CERT_3", "KEYVAULT_PUBLIC_CERT_PREFIX_URL"));
+            logger.LogDebug(Config.Optional("ID_TOKEN_ISSUER"));
             logger.LogDebug(Config.Optional("AUTH_TYPE")); // set to "app" to use an app service principal
-            if (AuthChooser.AuthType == "app")
+            if (authType == "app")
             {
                 logger.LogDebug(Config.Require("TENANT_ID"));
                 logger.LogDebug(Config.Require("CLIENT_SECRET"));
@@ -48,6 +50,9 @@ namespace dotnetauth
             {
                 logger.LogDebug(Config.Optional("KEYVAULT_CLIENT_SECRET_URL")); // use for AuthCode flow with AUTH_TYPE=mi
             }
+            logger.LogDebug(Config.Optional("AUTH_TYPE_CONFIG"));
+            logger.LogDebug(Config.Optional("AUTH_TYPE_VAULT"));
+            logger.LogDebug(Config.Optional("AUTH_TYPE_GRAPH"));
             logger.LogDebug(Config.Optional("APPCONFIG_RESOURCE_ID")); // use to get settings from Azure App Config
             logger.LogDebug(Config.Optional("CONFIG_KEYS")); // specify the keys to get from Azure App Config
             logger.LogDebug(Config.Optional("APPLICATION_ID")); // use to assert roles

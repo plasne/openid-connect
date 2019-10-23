@@ -481,33 +481,33 @@ public class Cmd
         // collect responses from the user
         Dictionary<string, string> config = new Dictionary<string, string>();
         int total = 15;
-        string id = GetStringFromUser("[01/{total}] Please provide an identifier for your application (ex. sample).",
+        string id = GetStringFromUser($"[01/{total}] Please provide an identifier for your application (ex. sample).",
             new Regex("^[a-zA-Z0-9-_]+$"),
             "Error: you may only use alphanumeric characters, dashes, or underscores.");
-        string baseDomain = GetStringFromUser("[02/{total}] Please provide a base domain (ex. plasne.com).",
+        string baseDomain = GetStringFromUser($"[02/{total}] Please provide a base domain (ex. plasne.com).",
             new Regex("^[a-zA-Z0-9-_.]+$"),
             "Error: you may only use alphanumeric characters, dashes, underscores, and periods.");
-        string wfeSubDomain = GetStringFromUser("[03/{total}] Please provide a subdomain name for the WFE (ex. wfe).",
+        string wfeSubDomain = GetStringFromUser($"[03/{total}] Please provide a subdomain name for the WFE (ex. wfe).",
             new Regex("^[a-zA-Z0-9-_]+$"),
             "Error: you may only use alphanumeric characters, dashes, and underscores.");
-        string authSubDomain = GetStringFromUser("[04/{total}] Please provide a subdomain name for the auth service (ex. auth).",
+        string authSubDomain = GetStringFromUser($"[04/{total}] Please provide a subdomain name for the auth service (ex. auth).",
             new Regex("^[a-zA-Z0-9-_]+$"),
             "Error: you may only use alphanumeric characters, dashes, and underscores.");
-        string apiSubDomain = GetStringFromUser("[05/{total}] Please provide a subdomain name for the API service (ex. api).",
+        string apiSubDomain = GetStringFromUser($"[05/{total}] Please provide a subdomain name for the API service (ex. api).",
             new Regex("^[a-zA-Z0-9-_]+$"),
             "Error: you may only use alphanumeric characters, dashes, and underscores.");
-        string tenantId = GetGuidFromUser("[06/{total}] What is the GUID of your Azure AD tenant that contains the authorization application?");
-        string clientId = GetGuidFromUser("[07/{total}] What is the Application ID (also called Client ID) of the authorization application?");
-        int duration = GetNumberFromUser("[08/{total}] How long (in minutes) do you want to sign the session_token for (ex. 240 minutes or 4 hours)?", 1, 60 * 24 * 30);
-        string keyVault = GetStringFromUser("[09/{total}] What is the name of your Azure Key Vault - the name before .vault.azure.net (ex. plasne-keyvault)?",
+        string tenantId = GetGuidFromUser($"[06/{total}] What is the GUID of your Azure AD tenant that contains the authorization application?");
+        string clientId = GetGuidFromUser($"[07/{total}] What is the Application ID (also called Client ID) of the authorization application?");
+        int duration = GetNumberFromUser($"[08/{total}] How long (in minutes) do you want to sign the session_token for (ex. 240 minutes, which is 4 hours)?", 1, 60 * 24 * 30);
+        string keyVault = GetStringFromUser($"[09/{total}] What is the name of your Azure Key Vault - the name before .vault.azure.net (ex. plasne-keyvault)?",
             new Regex("^[a-zA-Z0-9-_]+$"),
             "Error: you may only use alphanumeric characters, dashes, or underscores.");
-        bool allowReissue = GetBoolFromUser("[10/{total}] Do you want to allow tokens to be reissued (yes/no)?");
-        string appId = GetGuidFromUser("[11/{total}] Please specify a comma-delimited list of Application IDs (Client IDs) to get roles for or leave blank (ex. 00000000-0000-0000-0000-000000000000, 00000000-0000-0000-0000-000000000001).", allowEmpty: true, allowMultiple: true);
-        int wfePort = GetNumberFromUser("[12/{total}] For local debugging, what port do you want to host your WFE on (ex. 5000)?", 1024, 65535);
-        int authPort = GetNumberFromUser("[13/{total}] For local debugging, what port do you want to host your auth service on (ex. 5100)?", 1024, 65535);
-        int apiPort = GetNumberFromUser("[14/{total}] For local debugging, what port do you want to host your API service on (ex. 5200)?", 1024, 65535);
-        bool allowPermissiveDebug = GetBoolFromUser("[15/{total}] For local debugging, do you want to allow for a more permissive environment - allow  (yes/no)?");
+        bool allowReissue = GetBoolFromUser($"[10/{total}] Do you want to allow tokens to be reissued (yes/no)?");
+        string appId = GetGuidFromUser($"[11/{total}] Please specify a comma-delimited list of Application IDs (Client IDs) to get roles for or leave blank (ex. 00000000-0000-0000-0000-000000000000, 00000000-0000-0000-0000-000000000001).", allowEmpty: true, allowMultiple: true);
+        int wfePort = GetNumberFromUser($"[12/{total}] For local debugging, what port do you want to host your WFE on (ex. 5000)?", 1024, 65535);
+        int authPort = GetNumberFromUser($"[13/{total}] For local debugging, what port do you want to host your auth service on (ex. 5100)?", 1024, 65535);
+        int apiPort = GetNumberFromUser($"[14/{total}] For local debugging, what port do you want to host your API service on (ex. 5200)?", 1024, 65535);
+        bool allowPermissiveDebug = GetBoolFromUser($"[15/{total}] For local debugging, do you want to allow for a more permissive environment (yes/no)?");
 
         // build out the config
         config.Add($"{id}:auth:dev:AUTHORITY", $"https://login.microsoftonline.com/{tenantId}");

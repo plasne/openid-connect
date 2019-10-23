@@ -37,11 +37,12 @@ namespace dotnetauth
             logger.LogDebug(Config.Require("WELL_KNOWN_CONFIG_URL"));
             logger.LogDebug(Config.Require("BASE_DOMAIN"));
             logger.LogDebug(Config.Optional("AUTH_TYPE")); // set to "app" to use an app service principal
-            if (AuthChooser.AuthType == "app")
+            if (AuthChooser.AuthType() == "app")
             {
                 logger.LogDebug(Config.Require("TENANT_ID"));
                 logger.LogDebug(Config.Require("CLIENT_SECRET"));
             }
+            logger.LogDebug(Config.Optional("AUTH_TYPE_CONFIG"));
             logger.LogDebug(Config.Optional("APPCONFIG_RESOURCE_ID")); // use to get settings from Azure App Config
             logger.LogDebug(Config.Optional("CONFIG_KEYS")); // specify the keys to get from Azure App Config
 

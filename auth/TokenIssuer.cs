@@ -400,7 +400,7 @@ public class TokenIssuer
         {
 
             // get an access token
-            var accessToken = await AuthChooser.GetAccessToken("https://vault.azure.net");
+            var accessToken = await AuthChooser.GetAccessToken("https://vault.azure.net", "AUTH_TYPE_VAULT");
 
             // get from the keyvault
             using (var client = new WebClient())
@@ -453,7 +453,7 @@ public class TokenIssuer
     {
 
         // get an access token
-        var accessToken = await AuthChooser.GetAccessToken("https://graph.microsoft.com");
+        var accessToken = await AuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH");
 
         // catch the possible 403 Forbidden because access rights have not been granted
         try
@@ -484,22 +484,40 @@ public class TokenIssuer
 
     }
 
-    public async Task<dynamic> GetUserById(string oid)
+    public async Task<dynamic> GetUserById(string query)
     {
 
         // get an access token
-        var accessToken = await AuthChooser.GetAccessToken("https://graph.microsoft.com");
+        var accessToken = await AuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH");
 
         // get the user info
-        using (var client = new WebClient())
+        try
         {
-            if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
-            client.Headers.Add("Authorization", $"Bearer {accessToken}");
-            string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{oid}"));
-            dynamic json = JObject.Parse(raw);
-            return json;
+            using (var client = new WebClient())
+            {
+                if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
+                client.Headers.Add("Authorization", $"Bearer {accessToken}");
+                string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{query}"));
+                dynamic json = JObject.Parse(raw);
+                return json;
+            }
         }
-
+        catch (WebException e)
+        {
+            if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.NotFound)
+            {
+                // the user was not found, but the query was valid
+                return null;
+            }
+            else if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.Forbidden)
+            {
+                throw new Exception("the auth identity does not have the Directory.Read.All right", e);
+            }
+            else
+            {
+                throw;
+            }
+        }
     }
 
     public class RoleAssignments
@@ -523,14 +541,13 @@ public class TokenIssuer
         if (appIds.Count() < 1) return assignments;
 
         // get an access token
-        var accessToken = await AuthChooser.GetAccessToken("https://graph.microsoft.com");
+        var accessToken = await AuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH");
 
-        // catch the possible 403 Forbidden because access rights have not been granted
+        // lookup all specified applications
+        //   NOTE: catch the possible 403 Forbidden because access rights have not been granted
+        List<AppRoles> apps = new List<AppRoles>();
         try
         {
-
-            // lookup all specified applications
-            List<AppRoles> apps = new List<AppRoles>();
             using (var client = new WebClient())
             {
                 if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
@@ -550,8 +567,22 @@ public class TokenIssuer
                     }
                 }
             }
+        }
+        catch (WebException e)
+        {
+            if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.Forbidden)
+            {
+                throw new Exception("the auth identity does not have the Directory.Read.All right", e);
+            }
+            else
+            {
+                throw;
+            }
+        }
 
-            // get the roles that the user is in
+        // get the roles that the user is in
+        try
+        {
             using (var client = new WebClient())
             {
                 if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
@@ -580,11 +611,14 @@ public class TokenIssuer
                     }
                 }
             }
-
         }
         catch (WebException e)
         {
-            if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.Forbidden)
+            if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.NotFound)
+            {
+                // ignore, the user might not be in the directory
+            }
+            else if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.Forbidden)
             {
                 throw new Exception("the auth identity does not have the Directory.Read.All right", e);
             }
