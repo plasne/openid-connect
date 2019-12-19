@@ -9,8 +9,6 @@ using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
@@ -18,6 +16,7 @@ using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Azure.Services.AppAuthentication;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 
 namespace authentication.Controllers
 {
@@ -80,7 +79,7 @@ namespace authentication.Controllers
 
                 // store the authflow for validating state and nonce later
                 //  note: this has to be SameSite=none because it is being POSTed from login.microsoftonline.com
-                Response.Cookies.Append("authflow", JsonConvert.SerializeObject(flow), new CookieOptions()
+                Response.Cookies.Append("authflow", JsonSerializer.Serialize(flow), new CookieOptions()
                 {
                     Expires = DateTimeOffset.Now.AddMinutes(10),
                     HttpOnly = true,
@@ -101,22 +100,30 @@ namespace authentication.Controllers
             }
         }
 
-        private async Task<JwtSecurityToken> VerifyIdToken(string token, string nonce)
+        private async Task<JwtSecurityToken> VerifyTokenFromAAD(string token, string audience = null, string nonce = null)
         {
-            Logger.LogDebug($"id_token: {token}");
+            Logger.LogDebug($"token: {token}");
+            var handler = new JwtSecurityTokenHandler();
 
             // get configuration info from OpenID Connect endpoint
             //  note: this is cached for 1 hour by default
             OpenIdConnectConfiguration config = await this.ConfigManager.GetConfigurationAsync();
 
-            // determine the appropriate issuer
-            string issuer = $"{TokenIssuer.Authority}/v2.0";
-            var handler = new JwtSecurityTokenHandler();
-            if (TokenIssuer.Authority.EndsWith("/common"))
+            // determine the possible appropriate issuers
+            var issuers = new List<string>();
+            string tenant = TokenIssuer.Authority.Split("/").LastOrDefault();
+            if (tenant == "common")
             {
+                // multi-tenant; the issuer will be the directory containing the user
                 var unvalidatedJwt = handler.ReadJwtToken(token);
                 var tid = unvalidatedJwt.Payload.Claims.FirstOrDefault(c => c.Type == "tid");
-                if (tid != null) issuer = $"https://login.microsoftonline.com/{tid.Value}/v2.0";
+                if (tid != null) issuers.Add($"https://login.microsoftonline.com/{tid.Value}/v2.0");
+            }
+            else
+            {
+                // single-tenant; users are issued from the first, but applications respond with the second
+                issuers.Add($"https://login.microsoftonline.com/{tenant}/v2.0");
+                issuers.Add($"https://sts.windows.net/{tenant}/");
             }
 
             // define the validation parameters
@@ -125,9 +132,9 @@ namespace authentication.Controllers
                 RequireExpirationTime = true,
                 RequireSignedTokens = true,
                 ValidateIssuer = true,
-                ValidIssuer = issuer,
-                ValidateAudience = true,
-                ValidAudience = TokenIssuer.ClientId,
+                ValidIssuers = issuers.ToArray(),
+                ValidateAudience = (!string.IsNullOrEmpty(audience)),
+                ValidAudience = audience,
                 ValidateLifetime = true,
                 IssuerSigningKeys = config.SigningKeys
             };
@@ -137,17 +144,26 @@ namespace authentication.Controllers
             handler.ValidateToken(token, validationParameters, out validatedSecurityToken);
             JwtSecurityToken validatedJwt = validatedSecurityToken as JwtSecurityToken;
 
-            // validate alg and nonce
+            // validate alg
             if (validatedJwt.Header.Alg != SecurityAlgorithms.RsaSha256) throw new SecurityTokenValidationException("The alg must be RS256.");
-            if (validatedJwt.Payload.Nonce != nonce) throw new SecurityTokenValidationException("The nonce was invalid.");
+
+            // validate nonce
+            if (string.IsNullOrEmpty(nonce))
+            {
+                // nonce not provided
+            }
+            else if (validatedJwt.Payload.Nonce != nonce)
+            {
+                throw new SecurityTokenValidationException("The nonce was invalid.");
+            }
 
             return validatedJwt;
         }
 
         private class Tokens
         {
-            public string accessToken { get; set; }
-            public string refreshToken { get; set; }
+            public string access_token { get; set; }
+            public string refresh_token { get; set; }
         }
 
         private Tokens GetAccessTokenFromAuthCode(string code, string scope, TokenIssuer tokenIssuer)
@@ -169,12 +185,8 @@ namespace authentication.Controllers
                 data.Add("grant_type", "authorization_code");
                 byte[] response = client.UploadValues(url, data);
                 string result = System.Text.Encoding.UTF8.GetString(response);
-                dynamic json = JObject.Parse(result);
-                return new Tokens()
-                {
-                    accessToken = json.access_token,
-                    refreshToken = json.refresh_token
-                };
+                var tokens = JsonSerializer.Deserialize<Tokens>(result);
+                return tokens;
             }
 
         }
@@ -197,12 +209,55 @@ namespace authentication.Controllers
                 data.Add("grant_type", "refresh_token");
                 byte[] response = client.UploadValues(url, data);
                 string result = System.Text.Encoding.UTF8.GetString(response);
-                dynamic json = JObject.Parse(result);
-                return new Tokens()
-                {
-                    accessToken = json.access_token,
-                    refreshToken = json.refresh_token
-                };
+                var tokens = JsonSerializer.Deserialize<Tokens>(result);
+                return tokens;
+            }
+
+        }
+
+        private Tokens GetAccessTokenFromClientSecret(string clientId, string clientSecret, string scope, TokenIssuer tokenIssuer)
+        {
+
+            // build the URL
+            string url = $"{TokenIssuer.Authority}/oauth2/v2.0/token";
+
+            // get the response
+            using (WebClient client = new WebClient())
+            {
+                if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
+                NameValueCollection data = new NameValueCollection();
+                data.Add("client_id", clientId);
+                data.Add("client_secret", clientSecret);
+                data.Add("scope", scope);
+                data.Add("grant_type", "client_credentials");
+                byte[] response = client.UploadValues(url, data);
+                string result = System.Text.Encoding.UTF8.GetString(response);
+                var tokens = JsonSerializer.Deserialize<Tokens>(result);
+                return tokens;
+            }
+
+        }
+
+        private Tokens GetAccessTokenFromClientCertificate(string clientId, string token, string scope, TokenIssuer tokenIssuer)
+        {
+
+            // build the URL
+            string url = $"{TokenIssuer.Authority}/oauth2/v2.0/token";
+
+            // get the response
+            using (WebClient client = new WebClient())
+            {
+                if (!string.IsNullOrEmpty(Config.Proxy)) client.Proxy = new WebProxy(Config.Proxy);
+                NameValueCollection data = new NameValueCollection();
+                data.Add("client_id", clientId);
+                data.Add("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer");
+                data.Add("client_assertion", token);
+                data.Add("scope", scope);
+                data.Add("grant_type", "client_credentials");
+                byte[] response = client.UploadValues(url, data);
+                string result = System.Text.Encoding.UTF8.GetString(response);
+                var tokens = JsonSerializer.Deserialize<Tokens>(result);
+                return tokens;
             }
 
         }
@@ -215,12 +270,12 @@ namespace authentication.Controllers
 
                 // read flow, verify state and nonce
                 if (!Request.Cookies.ContainsKey("authflow")) throw new UnauthorizedAccessException("authflow not provided");
-                AuthFlow flow = JsonConvert.DeserializeObject<AuthFlow>(Request.Cookies["authflow"]);
+                AuthFlow flow = JsonSerializer.Deserialize<AuthFlow>(Request.Cookies["authflow"]);
                 if (Request.Form["state"] != flow.state) throw new UnauthorizedAccessException("state does not match");
 
                 // verify the id token
                 string idRaw = Request.Form["id_token"];
-                var idToken = await VerifyIdToken(idRaw, flow.nonce);
+                var idToken = await VerifyTokenFromAAD(idRaw, TokenIssuer.ClientId, flow.nonce);
 
                 // AuthCode: use the code to get an access token
                 /*
@@ -237,6 +292,9 @@ namespace authentication.Controllers
                 if (email != null) claims.Add(new Claim("email", email.Value));
                 var displayName = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "name");
                 if (displayName != null) claims.Add(new Claim("displayName", displayName.Value));
+
+                // add the user account type
+                claims.Add(new Claim("typ", "user"));
 
                 // get the oid
                 if (TokenIssuer.Authority.EndsWith("/common"))
@@ -277,7 +335,6 @@ namespace authentication.Controllers
                     // oids for 1st party users are fine
                     var oid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
                     if (oid != null) claims.Add(new Claim("oid", oid.Value));
-
                 }
 
                 // attempt to propogate roles
@@ -332,6 +389,55 @@ namespace authentication.Controllers
             catch (Exception e)
             {
                 Logger.LogError(e, "exception on api/auth/token");
+                return StatusCode(StatusCodes.Status500InternalServerError, e.Message);
+            }
+        }
+
+        [HttpPost, Route("service")]
+        public async Task<ActionResult<string>> IssueTokenForServiceAccount([FromForm] string clientId, [FromForm] string clientSecret, [FromForm] string token, [FromForm] string scope, [FromServices] TokenIssuer tokenIssuer)
+        {
+            try
+            {
+
+                // get an access token and verify it
+                Tokens tokens = null;
+                if (!string.IsNullOrEmpty(token))
+                {
+                    tokens = GetAccessTokenFromClientCertificate(clientId, token, scope + "/.default", tokenIssuer);
+                }
+                else if (!string.IsNullOrEmpty(clientSecret))
+                {
+                    tokens = GetAccessTokenFromClientSecret(clientId, clientSecret, scope + "/.default", tokenIssuer);
+                }
+                else
+                {
+                    throw new Exception("clientSecret or token must be supplied");
+                }
+                var accessToken = await VerifyTokenFromAAD(tokens.access_token, scope);
+
+                // populate the claims from the id_token
+                List<Claim> claims = new List<Claim>();
+                var oid = accessToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
+                if (oid != null) claims.Add(new Claim("oid", oid.Value));
+
+                // add the service account type
+                claims.Add(new Claim("typ", "service"));
+
+                // attempt to propogate roles
+                var roles = accessToken.Payload.Claims.Where(c => c.Type == "roles");
+                foreach (var role in roles)
+                {
+                    claims.Add(new Claim("roles", role.Value));
+                }
+
+                // return the newly issued token
+                string jwt = await tokenIssuer.IssueToken(claims);
+                return jwt;
+
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e, "exception on api/auth/service");
                 return StatusCode(StatusCodes.Status500InternalServerError, e.Message);
             }
         }

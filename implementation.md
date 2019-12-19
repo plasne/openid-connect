@@ -203,6 +203,8 @@ If you are going to use AUTH_TYPE=mi, the above settings are the only things you
 
 -   app:auth:env:JWT_DURATION (default: 240) - The number of minutes after an session_token is issued before it expires. This defaults to 4 hours (240 minutes).
 
+-   app:auth:env:JWT_SERVICE_DURATION (default: JWT_DURATION) - The number of minutes after an session_token is issued to a service account using the client credential grant before it expires.
+
 -   app:auth:env:JWT_MAX_DURATION (default: 10080) - You can specify a number of minutes that determines the maximum time for an session_token is allowed to exist (including reissue). It defaults to 7 days (10080 minutes). You may also specify 0 to allow the token to be reissued forever.
 
 -   app:auth:env:DOMAIN_HINT - If you want to provide a domain hint when authenticating, you can specify it.

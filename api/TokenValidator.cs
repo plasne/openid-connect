@@ -3,7 +3,6 @@ using System.Linq;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using System.Net;
-using System.Security.Cryptography.X509Certificates;
 using System.Collections.Specialized;
 using System.Text;
 using Microsoft.Extensions.Logging;

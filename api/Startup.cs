@@ -74,76 +74,78 @@ namespace dotnetauth
         private class XsrfHandler : AuthorizationHandler<XsrfRequirement>
         {
 
-            public XsrfHandler(ILoggerFactory loggerFactory, TokenValidator validator)
+            public XsrfHandler(ILoggerFactory loggerFactory, TokenValidator validator, IHttpContextAccessor contextAccessor)
             {
                 this.Logger = loggerFactory.CreateLogger<XsrfHandler>();
                 this.Validator = validator;
+                this.ContextAccessor = contextAccessor;
             }
 
             private ILogger Logger { get; }
             private TokenValidator Validator { get; }
+            private IHttpContextAccessor ContextAccessor;
 
             protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, XsrfRequirement requirement)
             {
-                if (TokenValidator.VerifyXsrfInHeader || TokenValidator.VerifyXsrfInCookie)
+                Logger.LogInformation("type!!: " + context.Resource.GetType().ToString());
+                try
                 {
-                    if (context.Resource is AuthorizationFilterContext mvc)
+
+                    // if there is no requirement for XSRF, then don't check for it
+                    if (!TokenValidator.VerifyXsrfInHeader && !TokenValidator.VerifyXsrfInCookie)
                     {
-                        try
-                        {
-
-                            // get the identity of the authenticated user
-                            var identity = context.User.Identity as ClaimsIdentity;
-                            if (identity == null) throw new Exception("identity not found");
-                            if (!identity.IsAuthenticated) throw new Exception("user is not authenticated");
-
-                            // get the XSRF-TOKEN (header, cookie)
-                            string code = null;
-                            if (TokenValidator.VerifyXsrfInHeader)
-                            {
-                                code = mvc.HttpContext.Request.Headers["X-XSRF-TOKEN"];
-                            }
-                            if (TokenValidator.VerifyXsrfInCookie && string.IsNullOrEmpty(code))
-                            {
-                                code = mvc.HttpContext.Request.Cookies["XSRF-TOKEN"];
-                            }
-                            if (string.IsNullOrEmpty(code)) throw new Exception("XSRF code not found");
-
-                            // validate the signature if signed
-                            //  NOTE: it will be signed if the source claim was accessible via JavaScript
-                            if (!TokenValidator.RequireHttpOnlyOnUserCookie)
-                            {
-                                var validate = this.Validator.ValidateToken(code);
-                                validate.Wait();
-                                var validated = validate.Result;
-                                var codeclaim = validated.Payload.Claims.FirstOrDefault(c => c.Type == "code");
-                                if (codeclaim == null) throw new Exception("xsrf signed token did not contain a code");
-                                code = codeclaim.Value;
-                            }
-
-                            // verify that it matches the XSRF claim
-                            var xsrfclaim = identity.FindFirst(c => c.Type == "xsrf");
-                            if (xsrfclaim == null) throw new Exception("xsrf claim not found");
-                            if (code != xsrfclaim.Value) throw new Exception("xsrf claim does not match code");
-
-                            context.Succeed(requirement);
-                        }
-                        catch (Exception e)
-                        {
-                            Logger.LogError(e, "authorization failure");
-                            context.Fail();
-                        }
+                        context.Succeed(requirement);
+                        return Task.CompletedTask;
                     }
-                    else
+
+                    // get the identity of the authenticated user
+                    var identity = context.User.Identity as ClaimsIdentity;
+                    if (identity == null) throw new Exception("identity not found");
+                    if (!identity.IsAuthenticated) throw new Exception("user is not authenticated");
+
+                    // if this is a service account, no XSRF is required
+                    var typ = identity.Claims.FirstOrDefault(c => c.Type == "typ");
+                    if (typ != null && typ.Value == "service")
                     {
-                        Logger.LogError("authorization failure - context.Resource is not AuthorizationFilterContext");
-                        context.Fail();
+                        context.Succeed(requirement);
+                        return Task.CompletedTask;
                     }
-                }
-                else
-                {
-                    // succeed if XSRF verification isn't required
+
+                    // get the XSRF-TOKEN (header, cookie)
+                    string code = null;
+                    if (TokenValidator.VerifyXsrfInHeader)
+                    {
+                        code = ContextAccessor.HttpContext.Request.Headers["X-XSRF-TOKEN"];
+                    }
+                    if (TokenValidator.VerifyXsrfInCookie && string.IsNullOrEmpty(code))
+                    {
+                        code = ContextAccessor.HttpContext.Request.Cookies["XSRF-TOKEN"];
+                    }
+                    if (string.IsNullOrEmpty(code)) throw new Exception("XSRF code not found");
+
+                    // validate the signature if signed
+                    //  NOTE: it will be signed if the source claim was accessible via JavaScript
+                    if (!TokenValidator.RequireHttpOnlyOnUserCookie)
+                    {
+                        var validate = this.Validator.ValidateToken(code);
+                        validate.Wait();
+                        var validated = validate.Result;
+                        var codeclaim = validated.Payload.Claims.FirstOrDefault(c => c.Type == "code");
+                        if (codeclaim == null) throw new Exception("xsrf signed token did not contain a code");
+                        code = codeclaim.Value;
+                    }
+
+                    // verify that it matches the XSRF claim
+                    var xsrfclaim = identity.FindFirst(c => c.Type == "xsrf");
+                    if (xsrfclaim == null) throw new Exception("xsrf claim not found");
+                    if (code != xsrfclaim.Value) throw new Exception("xsrf claim does not match code");
+
                     context.Succeed(requirement);
+                }
+                catch (Exception e)
+                {
+                    Logger.LogError(e, "authorization failure");
+                    context.Fail();
                 }
                 return Task.CompletedTask;
             }
@@ -174,19 +176,18 @@ namespace dotnetauth
 
             protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
             {
+                bool isTokenFromHeader = false;
                 bool isTokenFromCookie = false;
                 try
                 {
 
                     // check first for header
                     string token = string.Empty;
-                    if (Options.AllowAuthorizationHeader)
+                    var header = Request.Headers["Authorization"];
+                    if (header.Count() > 0)
                     {
-                        var header = Request.Headers["Authorization"];
-                        if (header.Count() > 0)
-                        {
-                            token = header.First().Replace("Bearer ", "");
-                        }
+                        token = header.First().Replace("Bearer ", "");
+                        isTokenFromHeader = true;
                     }
 
                     // look next at the cookie
@@ -229,12 +230,19 @@ namespace dotnetauth
                     // validate the token
                     var jwt = await this.TokenValidator.ValidateToken(token);
 
+                    // if the token was in the header and that wasn't allowed, it had better be a service account
+                    if (isTokenFromHeader && !Options.AllowAuthorizationHeader)
+                    {
+                        var typ = jwt.Payload.Claims.FirstOrDefault(c => c.Type == "typ");
+                        if (typ.Value != "service") throw new Exception("only service account types are allowed in the header");
+                    }
+
                     // build the identity, principal, and ticket
                     var claims = new List<Claim>();
                     foreach (var claim in jwt.Payload.Claims)
                     {
                         claims.Add(claim);
-                        if (claim.Type == "roles") claims.Add(new Claim("http://schemas.microsoft.com/ws/2008/06/identity/claims/role", claim.Value));
+                        if (claim.Type == "roles") claims.Add(new Claim("http://schemas.microsoft.com/ws/2008/06/identity/claims/role", (string)claim.Value));
                     }
                     var identity = new ClaimsIdentity(claims, Scheme.Name);
                     var principal = new ClaimsPrincipal(identity);
@@ -261,6 +269,9 @@ namespace dotnetauth
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+
+            // add the HttpContext
+            services.AddHttpContextAccessor();
 
             // add the validator service
             var validator = new TokenValidator(LoggerFactory);
@@ -309,16 +320,22 @@ namespace dotnetauth
                    });
                });
 
-            // setup MVC
-            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
+            // setup controllers
+            services.AddControllers();
 
         }
 
-        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            app.UseRouting();
             app.UseCors("origins");
-            app.UseMvc();
+            app.UseAuthentication();
+            app.UseAuthorization();
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+            });
         }
+
     }
 }

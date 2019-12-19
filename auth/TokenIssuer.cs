@@ -149,6 +149,23 @@ public class TokenIssuer
         }
     }
 
+    public static int JwtServiceDuration
+    {
+        get
+        {
+            // value is provided in minutes
+            string duration = System.Environment.GetEnvironmentVariable("JWT_SERVICE_DURATION");
+            if (int.TryParse(duration, out int result))
+            {
+                return result;
+            }
+            else
+            {
+                return JwtDuration;
+            }
+        }
+    }
+
     public static int JwtMaxDuration
     {
         get
@@ -659,12 +676,16 @@ public class TokenIssuer
             }
         }
 
+        // determine the signing duration
+        var typ = claims.FirstOrDefault(c => c.Type == "typ");
+        var duration = (typ != null && typ.Value == "service") ? JwtServiceDuration : JwtDuration;
+
         // generate the token
         var jwt = new JwtSecurityToken(
             issuer: Issuer,
             audience: Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(JwtDuration),
+            expires: DateTime.UtcNow.AddMinutes(duration),
             signingCredentials: SigningCredentials);
 
         // serialize
@@ -758,6 +779,10 @@ public class TokenIssuer
 
         // shortcut if not expired
         if (DateTime.UtcNow < jwt.Payload.ValidTo.ToUniversalTime()) throw new Exception("token is not expired");
+
+        // make sure it is typ=user
+        var typ = jwt.Payload.Claims.FirstOrDefault(c => c.Type == "typ");
+        if (typ == null || typ.Value != "user") throw new Exception("only user tokens can be reissued");
 
         // get keys from certificates
         var keys = ValidationCertificates.Select(c => new X509SecurityKey(c));
