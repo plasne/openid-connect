@@ -78,8 +78,7 @@ namespace dotnetauth
             // setup CORS policy
             services.AddCors(options =>
                {
-                   options.AddPolicy("origins",
-                   builder =>
+                   options.AddDefaultPolicy(builder =>
                    {
                        builder.WithOrigins(TokenIssuer.AllowedOrigins)
                        .AllowAnyHeader()
@@ -96,6 +95,7 @@ namespace dotnetauth
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             app.UseRouting();
+            app.UseCors();
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();

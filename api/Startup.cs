@@ -5,9 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -310,8 +308,7 @@ namespace dotnetauth
             // setup CORS policy
             services.AddCors(options =>
                {
-                   options.AddPolicy("origins",
-                   builder =>
+                   options.AddDefaultPolicy(builder =>
                    {
                        builder.WithOrigins(TokenValidator.AllowedOrigins)
                        .AllowAnyHeader()
@@ -328,7 +325,7 @@ namespace dotnetauth
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             app.UseRouting();
-            app.UseCors("origins");
+            app.UseCors();
             app.UseAuthentication();
             app.UseAuthorization();
             app.UseEndpoints(endpoints =>
