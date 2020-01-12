@@ -5,9 +5,10 @@
 !**/.vscode/launch.json
 !**/.vscode/extensions.json
 
-# bin, obj
+# bin, obj, out
 **/bin/
 **/obj/
+**/out/
 
 # env vars
 **/.env

@@ -4,6 +4,7 @@ using dotnetauth;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
+using CasAuth;
 
 namespace auth
 {
@@ -15,14 +16,6 @@ namespace auth
             get
             {
                 return System.Environment.GetEnvironmentVariable("LOG_LEVEL");
-            }
-        }
-
-        private static string HostUrl
-        {
-            get
-            {
-                return System.Environment.GetEnvironmentVariable("HOST_URL");
             }
         }
 
@@ -48,7 +41,7 @@ namespace auth
                     }
                 })
                 .UseStartup<Startup>();
-            if (!string.IsNullOrEmpty(HostUrl)) builder.UseUrls(HostUrl);
+            if (!string.IsNullOrEmpty(CasEnv.ServerHostUrl)) builder.UseUrls(CasEnv.ServerHostUrl);
             return builder;
         }
 

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <RootNamespace>CasAuth</RootNamespace>
+    <PackageId>CasAuth</PackageId>
+    <Version>1.2.6</Version>
+    <Authors>Peter Lasne</Authors>
+    <Company>Microsoft</Company>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" Version="3.1.0" />
+    <PackageReference Include="dotenv.net" Version="1.0.6" />
+    <PackageReference Include="Microsoft.Azure.Services.AppAuthentication" Version="1.3.1" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.7.1" />
+    <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="5.6.0" />
+  </ItemGroup>
+</Project>
