@@ -154,6 +154,10 @@ namespace CasAuth
                     {
                         return new string[] { "http://localhost:5000" };
                     }
+                    else if (!string.IsNullOrEmpty(ClientHostUrl))
+                    {
+                        return new string[] { ClientHostUrl };
+                    }
                     else
                     {
                         return new string[] { };

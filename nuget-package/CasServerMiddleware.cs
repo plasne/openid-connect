@@ -714,12 +714,11 @@ namespace CasAuth
                         // verify graph access
                         var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
                         logger.LogInformation("check-requirements: checking graph access...");
-                        var tokenProvider = new AzureServiceTokenProvider();
-                        var graphToken = await tokenProvider.GetAccessTokenAsync("https://graph.microsoft.com");
+                        var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH");
                         using (var client = new WebClient())
                         {
                             if (!string.IsNullOrEmpty(CasEnv.Proxy)) client.Proxy = new WebProxy(CasEnv.Proxy);
-                            client.Headers.Add("Authorization", $"Bearer {graphToken}");
+                            client.Headers.Add("Authorization", $"Bearer {accessToken}");
                             string query = "https://graph.microsoft.com/beta/users?$top=1";
                             client.DownloadString(new Uri(query));
                         }
