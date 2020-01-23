@@ -3,6 +3,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Security.Cryptography;
@@ -85,17 +86,6 @@ public class Config
         }
     }
 
-    private class Keys
-    {
-        public Key[] value = null;
-    }
-
-    private class Key
-    {
-        public string id = null;
-        public string value = null;
-    }
-
     private async static Task<(string, string)> GetIdAndSecret()
     {
         try
@@ -108,8 +98,9 @@ public class Config
                 string url = $"https://management.azure.com{AppConfigResourceId}/ListKeys?api-version=2019-02-01-preview";
                 byte[] bytes = client.UploadData(new Uri(url), Encoding.UTF8.GetBytes(string.Empty));
                 string raw = Encoding.UTF8.GetString(bytes);
-                var json = JsonSerializer.Deserialize<Keys>(raw);
-                var pri = json.value.First();
+                dynamic json = JObject.Parse(raw);
+                JArray values = json.value;
+                dynamic pri = values.First();
                 return ((string)pri.id, (string)pri.value);
             }
         }
@@ -124,17 +115,6 @@ public class Config
                 throw;
             }
         }
-    }
-
-    private class Items
-    {
-        public Item[] items = null;
-    }
-
-    private class Item
-    {
-        public string key = null;
-        public string value = null;
     }
 
     public async static Task<Dictionary<string, string>> Load(string[] filters, bool useFullyQualifiedName = false)
@@ -177,7 +157,7 @@ public class Config
                 var raw = await response.Content.ReadAsStringAsync();
 
                 // look for key/value pairs
-                var json = JsonSerializer.Deserialize<Items>(raw);
+                 dynamic json = JObject.Parse(raw);
                 foreach (var item in json.items)
                 {
                     var key = (useFullyQualifiedName) ? (string)item.key : ((string)item.key).Split(":").Last().ToUpper();
