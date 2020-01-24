@@ -104,6 +104,7 @@ appconfig_resource_id=$(az appconfig create --name $APP_CONFIG_NAME --location $
 # ------------------------------------
 # Create Azure Key Vault to securely store passwords and secrets
 # ------------------------------------
+# TODO: enable soft delete for key vault
 echo "Create Azure Keyvault to securely store secrets/passwords"
 az keyvault create --name $KEYVAULT_NAME --resource-group $RG --location $LOCATION
 
@@ -126,7 +127,7 @@ certpswd=$(date +%s | sha256sum | base64 | head -c 32)
 
 echo "Generate private key and public certs"
 mkdir certs
-privatekey=$(openssl genrsa -des3 -passout pass:$certpswd -out certs/privatekey.pem 2048)
+#privatekey=$(openssl genrsa -des3 -passout pass:$certpswd -out certs/privatekey.pem 2048)
 #publiccert=$(openssl req -x509 -new -key certs/privatekey.pem -out certs/certificate.pem -passin pass:$certpswd -subj "/C=US")
 publiccert=$(openssl req -x509 -newkey rsa:4096 -keyout certs/privatekey.pem -out certs/certificate.pem -passin pass:$certpswd -passout pass:$certpswd -subj "/C=US")
 openssl pkcs12 -export -inkey certs/privatekey.pem -in certs/certificate.pem -passin pass:$certpswd -out certs/cert.pfx -password pass:$certpswd
