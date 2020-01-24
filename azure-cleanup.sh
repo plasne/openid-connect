@@ -1,9 +1,9 @@
-# Set variables
-SUBSCRIPTION="PROD_EMIT_AzureSandbox"
-RG="delete-tyler-auth-rg"
-AUTH_DISPLAY_NAME="delete-tyler-auth-service"
-WFE_DISPLAY_NAME="delete-tyler-my-app"
-API_DISPLAY_NAME="delete-tyler-my-api"
+# User set variables
+SUBSCRIPTION="<your-azure-subscription>"
+RG="<your-resource-group>"
+AUTH_DISPLAY_NAME="<your-auth-service-name>"
+WFE_DISPLAY_NAME="<your-wfe-name>"
+API_DISPLAY_NAME="<your-api-name>"
 
 
 echo "Delete resource group $RG"
