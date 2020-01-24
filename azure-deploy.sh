@@ -1,21 +1,24 @@
-# Set variables
-SUBSCRIPTION="PROD_EMIT_AzureSandbox"
-RG="delete-tyler-auth-rg"
+# User set variables
+SUBSCRIPTION="<your-azure-subscription>"
+TENANT_ID="<your-tenant-id>"
+
+# Auto set variables
+rand=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 10 | head -n 1)
+RG="central-auth-$rand-rg"
 LOCATION="eastus"
-APP_SERVICE_PLAN="delete-tyler-plan"
-APP_SERVICE_PLAN_LINUX="delete-tyler-plan-linux"
-AUTH_DISPLAY_NAME="delete-tyler-auth-service"
-WFE_DISPLAY_NAME="delete-tyler-my-app"
-API_DISPLAY_NAME="delete-tyler-my-api"
-APP_CONFIG_NAME="delete-tyler-app-config"
-KEYVAULT_NAME="delete-tyler-auth-kv"
-AUTH_DOMAIN="map.xom.cloud"
-TENANT_ID="d1ee1acd-bc7a-4bc4-a787-938c49a83906"
+APP_SERVICE_PLAN="app-service-plan-$rand"
+#APP_SERVICE_PLAN_LINUX="delete-tyler-plan-linux"
+AUTH_DISPLAY_NAME="auth-service-$rand"
+WFE_DISPLAY_NAME="my-app-$rand"
+API_DISPLAY_NAME="my-api-$rand"
+APP_CONFIG_NAME="app-config-$rand"
+KEYVAULT_NAME="auth-kv-$rand"
+AUTH_DOMAIN="contoso.com"
+
 
 # Log into Azure (Interactive)
 az login
 az account set --subscription $SUBSCRIPTION
-
 
 # ------------------------------------
 # Create a resource group
@@ -29,8 +32,6 @@ az group create --location $LOCATION --name $RG
 echo "Creating app registrations in Azure Active Directory"
 auth_client_id=$(az ad app create --display-name $AUTH_DISPLAY_NAME --reply-urls http://localhost:5100/api/auth/token https://$AUTH_DOMAIN/api/auth/token --query appId --output tsv)
 
-#userguid=$(cat /proc/sys/kernel/random/uuid)
-#adminguid=$(cat /proc/sys/kernel/random/uuid)
 echo '[{
     "allowedMemberTypes": [
       "User"
@@ -96,10 +97,9 @@ echo "Web app managed identity principalId $api_pid"
 # ------------------------------------
 # Create Azure App Config Service to store central configs
 # ------------------------------------
-appconfig_resource_id=$(az appconfig create --name $APP_CONFIG_NAME --location $LOCATION  --resource-group $RG | jq -j '.id')
-
-#connstring=$(az appconfig credential list --name $APP_CONFIG_NAME --query "[?name == 'Primary'].connectionString" -o tsv)
 # TODO: Give auth and api managed identities permission to be owner of app config 
+appconfig_resource_id=$(az appconfig create --name $APP_CONFIG_NAME --location $LOCATION  --resource-group $RG | jq -j '.id')
+#connstring=$(az appconfig credential list --name $APP_CONFIG_NAME --query "[?name == 'Primary'].connectionString" -o tsv)
 
 # ------------------------------------
 # Create Azure Key Vault to securely store passwords and secrets
@@ -127,8 +127,6 @@ certpswd=$(date +%s | sha256sum | base64 | head -c 32)
 
 echo "Generate private key and public certs"
 mkdir certs
-#privatekey=$(openssl genrsa -des3 -passout pass:$certpswd -out certs/privatekey.pem 2048)
-#publiccert=$(openssl req -x509 -new -key certs/privatekey.pem -out certs/certificate.pem -passin pass:$certpswd -subj "/C=US")
 publiccert=$(openssl req -x509 -newkey rsa:4096 -keyout certs/privatekey.pem -out certs/certificate.pem -passin pass:$certpswd -passout pass:$certpswd -subj "/C=US")
 openssl pkcs12 -export -inkey certs/privatekey.pem -in certs/certificate.pem -passin pass:$certpswd -out certs/cert.pfx -password pass:$certpswd
 certpfx=$(openssl base64 -in certs/cert.pfx)
@@ -140,10 +138,10 @@ az keyvault secret set --vault-name $KEYVAULT_NAME --name PUBLIC-CERT-0 --file c
 
 # Must grab the secret in order to get its uri with version. The jq statement pulls the uri without quotes. -JIH
 pk_kv_uri=$(az keyvault secret show --name PRIVATEKEY --vault-name $KEYVAULT_NAME | jq -j '.id')
-echo $pk_kv_uri
 pkpswd_kv_uri=$(az keyvault secret show --name PRIVATEKEYPW --vault-name $KEYVAULT_NAME | jq -j '.id')
-echo $pkpswd_kv_uri
 pc_kv_uri=$(az keyvault show --name $KEYVAULT_NAME | jq -j '.properties.vaultUri')
+echo $pk_kv_uri
+echo $pkpswd_kv_uri
 echo $pc_kv_uri
 
 # ------------------------------------
@@ -199,6 +197,7 @@ echo '{
   "sample:wfe:local:LOGIN_URL": "http://localhost:5100/api/auth/authorize",
   "sample:wfe:local:ME_URL": "http://localhost:5200/api/identity/me"
 }' > appconfig.json
+
 # TODO: if someone knows a better way of assinging dynamic variables to a json file via BASH, please fix
 jq --arg reissue_url "https://auth.$AUTH_DOMAIN/api/auth/reissue" '.["sample:api:dev:REISSUE_URL"] |= $reissue_url' appconfig.json > tmpconfig.json && mv tmpconfig.json appconfig.json
 jq --arg well_known_config_url "https://auth.$AUTH_DOMAIN/api/auth/.well-known/openid-configuration" '.["sample:api:dev:WELL_KNOWN_CONFIG_URL"] |= $well_known_config_url' appconfig.json > tmpconfig.json && mv tmpconfig.json appconfig.json
