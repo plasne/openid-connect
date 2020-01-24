@@ -1,10 +1,10 @@
 # User set variables
-SUBSCRIPTION="<your-azure-subscription>"
-TENANT_ID="<your-tenant-id>"
+SUBSCRIPTION="<your-azure-subscription-name>"
+TENANT_ID="<your-tenant-id>" # i.e. 00000000-0000-0000-0000-000000000000
 
 # Auto set variables
 rand=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 10 | head -n 1)
-RG="central-auth-$rand-rg"
+RG="central-auth-rg-$rand"
 LOCATION="eastus"
 APP_SERVICE_PLAN="app-service-plan-$rand"
 #APP_SERVICE_PLAN_LINUX="delete-tyler-plan-linux"
@@ -23,7 +23,7 @@ az account set --subscription $SUBSCRIPTION
 # ------------------------------------
 # Create a resource group
 # ------------------------------------
-echo "Create resoure group $RG in location $LOCATION"
+echo "Create resoure group '$RG' in location '$LOCATION'"
 az group create --location $LOCATION --name $RG
 
 # ------------------------------------
@@ -66,38 +66,42 @@ az ad app permission grant --id $auth_client_id --api 00000003-0000-0000-c000-00
 # ------------------------------------
 # Create web applications
 # ------------------------------------
-echo "Create app service plan $APP_SERVICE_PLAN and $APP_SERVICE_PLAN_LINUX in $RG"
+echo "Create app service plan '$APP_SERVICE_PLAN' in '$RG'"
 az appservice plan create --resource-group $RG --name $APP_SERVICE_PLAN --location $LOCATION --sku S1
 #az appservice plan create --resource-group $RG --name $APP_SERVICE_PLAN_LINUX --location $LOCATION --sku B1
 
-echo "Create and deploy auth service $AUTH_DISPLAY_NAME"
+echo "Create and deploy auth service '$AUTH_DISPLAY_NAME'"
 az webapp create --name $AUTH_DISPLAY_NAME --resource-group $RG --plan $APP_SERVICE_PLAN
-zip -r auth/auth.zip auth
+cd auth && zip -r auth.zip . && cd ..
+az webapp deployment source config-zip --resource-group central-auth-wNkiRq0Wu4-rg --name auth-service-wNkiRq0Wu4 --src auth/auth.zip
+
+
 az webapp deployment source config-zip --resource-group $RG --name $AUTH_DISPLAY_NAME --src auth/auth.zip
 
-echo "Create and deploy api service $API_DISPLAY_NAME"
+echo "Create and deploy api service '$API_DISPLAY_NAME'"
 az webapp create --name $API_DISPLAY_NAME --resource-group $RG --plan $APP_SERVICE_PLAN
-zip -r api/api.zip api
+cd api && zip -r api.zip . && cd ..
 az webapp deployment source config-zip --resource-group $RG --name $API_DISPLAY_NAME --src api/api.zip
 
-echo "Create and deploy web front end (WFE) app $WFE_DISPLAY_NAME"
+echo "Create and deploy web front end (WFE) app '$WFE_DISPLAY_NAME'"
 az webapp create --name $WFE_DISPLAY_NAME --resource-group $RG --plan $APP_SERVICE_PLAN
-zip -r wfe/wfe.zip wfe
+cd wfe && zip -r wfe.zip . && cd ..
 az webapp deployment source config-zip --resource-group $RG --name $WFE_DISPLAY_NAME --src wfe/wfe.zip
 
 
 echo "Create a managed identities for web apps"
 auth_pid=$(az webapp identity assign --name $AUTH_DISPLAY_NAME --resource-group $RG --query principalId --output tsv)
-echo "Web app managed identity principalId $auth_pid"
+echo "Web app managed identity principalId '$auth_pid'"
 # TODO: Allow Auth Service to read directory information from Microsoft Graph to see what roles the user is in (See above permissions for app reg)
 
 api_pid=$(az webapp identity assign --name $API_DISPLAY_NAME --resource-group $RG --query principalId --output tsv)
-echo "Web app managed identity principalId $api_pid"
+echo "Web app managed identity principalId '$api_pid'"
 
 # ------------------------------------
 # Create Azure App Config Service to store central configs
 # ------------------------------------
-# TODO: Give auth and api managed identities permission to be owner of app config 
+# TODO: Give auth and api managed identities permission to be owner of app config
+echo "Create Azure App Config Service to store central configs"
 appconfig_resource_id=$(az appconfig create --name $APP_CONFIG_NAME --location $LOCATION  --resource-group $RG | jq -j '.id')
 #connstring=$(az appconfig credential list --name $APP_CONFIG_NAME --query "[?name == 'Primary'].connectionString" -o tsv)
 
@@ -131,7 +135,7 @@ publiccert=$(openssl req -x509 -newkey rsa:4096 -keyout certs/privatekey.pem -ou
 openssl pkcs12 -export -inkey certs/privatekey.pem -in certs/certificate.pem -passin pass:$certpswd -out certs/cert.pfx -password pass:$certpswd
 certpfx=$(openssl base64 -in certs/cert.pfx)
 
-echo "Add secrets to keyvault $KEYVAULT_NAME"
+echo "Add secrets to keyvault '$KEYVAULT_NAME'"
 az keyvault secret set --vault-name $KEYVAULT_NAME --name PRIVATEKEY --value "$certpfx"
 az keyvault secret set --vault-name $KEYVAULT_NAME --name PRIVATEKEYPW --value $certpswd
 az keyvault secret set --vault-name $KEYVAULT_NAME --name PUBLIC-CERT-0 --file certs/certificate.pem
