@@ -4,10 +4,54 @@ This guide walks you through implementing this sample. There is also a video sho
 
 NOTE: The video shows publishing the auth, API, and WFE services to an Azure App Service using git, however, there are some steps that were not captured on the video that are important when using this method to publish. These are steps that were taken for publishing.
 
+### Steps to initialize locally
+
 1. I cloned the public git repo into a local folder.
 1. I deleted the .git subfolder in the new local folder.
 1. I copied the .gitignore file from the root into the auth, api, and wfe folders. This is very important because it keeps the .env files from being published.
 1. I ran "git init" in the auth, api, and wfe folders to create git repos that could be published separately.
+
+### Steps to implement using Visual Studio Online (Linux)
+
+[Clone Repository with Visual Studio Online](https://online.visualstudio.com/environments/new?name=Centralized%20Auth%20Service&repo=plasne/openid-connect)
+
+1. Open the link above.
+1. Create a Visual Studio Online plan associated with an active Azure subscription.
+1. Connect to the environment.
+1. Open a new terminal by ```[ctrl]+[backtick]``` and run ```git checkout -b version1 origin/version1```.
+1. Install the package jq by running ```sudo apt-get install jq```. It is used by the azure-deploy.sh script to manipulate json files.
+1. Copy the .gitignore file from the root into the auth, api, and wfe folders. This is very important because it keeps the .env files from being published.
+1. Change the *user set variables* in the azure-deploy.sh file and save.
+1. In the terminal, run ```bash azure-deploy.sh```. Note: the script uses the Azure CLI to create the resources; You must log in for it to work.
+1. After deployment is complete, run the following commands in three seperate terminals:
+
+```
+cd wfe/
+npm install
+node index.js
+```
+
+```
+cd api/
+dotnet run
+```
+
+```
+cd auth/
+dotnet run
+```
+
+### Port forwarding
+
+1. Open the Remote Explorer activity pane
+1. In the Environment Details panel, click the Forward Port button that appears when you hover over Forwarded Ports (#)
+1. Enter port 5000 in the prompt
+1. Accept the default name
+1. Repeat for ports 5100 and 5200
+1. Click the Copy Port URL button in the localhost:5000 title bar
+1. Paste the URL into the browser of your choice.
+
+Note: VS Online has forwarded the environment's port 5000 to a location you can now access
 
 ## AUTH_TYPE
 
