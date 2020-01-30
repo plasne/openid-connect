@@ -3,7 +3,7 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <RootNamespace>CasAuth</RootNamespace>
     <PackageId>CasAuth</PackageId>
-    <Version>1.2.6</Version>
+    <Version>1.3.2</Version>
     <Authors>Peter Lasne</Authors>
     <Company>Microsoft</Company>
     <IsPackable>true</IsPackable>

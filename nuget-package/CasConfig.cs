@@ -8,8 +8,8 @@ using System.Text;
 using System.Security.Cryptography;
 using System.Net.Http.Headers;
 using System.IO;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json; // System.Text.Json was not deserializing properly
 
 namespace CasAuth
 {
@@ -91,34 +91,33 @@ namespace CasAuth
             public string value = null;
         }
 
-        private async static Task<(string, string)> GetIdAndSecret()
+        private async static Task<(string, string)> GetIdAndSecret(HttpClient httpClient)
         {
-            try
+            string accessToken = await CasAuthChooser.GetAccessToken("https://management.azure.com", "AUTH_TYPE_CONFIG");
+            string url = $"https://management.azure.com{AppConfigResourceId}/ListKeys?api-version=2019-10-01";
+            using (var request = new HttpRequestMessage()
             {
-                string accessToken = await CasAuthChooser.GetAccessToken("https://management.azure.com", "AUTH_TYPE_CONFIG");
-                using (var client = new WebClient())
+                RequestUri = new Uri(url),
+                Method = HttpMethod.Post
+            })
+            {
+                request.Headers.Add("Authorization", $"Bearer {accessToken}");
+                using (var response = await httpClient.SendAsync(request))
                 {
-                    if (!string.IsNullOrEmpty(CasEnv.Proxy)) client.Proxy = new WebProxy(CasEnv.Proxy);
-                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
-                    string url = $"https://management.azure.com{AppConfigResourceId}/ListKeys?api-version=2019-02-01-preview";
-                    byte[] bytes = client.UploadData(new Uri(url), Encoding.UTF8.GetBytes(string.Empty));
-                    string raw = Encoding.UTF8.GetString(bytes);
-                    var json = JsonSerializer.Deserialize<Keys>(raw);
-                    var pri = json.value.First();
+                    var raw = await response.Content.ReadAsStringAsync();
+                    if ((int)response.StatusCode == 401 || (int)response.StatusCode == 403)
+                    {
+                        throw new Exception($"CasConfig.GetIdAndSecret: The identity is not authorized to get management keys for the AppConfig: {AppConfigResourceId}; make sure this is the right instance and that you have granted rights to the Managed Identity or Service Principal. If running locally, make sure you have run an \"az login\" with the correct account and subscription.");
+                    }
+                    else if (!response.IsSuccessStatusCode)
+                    {
+                        throw new Exception($"CasConfig.GetIdAndSecret: HTTP {(int)response.StatusCode} - {raw}");
+                    }
+                    var keys = JsonConvert.DeserializeObject<Keys>(raw);
+                    var pri = keys.value.First();
                     return ((string)pri.id, (string)pri.value);
                 }
-            }
-            catch (WebException e)
-            {
-                if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.Unauthorized)
-                {
-                    throw new Exception($"The identity is not authorized to get management keys for the AppConfig: {AppConfigResourceId}; make sure this is the right instance and that you have granted rights to the Managed Identity or Service Principal. If running locally, make sure you have run an \"az login\" with the correct account and subscription.", e);
-                }
-                else
-                {
-                    throw;
-                }
-            }
+            };
         }
 
         private class Items
@@ -132,7 +131,7 @@ namespace CasAuth
             public string value = null;
         }
 
-        public async static Task<Dictionary<string, string>> Load(string[] filters, bool useFullyQualifiedName = false)
+        public async static Task<Dictionary<string, string>> Load(HttpClient httpClient, string[] filters, bool useFullyQualifiedName = false)
         {
 
             // exit if there are no keys requested
@@ -140,7 +139,7 @@ namespace CasAuth
             if (filters.Length < 1) return kv;
 
             // get the id and secret
-            var (appConfigId, appConfigSecret) = await CasConfig.GetIdAndSecret();
+            var (appConfigId, appConfigSecret) = await CasConfig.GetIdAndSecret(httpClient);
 
             // process each key filter request
             foreach (var filter in filters)
@@ -172,7 +171,7 @@ namespace CasAuth
                     var raw = await response.Content.ReadAsStringAsync();
 
                     // look for key/value pairs
-                    var json = JsonSerializer.Deserialize<Items>(raw);
+                    var json = JsonConvert.DeserializeObject<Items>(raw);
                     foreach (var item in json.items)
                     {
                         var key = (useFullyQualifiedName) ? (string)item.key : ((string)item.key).Split(":").Last().ToUpper();
@@ -187,12 +186,12 @@ namespace CasAuth
             return kv;
         }
 
-        public async static Task Apply(string[] filters = null)
+        public async static Task Apply(HttpClient httpClient, string[] filters = null)
         {
 
             // load the config
             if (filters == null) filters = ConfigKeys;
-            Dictionary<string, string> kv = await CasConfig.Load(filters);
+            Dictionary<string, string> kv = await CasConfig.Load(httpClient, filters);
 
             // apply the config
             foreach (var pair in kv)

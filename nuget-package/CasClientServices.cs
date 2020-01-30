@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -18,6 +20,14 @@ namespace CasAuth
             // add the HttpContext
             services.AddHttpContextAccessor();
 
+            // add HttpClient
+            services.AddHttpClient("cas")
+                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler()
+                {
+                    Proxy = (!string.IsNullOrEmpty(CasEnv.Proxy)) ? new WebProxy(CasEnv.Proxy, true) : null,
+                    UseProxy = (!string.IsNullOrEmpty(CasEnv.Proxy))
+                });
+
             // load the configuration and log it
             using (var provider = services.BuildServiceProvider())
             {
@@ -30,7 +40,9 @@ namespace CasAuth
 
                 // load the configuration
                 logger.LogInformation("Loading configuration...");
-                CasConfig.Apply().Wait();
+                var httpClientFactory = provider.GetService<IHttpClientFactory>();
+                var httpClient = httpClientFactory.CreateClient("cas");
+                CasConfig.Apply(httpClient).Wait();
 
                 // confirm and log the configuration
                 CasConfig.Require("CLIENT_HOST_URL", CasEnv.ClientHostUrl, logger);

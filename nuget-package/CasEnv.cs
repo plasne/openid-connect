@@ -79,7 +79,7 @@ namespace CasAuth
             get
             {
                 string s = System.Environment.GetEnvironmentVariable("BASE_DOMAIN");
-                if (string.IsNullOrEmpty(s) && UseInsecureDefaults)
+                if (string.IsNullOrEmpty(s))
                 {
                     var list = new Stack<char>();
                     string u1 = new Uri(ClientHostUrl).Host;
@@ -285,6 +285,97 @@ namespace CasAuth
             get
             {
                 return System.Environment.GetEnvironmentVariable("CLIENT_SECRET");
+            }
+        }
+
+        public static string TenantIdConfig
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("TENANT_ID_CONFIG");
+                if (string.IsNullOrEmpty(s)) return TenantId;
+                return s;
+            }
+        }
+
+        public static string ClientIdConfig
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("CLIENT_ID_CONFIG");
+                if (string.IsNullOrEmpty(s)) return ClientId;
+                return s;
+            }
+        }
+
+        public static string ClientSecretConfig
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("CLIENT_SECRET_CONFIG");
+                if (string.IsNullOrEmpty(s)) return ClientSecret;
+                return s;
+            }
+        }
+
+        public static string TenantIdGraph
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("TENANT_ID_GRAPH");
+                if (string.IsNullOrEmpty(s)) return TenantId;
+                return s;
+            }
+        }
+
+        public static string ClientIdGraph
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("CLIENT_ID_GRAPH");
+                if (string.IsNullOrEmpty(s)) return ClientId;
+                return s;
+            }
+        }
+
+        public static string ClientSecretGraph
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("CLIENT_SECRET_GRAPH");
+                if (string.IsNullOrEmpty(s)) return ClientSecret;
+                return s;
+            }
+        }
+
+
+        public static string TenantIdVault
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("TENANT_ID_VAULT");
+                if (string.IsNullOrEmpty(s)) return TenantId;
+                return s;
+            }
+        }
+
+        public static string ClientIdVault
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("CLIENT_ID_VAULT");
+                if (string.IsNullOrEmpty(s)) return ClientIdConfig;
+                return s;
+            }
+        }
+
+        public static string ClientSecretVault
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("CLIENT_SECRET_VAULT");
+                if (string.IsNullOrEmpty(s)) return ClientSecretConfig;
+                return s;
             }
         }
 

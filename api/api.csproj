@@ -4,6 +4,6 @@
     <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CasAuth" Version="1.2.6" />
+    <PackageReference Include="CasAuth" Version="1.3.0" />
   </ItemGroup>
 </Project>

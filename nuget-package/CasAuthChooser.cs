@@ -19,14 +19,14 @@ namespace CasAuth
             return (app.Contains(type.ToLower())) ? "app" : "mi";
         }
 
-        public static async Task<string> GetAccessTokenByApplication(string resourceId)
+        public static async Task<string> GetAccessTokenByApplication(string resourceId, string tenantId, string clientId, string clientSecret)
         {
 
             // builder
             var app = ConfidentialClientApplicationBuilder
-                .Create(CasEnv.ClientId)
-                .WithTenantId(CasEnv.TenantId)
-                .WithClientSecret(CasEnv.ClientSecret)
+                .Create(clientId)
+                .WithTenantId(tenantId)
+                .WithClientSecret(clientSecret)
                 .Build();
 
             // ensure resourceId does not have trailing /
@@ -47,8 +47,23 @@ namespace CasAuth
 
         public static Task<string> GetAccessToken(string resourceId, string authTypeKey)
         {
-            if (AuthType(authTypeKey) == "app") return GetAccessTokenByApplication(resourceId);
-            return GetAccessTokenByManagedIdentity(resourceId);
+            switch (AuthType(authTypeKey))
+            {
+                case "app":
+                    switch (authTypeKey)
+                    {
+                        case "AUTH_TYPE_CONFIG":
+                            return GetAccessTokenByApplication(resourceId, CasEnv.TenantIdConfig, CasEnv.ClientIdConfig, CasEnv.ClientSecretConfig);
+                        case "AUTH_TYPE_GRAPH":
+                            return GetAccessTokenByApplication(resourceId, CasEnv.TenantIdGraph, CasEnv.ClientIdGraph, CasEnv.ClientSecretGraph);
+                        case "AUTH_TYPE_VAULT":
+                            return GetAccessTokenByApplication(resourceId, CasEnv.TenantIdVault, CasEnv.ClientIdVault, CasEnv.ClientSecretVault);
+                        default:
+                            return GetAccessTokenByApplication(resourceId, CasEnv.TenantId, CasEnv.ClientId, CasEnv.ClientSecret);
+                    }
+                default:
+                    return GetAccessTokenByManagedIdentity(resourceId);
+            }
         }
 
     }

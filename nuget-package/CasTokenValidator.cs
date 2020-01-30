@@ -9,6 +9,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using System.Threading.Tasks;
+using System.Net.Http;
+using System.Collections.Generic;
 
 namespace CasAuth
 {
@@ -61,17 +63,29 @@ namespace CasAuth
             return validatedJwt;
         }
 
-        public static string ReissueToken(string token)
+        public static async Task<string> ReissueToken(HttpClient httpClient, string token)
         {
-            using (var client = new WebClient())
+            using (var request = new HttpRequestMessage()
             {
-                if (!string.IsNullOrEmpty(CasEnv.Proxy)) client.Proxy = new WebProxy(CasEnv.Proxy);
-                NameValueCollection data = new NameValueCollection();
-                data.Add("token", token);
-                byte[] response = client.UploadValues(CasEnv.ReissueUrl, data);
-                string reissued = Encoding.UTF8.GetString(response);
-                return reissued;
-            }
+                RequestUri = new Uri(CasEnv.ReissueUrl),
+                Method = HttpMethod.Post
+            })
+            {
+                using (request.Content = new FormUrlEncodedContent(new[] {
+                    new KeyValuePair<string, string>("token", token)
+                }))
+                {
+                    using (var response = await httpClient.SendAsync(request))
+                    {
+                        var raw = await response.Content.ReadAsStringAsync();
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            throw new Exception($"CasTokenValidator.ReissueToken: HTTP {(int)response.StatusCode} - {raw}");
+                        }
+                        return raw;
+                    }
+                }
+            };
         }
 
     }

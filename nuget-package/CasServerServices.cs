@@ -1,4 +1,6 @@
 using System;
+using System.Net;
+using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -15,6 +17,14 @@ namespace CasAuth
         public static void AddCasServerAuth(this IServiceCollection services)
         {
 
+            // add HttpClient
+            services.AddHttpClient("cas")
+                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler()
+                {
+                    Proxy = (!string.IsNullOrEmpty(CasEnv.Proxy)) ? new WebProxy(CasEnv.Proxy, true) : null,
+                    UseProxy = (!string.IsNullOrEmpty(CasEnv.Proxy))
+                });
+
             // load the configuration and log it
             using (var provider = services.BuildServiceProvider())
             {
@@ -27,10 +37,13 @@ namespace CasAuth
 
                 // load the configuration
                 logger.LogInformation("Loading configuration...");
-                CasConfig.Apply().Wait();
+                var httpClientFactory = provider.GetService<IHttpClientFactory>();
+                var httpClient = httpClientFactory.CreateClient("cas");
+                CasConfig.Apply(httpClient).Wait();
 
                 // confirm and log the configuration
                 CasConfig.Require("SERVER_HOST_URL", CasEnv.ServerHostUrl, logger);
+                CasConfig.Optional("CLIENT_HOST_URL", CasEnv.ClientHostUrl, logger);
                 CasConfig.Require("TENANT_ID", CasEnv.TenantId, logger);
                 CasConfig.Require("AUTHORITY", CasEnv.Authority, logger);
                 CasConfig.Require("REDIRECT_URI", CasEnv.RedirectUri, logger);
@@ -58,7 +71,10 @@ namespace CasAuth
                     throw new Exception("You must specify either PRIVATE_KEY_PASSWORD or KEYVAULT_PRIVATE_KEY_PASSWORD_URL.");
                 }
                 if (
-                    !CasConfig.Optional("PUBLIC_CERT_#", CasEnv.PublicCertificates, logger) &&
+                    !CasConfig.Optional("PUBLIC_CERT_0", CasEnv.PublicCertificates, logger) &&
+                    !CasConfig.Optional("PUBLIC_CERT_1", CasEnv.PublicCertificates, logger) &&
+                    !CasConfig.Optional("PUBLIC_CERT_2", CasEnv.PublicCertificates, logger) &&
+                    !CasConfig.Optional("PUBLIC_CERT_3", CasEnv.PublicCertificates, logger) &&
                     !CasConfig.Optional("KEYVAULT_PUBLIC_CERT_PREFIX_URL", CasEnv.KeyvaultPublicCertificateUrls, logger)
                 )
                 {

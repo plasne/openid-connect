@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
@@ -66,7 +67,9 @@ namespace CasAuth
 
                     // attempt to reissue
                     Logger.LogDebug("attempted to reissue an expired token...");
-                    token = CasTokenValidator.ReissueToken(token);
+                    var httpClientFactory = Request.HttpContext.RequestServices.GetService(typeof(IHttpClientFactory)) as IHttpClientFactory;
+                    var httpClient = httpClientFactory.CreateClient("cas");
+                    token = await CasTokenValidator.ReissueToken(httpClient, token);
                     Logger.LogDebug("reissued token successfully");
 
                     // rewrite the cookie
