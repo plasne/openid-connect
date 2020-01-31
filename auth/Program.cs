@@ -19,6 +19,14 @@ namespace auth
             }
         }
 
+        private static string HostUrl
+        {
+            get
+            {
+                return System.Environment.GetEnvironmentVariable("HOST_URL") ?? CasEnv.ServerHostUrl;
+            }
+        }
+
         public static void Main(string[] args)
         {
             DotEnv.Config(throwOnError: false);
@@ -41,7 +49,7 @@ namespace auth
                     }
                 })
                 .UseStartup<Startup>();
-            if (!string.IsNullOrEmpty(CasEnv.ServerHostUrl)) builder.UseUrls(CasEnv.ServerHostUrl);
+            if (!string.IsNullOrEmpty(HostUrl)) builder.UseUrls(HostUrl);
             return builder;
         }
 

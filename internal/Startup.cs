@@ -1,11 +1,12 @@
-﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using CasAuth;
 
-namespace dotnetauth
+namespace internal_svc
 {
+
     public class Startup
     {
         public Startup(IConfiguration configuration)
@@ -19,19 +20,7 @@ namespace dotnetauth
         {
 
             // setup CasAuth
-            services.AddCasClientAuth();
-
-            // add an HttpClient for the api that supports propogating headers and the proxy settings
-            services.AddSingleton<CasIntPropogateHeadersOptions>(p =>
-            {
-                var options = new CasIntPropogateHeadersOptions();
-                options.Headers.Add("x-custom-header");
-                return options;
-            });
-            services.AddTransient<CasIntPropogateHeaders>();
-            services.AddHttpClient("api")
-                .AddHttpMessageHandler<CasIntPropogateHeaders>()
-                .ConfigurePrimaryHttpMessageHandler(() => new CasProxyHandler());
+            services.AddCasIntAuth();
 
             // setup controllers
             services.AddControllers();
@@ -52,4 +41,6 @@ namespace dotnetauth
         }
 
     }
+
+
 }

@@ -100,8 +100,7 @@ namespace CasAuth
                 var claims = new List<Claim>();
                 foreach (var claim in jwt.Payload.Claims)
                 {
-                    claims.Add(claim);
-                    if (claim.Type == "roles") claims.Add(new Claim("http://schemas.microsoft.com/ws/2008/06/identity/claims/role", (string)claim.Value));
+                    claims.Add(claim.Type, claim.Value);
                 }
                 var identity = new ClaimsIdentity(claims, Scheme.Name);
                 var principal = new ClaimsPrincipal(identity);

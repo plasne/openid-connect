@@ -21,7 +21,9 @@ namespace CasAuth
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("PROXY");
+                return System.Environment.GetEnvironmentVariable("PROXY") ??
+                    System.Environment.GetEnvironmentVariable("HTTPS_PROXY") ??
+                    System.Environment.GetEnvironmentVariable("HTTP_PROXY");
             }
         }
 

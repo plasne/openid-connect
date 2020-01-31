@@ -145,42 +145,41 @@ namespace CasAuth
             foreach (var filter in filters)
             {
 
-                // config proxy if required
-                var handler = new HttpClientHandler();
-                if (!string.IsNullOrEmpty(CasEnv.Proxy)) handler.Proxy = new WebProxy(CasEnv.Proxy);
-
                 // make authenticated calls to Azure AppConfig
-                using (var client = new HttpClient(handler))
+                string appConfigName = AppConfigResourceId.Split("/").Last();
+                using (var request = new HttpRequestMessage()
                 {
-
-                    // create the request message
-                    string appConfigName = AppConfigResourceId.Split("/").Last();
-                    var request = new HttpRequestMessage()
+                    RequestUri = new Uri($"https://{appConfigName}.azconfig.io/kv?key={filter}"),
+                    Method = HttpMethod.Get
+                })
+                {
+                    Sign(request, appConfigId, Convert.FromBase64String(appConfigSecret));
+                    using (var response = await httpClient.SendAsync(request))
                     {
-                        RequestUri = new Uri($"https://{appConfigName}.azconfig.io/kv?key={filter}"),
-                        Method = HttpMethod.Get
+
+                        // evaluate the response
+                        var raw = await response.Content.ReadAsStringAsync();
+                        if ((int)response.StatusCode == 401 || (int)response.StatusCode == 403)
+                        {
+                            throw new Exception($"CasConfig.Load: The identity is not authorized to get key/value pairs from the AppConfig: {AppConfigResourceId}; make sure this is the right instance and that you have granted rights to the Managed Identity or Service Principal. If running locally, make sure you have run an \"az login\" with the correct account and subscription.");
+                        }
+                        else if (!response.IsSuccessStatusCode)
+                        {
+                            throw new Exception($"CasConfig.Load: HTTP {(int)response.StatusCode} - {raw}");
+                        }
+
+                        // look for key/value pairs
+                        var json = JsonConvert.DeserializeObject<Items>(raw);
+                        foreach (var item in json.items)
+                        {
+                            var key = (useFullyQualifiedName) ? (string)item.key : ((string)item.key).Split(":").Last().ToUpper();
+                            var val = (string)item.value;
+                            if (!kv.ContainsKey(key)) kv.Add(key, val);
+                        }
+
                     };
 
-                    // sign the message
-                    Sign(request, appConfigId, Convert.FromBase64String(appConfigSecret));
-
-                    // get the response
-                    var response = await client.SendAsync(request);
-                    if (response.StatusCode == HttpStatusCode.Unauthorized) throw new Exception($"The identity is not authorized to get key/value pairs from the AppConfig: {AppConfigResourceId}; make sure this is the right instance and that you have granted rights to the Managed Identity or Service Principal. If running locally, make sure you have run an \"az login\" with the correct account and subscription.");
-                    if (response.StatusCode != HttpStatusCode.OK) throw new Exception($"config could not be read from Azure AppConfig ({response.StatusCode}: {response.ReasonPhrase})");
-                    var raw = await response.Content.ReadAsStringAsync();
-
-                    // look for key/value pairs
-                    var json = JsonConvert.DeserializeObject<Items>(raw);
-                    foreach (var item in json.items)
-                    {
-                        var key = (useFullyQualifiedName) ? (string)item.key : ((string)item.key).Split(":").Last().ToUpper();
-                        var val = (string)item.value;
-                        if (!kv.ContainsKey(key)) kv.Add(key, val);
-                    }
-
                 }
-
             }
 
             return kv;

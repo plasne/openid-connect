@@ -22,11 +22,7 @@ namespace CasAuth
 
             // add HttpClient
             services.AddHttpClient("cas")
-                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler()
-                {
-                    Proxy = (!string.IsNullOrEmpty(CasEnv.Proxy)) ? new WebProxy(CasEnv.Proxy, true) : null,
-                    UseProxy = (!string.IsNullOrEmpty(CasEnv.Proxy))
-                });
+                .ConfigurePrimaryHttpMessageHandler(() => new CasProxyHandler());
 
             // load the configuration and log it
             using (var provider = services.BuildServiceProvider())

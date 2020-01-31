@@ -30,14 +30,23 @@ namespace dotnetauth
         {
             app.UseRouting();
             app.UseCors();
-            app.UseCasServerAuth(new ext.CasServerAuthOptions()
+            app.UseCasServerAuth(() =>
             {
-                AdditionalScopes = new string[] { "https://graph.microsoft.com/user.read" },
-                AuthCodeFunc = async (getAcessToken) =>
+                var opt = new ext.CasServerAuthOptions()
                 {
-                    var token1 = await getAcessToken("offline_access https://graph.microsoft.com/user.read");
-                    var token2 = await getAcessToken("offline_access https://graph.microsoft.com/user.read");
-                }
+                    AuthCodeFunc = async (getAcessToken) =>
+                    {
+                        var token1 = await getAcessToken("offline_access https://graph.microsoft.com/user.read");
+                        // var token2 = await getAcessToken("offline_access https://graph.microsoft.com/group.read");
+                    },
+                    ClaimBuilderFunc = (inClaims, outClaims) =>
+                    {
+                        outClaims.Add(new System.Security.Claims.Claim("color", "yellow"));
+                    }
+                };
+                opt.Scopes.Add("https://graph.microsoft.com/user.read");
+                // opt.Scopes.Add("https://graph.microsoft.com/group.read");
+                return opt;
             });
         }
 

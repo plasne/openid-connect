@@ -82,13 +82,12 @@ namespace CasAuth
                     try
                     {
 
-                        // get the identity of the authenticated user
-                        var identity = context.User.Identity as ClaimsIdentity;
-                        if (identity == null || !identity.IsAuthenticated) throw new HttpException(401, "user is not authenticated");
+                        // ensure user is authorized
+                        if (context.User == null) throw new HttpException(401, "user is not authenticated");
 
                         // filter the claims
                         var filter = new string[] { "xsrf", "old", "exp", "iss", "aud" };
-                        var filtered = identity.Claims.ToList();
+                        var filtered = context.User.Claims.ToList();
                         filtered.RemoveAll(c => filter.Contains(c.Type) || c.Type.StartsWith("http://schemas.microsoft.com/"));
 
                         // project to a dictionary
@@ -139,13 +138,9 @@ namespace CasAuth
                     try
                     {
 
-                        // get the identity of the authenticated user
-                        var identity = context.User.Identity as ClaimsIdentity;
-                        if (identity == null || !identity.IsAuthenticated) throw new HttpException(401, "user is not authenticated");
-
-                        // ensure that the user is an admin
-                        if (identity.Claims.Count(c => c.Type == "roles" && c.Value.ToLower() == CasEnv.RoleForAdminFunctions) < 1)
-                            throw new HttpException(403, "user is not authorized");
+                        // ensure user is authorized
+                        if (context.User == null) throw new HttpException(401, "user is not authenticated");
+                        if (!context.User.HasRole(CasEnv.RoleForAdminFunctions)) throw new HttpException(403, "user is not authorized");
 
                         // find the validator and use it to clear cache
                         var validator = context.RequestServices.GetService<CasTokenValidator>();
@@ -175,13 +170,9 @@ namespace CasAuth
                     try
                     {
 
-                        // get the identity of the authenticated user
-                        var identity = context.User.Identity as ClaimsIdentity;
-                        if (identity == null || !identity.IsAuthenticated) throw new HttpException(401, "user is not authenticated");
-
-                        // ensure that the user is an admin
-                        if (identity.Claims.Count(c => c.Type == "roles" && c.Value.ToLower() == CasEnv.RoleForAdminFunctions) < 1)
-                            throw new HttpException(403, "user is not authorized");
+                        // ensure user is authorized
+                        if (context.User == null) throw new HttpException(401, "user is not authenticated");
+                        if (!context.User.HasRole(CasEnv.RoleForAdminFunctions)) throw new HttpException(403, "user is not authorized");
 
                         // get the configuration
                         var list = new List<string>();

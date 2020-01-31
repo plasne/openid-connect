@@ -301,12 +301,14 @@ namespace CasAuth
 
         public class CasServerAuthOptions
         {
-            public IEnumerable<string> AdditionalScopes { get; set; }
+            public List<string> Scopes { get; set; } = new List<string> { "openid", "profile", "email" };
             public Action<Func<string, Task<Tokens>>> AuthCodeFunc { get; set; }
+            public Action<IEnumerable<Claim>, List<Claim>> ClaimBuilderFunc { get; set; }
         }
 
-        public static IApplicationBuilder UseCasServerAuth(this IApplicationBuilder builder, CasServerAuthOptions opt = null)
+        public static IApplicationBuilder UseCasServerAuth(this IApplicationBuilder builder, Func<CasServerAuthOptions> optionsBuilder = null)
         {
+            var opt = (optionsBuilder != null) ? optionsBuilder() : new CasServerAuthOptions();
 
             // define additional endpoints
             builder.UseEndpoints(endpoints =>
@@ -324,9 +326,7 @@ namespace CasAuth
                         string clientId = WebUtility.UrlEncode(CasEnv.ClientId);
                         string redirectUri = WebUtility.UrlEncode(CasEnv.RedirectUri);
                         // REF: https://docs.microsoft.com/en-us/azure/active-directory/develop/id-tokens
-                        string scope = (opt.AdditionalScopes != null && opt.AdditionalScopes.Count() > 0) ?
-                            WebUtility.UrlEncode("openid profile email " + string.Join(" ", opt.AdditionalScopes)) :
-                            WebUtility.UrlEncode("openid profile email");
+                        string scope = WebUtility.UrlEncode(string.Join(" ", opt.Scopes));
                         string response_type = (opt.AuthCodeFunc != null) ?
                             WebUtility.UrlEncode("id_token code") :
                             WebUtility.UrlEncode("id_token");
@@ -416,11 +416,12 @@ namespace CasAuth
                         }
 
                         // populate the claims from the id_token
+                        // NOTE: claims.Add(key, value) is an extension method that normalizes the names to their URIs
                         List<Claim> claims = new List<Claim>();
                         var email = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "email");
-                        if (email != null) claims.Add(new Claim("email", email.Value));
-                        var displayName = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "name");
-                        if (displayName != null) claims.Add(new Claim("displayName", displayName.Value));
+                        if (email != null) claims.Add("email", email.Value);
+                        var name = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "name");
+                        if (name != null) claims.Add("name", name.Value);
 
                         // add the user account type
                         claims.Add(new Claim("typ", "user"));
@@ -470,15 +471,14 @@ namespace CasAuth
                         var roles = idToken.Payload.Claims.Where(c => c.Type == "roles");
                         foreach (var role in roles)
                         {
-                            claims.Add(new Claim("roles", role.Value));
+                            claims.Add("role", role.Value);
                         }
 
-                        // Service-to-Service: get other claims from the graph (req. Directory.Read.All)
-                        //    or from a database
-                        /*
-                        dynamic user = await tokenIssuer.GetUserById(oid.Value);
-                        claims.Add(new Claim("displayName2", (string)user.displayName));
-                        */
+                        // ClaimBuilder: add custom claims, potentially from other databases
+                        if (opt.ClaimBuilderFunc != null)
+                        {
+                            opt.ClaimBuilderFunc(idToken.Payload.Claims, claims);
+                        }
 
                         // write the XSRF-TOKEN cookie (if it will be verified)
                         if (CasEnv.VerifyXsrfInHeader || CasEnv.VerifyXsrfInCookie)
@@ -547,6 +547,9 @@ namespace CasAuth
                         string token = context.Request.Form["token"];
                         string scope = context.Request.Form["scope"];
 
+                        // optionally the call can include a service name which we will assert in the claims
+                        string serviceName = context.Request.Form["serviceName"];
+
                         // get an access token and verify it
                         Tokens tokens = null;
                         if (!string.IsNullOrEmpty(token))
@@ -570,12 +573,16 @@ namespace CasAuth
 
                         // add the service account type
                         claims.Add(new Claim("typ", "service"));
+                        if (!string.IsNullOrEmpty(serviceName))
+                        {
+                            claims.Add("name", serviceName);
+                        }
 
                         // attempt to propogate roles
                         var roles = accessToken.Payload.Claims.Where(c => c.Type == "roles");
                         foreach (var role in roles)
                         {
-                            claims.Add(new Claim("roles", role.Value));
+                            claims.Add("role", role.Value);
                         }
 
                         // return the newly issued token
