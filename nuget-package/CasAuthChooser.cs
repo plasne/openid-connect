@@ -45,7 +45,7 @@ namespace CasAuth
             return await tokenProvider.GetAccessTokenAsync(resourceId);
         }
 
-        public static Task<string> GetAccessToken(string resourceId, string authTypeKey)
+        public static async Task<string> GetAccessToken(string resourceId, string authTypeKey, CasTokenIssuer issuer = null)
         {
             switch (AuthType(authTypeKey))
             {
@@ -53,16 +53,17 @@ namespace CasAuth
                     switch (authTypeKey)
                     {
                         case "AUTH_TYPE_CONFIG":
-                            return GetAccessTokenByApplication(resourceId, CasEnv.TenantIdConfig, CasEnv.ClientIdConfig, CasEnv.ClientSecretConfig);
+                            return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdConfig, CasEnv.ClientIdConfig, CasEnv.ClientSecretConfig);
                         case "AUTH_TYPE_GRAPH":
-                            return GetAccessTokenByApplication(resourceId, CasEnv.TenantIdGraph, CasEnv.ClientIdGraph, CasEnv.ClientSecretGraph);
+                            var graphSecret = (issuer != null) ? await issuer.GetClientSecretGraph() : CasEnv.ClientSecretGraph;
+                            return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdGraph, CasEnv.ClientIdGraph, graphSecret);
                         case "AUTH_TYPE_VAULT":
-                            return GetAccessTokenByApplication(resourceId, CasEnv.TenantIdVault, CasEnv.ClientIdVault, CasEnv.ClientSecretVault);
+                            return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdVault, CasEnv.ClientIdVault, CasEnv.ClientSecretVault);
                         default:
-                            return GetAccessTokenByApplication(resourceId, CasEnv.TenantId, CasEnv.ClientId, CasEnv.ClientSecret);
+                            throw new Exception("GetAccessToken requires an authTypeKey when using AUTH_TYPE=app");
                     }
                 default:
-                    return GetAccessTokenByManagedIdentity(resourceId);
+                    return await GetAccessTokenByManagedIdentity(resourceId);
             }
         }
 

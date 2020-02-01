@@ -14,7 +14,7 @@ namespace internal_svc.Controllers
         [HttpGet, Route("name")]
         public ActionResult<string> GetName()
         {
-            return User.Name();
+            return User.Claims.Name();
         }
     }
 }

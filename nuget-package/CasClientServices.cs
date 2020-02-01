@@ -41,7 +41,9 @@ namespace CasAuth
                 CasConfig.Apply(httpClient).Wait();
 
                 // confirm and log the configuration
-                CasConfig.Require("CLIENT_HOST_URL", CasEnv.ClientHostUrl, logger);
+                CasConfig.Optional("SERVER_HOST_URL", CasEnv.ServerHostUrl, logger);
+                CasConfig.Optional("CLIENT_HOST_URL", CasEnv.ClientHostUrl, logger);
+                CasConfig.Optional("WEB_HOST_URL", CasEnv.WebHostUrl, logger);
                 CasConfig.Require("ISSUER", CasEnv.Issuer, logger);
                 CasConfig.Require("AUDIENCE", CasEnv.Audience, logger);
                 CasConfig.Require("ALLOWED_ORIGINS", CasEnv.AllowedOrigins, logger);
@@ -51,13 +53,8 @@ namespace CasAuth
                 if (authType == "app")
                 {
                     CasConfig.Require("TENANT_ID", CasEnv.TenantId, logger);
+                    CasConfig.Require("CLIENT_ID", CasEnv.ClientId, logger);
                     CasConfig.Require("CLIENT_SECRET", CasEnv.ClientSecret, logger);
-                }
-                else
-                {
-                    // NOTE: a secret is needed for authcode
-                    CasConfig.Optional("CLIENT_SECRET", CasEnv.ClientSecret, logger);
-                    CasConfig.Optional("KEYVAULT_CLIENT_SECRET_URL", CasEnv.KeyvaultClientSecretUrl, logger);
                 }
                 CasConfig.Optional("AUTH_TYPE_CONFIG", CasAuthChooser.AuthType("AUTH_TYPE_CONFIG"), logger);
                 CasConfig.Optional("APPCONFIG_RESOURCE_ID", CasConfig.AppConfigResourceId, logger);

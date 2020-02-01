@@ -260,6 +260,21 @@ namespace CasAuth
             return true;
         }
 
+        public static bool Optional(string key, ILogger logger)
+        {
+            string value = System.Environment.GetEnvironmentVariable(key);
+            if (string.IsNullOrEmpty(value))
+            {
+                logger.LogDebug($"{key} is \"(not-set)\".");
+                return false;
+            }
+            else
+            {
+                logger.LogDebug($"{key} = \"{value}\"");
+                return true;
+            }
+        }
+
     }
 
 

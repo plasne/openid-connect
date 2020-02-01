@@ -48,6 +48,31 @@ namespace CasAuth
             return _clientSecret;
         }
 
+        private string _clientSecretGraph;
+
+        public async Task<string> GetClientSecretGraph()
+        {
+
+            // see if there is an env for CLIENT_SECRET_GRAPH
+            if (string.IsNullOrEmpty(_clientSecretGraph)) _clientSecretGraph = CasEnv.ClientSecret;
+
+            // see if there is an env for KEYVAULT_CLIENT_SECRET_GRAPH_URL
+            if (string.IsNullOrEmpty(_clientSecretGraph))
+            {
+                string url = CasEnv.KeyvaultClientSecretGraphUrl;
+                if (!string.IsNullOrEmpty(url))
+                {
+                    _clientSecretGraph = await CasTokenIssuer.GetFromKeyVault(this.HttpClient, url);
+                }
+                else
+                {
+                    _clientSecretGraph = await GetClientSecret();
+                }
+            }
+
+            return _clientSecretGraph;
+        }
+
         private string _commandPassword;
 
         public async Task<string> GetCommandPassword()
@@ -221,11 +246,11 @@ namespace CasAuth
             _validationCertificates = null;
         }
 
-        public static async Task<bool> IsUserEnabled(HttpClient httpClient, string userId)
+        public async Task<bool> IsUserEnabled(string userId)
         {
 
             // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH");
+            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this);
 
             // check for enabled
             using (var request = new HttpRequestMessage()
@@ -235,7 +260,7 @@ namespace CasAuth
             })
             {
                 request.Headers.Add("Authorization", $"Bearer {accessToken}");
-                using (var response = await httpClient.SendAsync(request))
+                using (var response = await this.HttpClient.SendAsync(request))
                 {
                     var raw = await response.Content.ReadAsStringAsync();
                     if ((int)response.StatusCode == 403) // Forbidden
@@ -253,11 +278,11 @@ namespace CasAuth
 
         }
 
-        public static async Task<dynamic> GetUserById(HttpClient httpClient, string query)
+        public async Task<dynamic> GetUserById(string query)
         {
 
             // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH");
+            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this);
 
             // get the user info
             using (var request = new HttpRequestMessage()
@@ -267,7 +292,7 @@ namespace CasAuth
             })
             {
                 request.Headers.Add("Authorization", $"Bearer {accessToken}");
-                using (var response = await httpClient.SendAsync(request))
+                using (var response = await this.HttpClient.SendAsync(request))
                 {
                     var raw = await response.Content.ReadAsStringAsync();
                     if ((int)response.StatusCode == 404) // Not Found
@@ -301,7 +326,7 @@ namespace CasAuth
             public Dictionary<string, string> Roles = new Dictionary<string, string>();
         }
 
-        public static async Task<List<RoleAssignments>> GetRoleAssignments(HttpClient httpClient, string userId)
+        public async Task<List<RoleAssignments>> GetRoleAssignments(string userId)
         {
             List<RoleAssignments> assignments = new List<RoleAssignments>();
 
@@ -310,7 +335,7 @@ namespace CasAuth
             if (appIds.Count() < 1) return assignments;
 
             // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH");
+            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this);
 
             // lookup all specified applications
             //   NOTE: catch the possible 403 Forbidden because access rights have not been granted
@@ -324,7 +349,7 @@ namespace CasAuth
             })
             {
                 request.Headers.Add("Authorization", $"Bearer {accessToken}");
-                using (var response = await httpClient.SendAsync(request))
+                using (var response = await this.HttpClient.SendAsync(request))
                 {
                     var raw = await response.Content.ReadAsStringAsync();
                     if ((int)response.StatusCode == 403) // Forbidden
@@ -357,7 +382,7 @@ namespace CasAuth
             })
             {
                 request.Headers.Add("Authorization", $"Bearer {accessToken}");
-                using (var response = await httpClient.SendAsync(request))
+                using (var response = await this.HttpClient.SendAsync(request))
                 {
                     var raw = await response.Content.ReadAsStringAsync();
                     if ((int)response.StatusCode == 404) // Not Found
@@ -415,7 +440,7 @@ namespace CasAuth
             var oid = claims.FirstOrDefault(c => c.Type == "oid");
             if (oid != null)
             {
-                var assignments = await CasTokenIssuer.GetRoleAssignments(this.HttpClient, oid.Value);
+                var assignments = await GetRoleAssignments(oid.Value);
                 foreach (var assignment in assignments)
                 {
                     foreach (var role in assignment.Roles)
@@ -426,8 +451,7 @@ namespace CasAuth
             }
 
             // determine the signing duration
-            var typ = claims.FirstOrDefault(c => c.Type == "typ");
-            var duration = (typ != null && typ.Value == "service") ? CasEnv.JwtServiceDuration : CasEnv.JwtDuration;
+            var duration = (claims.IsService()) ? CasEnv.JwtServiceDuration : CasEnv.JwtDuration;
 
             // get the signing creds
             var signingCredentials = await GetSigningCredentials();
@@ -536,9 +560,8 @@ namespace CasAuth
             // shortcut if not expired
             if (DateTime.UtcNow < jwt.Payload.ValidTo.ToUniversalTime()) throw new Exception("token is not expired");
 
-            // make sure it is typ=user
-            var typ = jwt.Payload.Claims.FirstOrDefault(c => c.Type == "typ");
-            if (typ == null || typ.Value != "user") throw new Exception("only user tokens can be reissued");
+            // make sure it is not a service account
+            if (jwt.Payload.Claims.IsService()) throw new Exception("only user tokens can be reissued");
 
             // get keys from certificates
             var certs = await GetValidationCertificates();
@@ -593,7 +616,7 @@ namespace CasAuth
             if (oid.Value == null) throw new Exception("oid is not specified in the token");
             if (CasEnv.RequireUserEnabledOnReissue)
             {
-                bool enabled = await IsUserEnabled(this.HttpClient, (string)oid.Value);
+                bool enabled = await IsUserEnabled((string)oid.Value);
                 if (!enabled) throw new Exception("user is not enabled");
             }
 

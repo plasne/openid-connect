@@ -91,16 +91,16 @@ namespace CasAuth
                 }
 
                 // remove duplicates
-                var dedup = claims.GroupBy(c => c.Type + "=" + c.Value).Select(g => g.First());
+                var dedupe = claims.Distinct();
 
                 // verify there is at least 1 claim
-                if (dedup.Count() < 1)
+                if (dedupe.Count() < 1)
                 {
                     return Task.FromResult(AuthenticateResult.Fail("no claims for authentication were found"));
                 }
 
                 // build the identity, principal, and ticket
-                var identity = new ClaimsIdentity(dedup, Scheme.Name);
+                var identity = new ClaimsIdentity(dedupe, Scheme.Name);
                 var principal = new ClaimsPrincipal(identity);
                 var ticket = new AuthenticationTicket(principal, Scheme.Name);
                 return Task.FromResult(AuthenticateResult.Success(ticket));

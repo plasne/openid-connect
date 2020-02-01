@@ -90,19 +90,24 @@ namespace CasAuth
                 var jwt = await this.CasTokenValidator.ValidateToken(token);
 
                 // if the token was in the header and that wasn't allowed, it had better be a service account
-                if (isTokenFromHeader && !CasEnv.VerifyTokenInHeader)
+                if (isTokenFromHeader &&
+                    !CasEnv.VerifyTokenInHeader &&
+                    !jwt.Payload.Claims.IsService()
+                )
                 {
-                    var typ = jwt.Payload.Claims.FirstOrDefault(c => c.Type == "typ");
-                    if (typ.Value != "service") throw new Exception("only service account types are allowed in the header");
+                    throw new Exception("only service account types are allowed in the header");
                 }
 
-                // build the identity, principal, and ticket
+                // propogate the claims and dedupe
                 var claims = new List<Claim>();
                 foreach (var claim in jwt.Payload.Claims)
                 {
                     claims.Add(claim.Type, claim.Value);
                 }
-                var identity = new ClaimsIdentity(claims, Scheme.Name);
+                var dedupe = claims.Distinct();
+
+                // build the identity, principal, and ticket
+                var identity = new ClaimsIdentity(dedupe, Scheme.Name);
                 var principal = new ClaimsPrincipal(identity);
                 var ticket = new AuthenticationTicket(principal, Scheme.Name);
                 return AuthenticateResult.Success(ticket);

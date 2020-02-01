@@ -140,7 +140,7 @@ namespace CasAuth
 
                         // ensure user is authorized
                         if (context.User == null) throw new HttpException(401, "user is not authenticated");
-                        if (!context.User.HasRole(CasEnv.RoleForAdminFunctions)) throw new HttpException(403, "user is not authorized");
+                        if (!context.User.Claims.HasRole(CasEnv.RoleForAdmin)) throw new HttpException(403, "user is not authorized");
 
                         // find the validator and use it to clear cache
                         var validator = context.RequestServices.GetService<CasTokenValidator>();
@@ -172,7 +172,7 @@ namespace CasAuth
 
                         // ensure user is authorized
                         if (context.User == null) throw new HttpException(401, "user is not authenticated");
-                        if (!context.User.HasRole(CasEnv.RoleForAdminFunctions)) throw new HttpException(403, "user is not authorized");
+                        if (!context.User.Claims.HasRole(CasEnv.RoleForAdmin)) throw new HttpException(403, "user is not authorized");
 
                         // get the configuration
                         var list = new List<string>();

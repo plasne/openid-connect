@@ -38,9 +38,11 @@ namespace CasAuth
                 CasConfig.Apply(httpClient).Wait();
 
                 // confirm and log the configuration
-                CasConfig.Require("SERVER_HOST_URL", CasEnv.ServerHostUrl, logger);
+                CasConfig.Optional("SERVER_HOST_URL", CasEnv.ServerHostUrl, logger);
                 CasConfig.Optional("CLIENT_HOST_URL", CasEnv.ClientHostUrl, logger);
+                CasConfig.Optional("WEB_HOST_URL", CasEnv.WebHostUrl, logger);
                 CasConfig.Require("TENANT_ID", CasEnv.TenantId, logger);
+                CasConfig.Require("CLIENT_ID", CasEnv.ClientId, logger);
                 CasConfig.Require("AUTHORITY", CasEnv.Authority, logger);
                 CasConfig.Require("REDIRECT_URI", CasEnv.RedirectUri, logger);
                 CasConfig.Require("ISSUER", CasEnv.Issuer, logger);
@@ -48,7 +50,6 @@ namespace CasAuth
                 CasConfig.Require("DEFAULT_REDIRECT_URL", CasEnv.DefaultRedirectUrl, logger);
                 CasConfig.Require("ALLOWED_ORIGINS", CasEnv.AllowedOrigins, logger);
                 CasConfig.Require("BASE_DOMAIN", CasEnv.BaseDomain, logger);
-                CasConfig.Require("CLIENT_ID", CasEnv.ClientId, logger);
                 CasConfig.Require("PUBLIC_KEYS_URL", CasEnv.PublicKeysUrl, logger);
                 if (
                     !CasConfig.Optional("PRIVATE_KEY", CasEnv.PrivateKey, logger) &&
@@ -66,12 +67,14 @@ namespace CasAuth
                     logger.LogError("You must specify either PRIVATE_KEY_PASSWORD or KEYVAULT_PRIVATE_KEY_PASSWORD_URL.");
                     throw new Exception("You must specify either PRIVATE_KEY_PASSWORD or KEYVAULT_PRIVATE_KEY_PASSWORD_URL.");
                 }
+                CasConfig.Optional("PUBLIC_CERT_0", logger);
+                CasConfig.Optional("PUBLIC_CERT_1", logger);
+                CasConfig.Optional("PUBLIC_CERT_2", logger);
+                CasConfig.Optional("PUBLIC_CERT_3", logger);
+                CasConfig.Optional("KEYVAULT_PUBLIC_CERT_PREFIX_URL", logger);
                 if (
-                    !CasConfig.Optional("PUBLIC_CERT_0", CasEnv.PublicCertificates, logger) &&
-                    !CasConfig.Optional("PUBLIC_CERT_1", CasEnv.PublicCertificates, logger) &&
-                    !CasConfig.Optional("PUBLIC_CERT_2", CasEnv.PublicCertificates, logger) &&
-                    !CasConfig.Optional("PUBLIC_CERT_3", CasEnv.PublicCertificates, logger) &&
-                    !CasConfig.Optional("KEYVAULT_PUBLIC_CERT_PREFIX_URL", CasEnv.KeyvaultPublicCertificateUrls, logger)
+                    (CasEnv.PublicCertificates.Length < 1) &&
+                    (CasEnv.KeyvaultPublicCertificateUrls.Length < 1)
                 )
                 {
                     logger.LogError("You must specify one of PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, PUBLIC_CERT_3, or KEYVAULT_PUBLIC_CERT_PREFIX_URL.");
@@ -80,12 +83,11 @@ namespace CasAuth
                 CasConfig.Optional("AUTH_TYPE", authType, logger);
                 if (authType == "app")
                 {
-                    CasConfig.Require("TENANT_ID", CasEnv.TenantId, logger);
                     CasConfig.Require("CLIENT_SECRET", CasEnv.ClientSecret, logger);
                 }
                 else
                 {
-                    // NOTE: a secret is needed for authcode
+                    // NOTE: an id and secret are needed for authcode
                     CasConfig.Optional("CLIENT_SECRET", CasEnv.ClientSecret, logger);
                     CasConfig.Optional("KEYVAULT_CLIENT_SECRET_URL", CasEnv.KeyvaultClientSecretUrl, logger);
                 }

@@ -43,8 +43,7 @@ namespace CasAuth
                 if (!identity.IsAuthenticated) throw new Exception("user is not authenticated");
 
                 // if this is a service account, no XSRF is required
-                var typ = identity.Claims.FirstOrDefault(c => c.Type == "typ");
-                if (typ != null && typ.Value == "service")
+                if (identity.Claims.IsService())
                 {
                     context.Succeed(requirement);
                     return Task.CompletedTask;

@@ -423,9 +423,6 @@ namespace CasAuth
                         var name = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "name");
                         if (name != null) claims.Add("name", name.Value);
 
-                        // add the user account type
-                        claims.Add(new Claim("typ", "user"));
-
                         // get the oid
                         if (CasEnv.Authority.EndsWith("/common"))
                         {
@@ -438,14 +435,14 @@ namespace CasAuth
                             var oid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
                             if (oid != null)
                             {
-                                if (await CasTokenIssuer.GetUserById(httpClient, oid.Value) == null)
+                                if (await tokenIssuer.GetUserById(oid.Value) == null)
                                 {
                                     // query by userPrincipalName
                                     var username = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "preferred_username");
                                     if (username != null)
                                     {
                                         string userId = username.Value.Replace("@", "_");
-                                        var users = await CasTokenIssuer.GetUserById(httpClient, $"?$filter=startsWith(userPrincipalName, '{userId}%23EXT%23')");
+                                        var users = await tokenIssuer.GetUserById($"?$filter=startsWith(userPrincipalName, '{userId}%23EXT%23')");
                                         if (users != null && users.value.Count > 0)
                                         {
                                             claims.Add(new Claim("oid", (string)users.value[0].id));
@@ -571,12 +568,9 @@ namespace CasAuth
                         var oid = accessToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
                         if (oid != null) claims.Add(new Claim("oid", oid.Value));
 
-                        // add the service account type
-                        claims.Add(new Claim("typ", "service"));
-                        if (!string.IsNullOrEmpty(serviceName))
-                        {
-                            claims.Add("name", serviceName);
-                        }
+                        // add the service details
+                        if (!string.IsNullOrEmpty(serviceName)) claims.Add("name", serviceName);
+                        claims.Add("role", CasEnv.RoleForService);
 
                         // attempt to propogate roles
                         var roles = accessToken.Payload.Claims.Where(c => c.Type == "roles");
@@ -792,12 +786,15 @@ namespace CasAuth
                     try
                     {
 
-                        // verify graph access
+                        // get references
                         var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
                         var httpClientFactory = context.RequestServices.GetService<IHttpClientFactory>();
                         var httpClient = httpClientFactory.CreateClient("cas");
+                        var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
+
+                        // validate graph access
                         logger.LogInformation("/cas/check-requirements: checking graph access...");
-                        var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH");
+                        var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", tokenIssuer);
                         using (var request = new HttpRequestMessage()
                         {
                             RequestUri = new Uri("https://graph.microsoft.com/beta/users?$top=1"),
