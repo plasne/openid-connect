@@ -34,10 +34,10 @@ namespace dotnetauth
             {
                 var opt = new ext.CasServerAuthOptions()
                 {
-                    AuthCodeFunc = async (getAcessToken) =>
+                    AuthCodeFunc = async (getAccessToken) =>
                     {
-                        var token1 = await getAcessToken("offline_access https://graph.microsoft.com/user.read");
-                        // var token2 = await getAcessToken("offline_access https://graph.microsoft.com/group.read");
+                        var token1 = await getAccessToken("offline_access https://graph.microsoft.com/user.read");
+                        // var token2 = await getAccessToken("offline_access https://graph.microsoft.com/group.read");
                     },
                     ClaimBuilderFunc = (inClaims, outClaims) =>
                     {

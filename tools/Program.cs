@@ -32,7 +32,7 @@ namespace tools
             [Option('e', "email", Required = false, HelpText = "The email address of the user.")]
             public string Email { get; set; }
 
-            [Option('n', "name", Required = true, HelpText = "The name of the user or service account.")]
+            [Option('n', "name", Required = false, HelpText = "The name of the user or service account.")]
             public string Name { get; set; }
 
             [Option('r', "roles", Required = false, HelpText = "The roles for the user or service account.")]
@@ -74,10 +74,7 @@ namespace tools
             // support dependency injection
             var services = new ServiceCollection();
             services
-                .AddLogging(configure => configure.AddConsole(c =>
-                {
-                    c.Format = Microsoft.Extensions.Logging.Console.ConsoleLoggerFormat.Systemd;
-                }))
+                .AddLogging(configure => configure.AddConsole())
                 .Configure<LoggerFilterOptions>(options =>
                 {
                     if (Enum.TryParse(LogLevel, out Microsoft.Extensions.Logging.LogLevel level))
@@ -179,7 +176,7 @@ namespace tools
                                     var claims = new List<Claim>();
                                     if (!string.IsNullOrEmpty(o.Oid)) claims.Add(new Claim("oid", o.Oid));
                                     if (!string.IsNullOrEmpty(o.Email)) claims.Add(new Claim("email", o.Email));
-                                    claims.Add(new Claim("name", o.Name));
+                                    if (!string.IsNullOrEmpty(o.Name)) claims.Add(new Claim("name", o.Name));
                                     if (!string.IsNullOrEmpty(o.Roles))
                                     {
                                         var roles = o.Roles.Split(',').Select(id => id.Trim());

@@ -558,10 +558,10 @@ namespace CasAuth
             var jwt = handler.ReadJwtToken(token);
 
             // shortcut if not expired
-            if (DateTime.UtcNow < jwt.Payload.ValidTo.ToUniversalTime()) throw new Exception("token is not expired");
+            if (DateTime.UtcNow < jwt.Payload.ValidTo.ToUniversalTime()) throw new CasHttpException(400, "token is not expired");
 
             // make sure it is not a service account
-            if (jwt.Payload.Claims.IsService()) throw new Exception("only user tokens can be reissued");
+            if (jwt.Payload.Claims.IsService()) throw new CasHttpException(403, "only user tokens can be reissued");
 
             // get keys from certificates
             var certs = await GetValidationCertificates();
@@ -585,7 +585,7 @@ namespace CasAuth
             }
             catch (Exception e)
             {
-                throw new Exception("token cannot be validated (excepting lifetime)", e);
+                throw new CasHttpException(400, "token cannot be validated (excepting lifetime) - " + e.Message);
             }
             JwtSecurityToken validatedJwt = validatedSecurityToken as JwtSecurityToken;
 
@@ -600,7 +600,7 @@ namespace CasAuth
             }
             else
             {
-                throw new Exception("token is too old to renew");
+                throw new CasHttpException(403, "token is too old to renew");
             }
 
         }
@@ -613,11 +613,11 @@ namespace CasAuth
 
             // make sure the user is eligible
             var oid = jwt.Payload.FirstOrDefault(claim => claim.Key == "oid");
-            if (oid.Value == null) throw new Exception("oid is not specified in the token");
+            if (oid.Value == null) throw new CasHttpException(403, "oid is not specified in the token");
             if (CasEnv.RequireUserEnabledOnReissue)
             {
                 bool enabled = await IsUserEnabled((string)oid.Value);
-                if (!enabled) throw new Exception("user is not enabled");
+                if (!enabled) throw new CasHttpException(403, "user is not enabled");
             }
 
             // strip inappropriate claims

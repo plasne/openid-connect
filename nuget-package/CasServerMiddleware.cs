@@ -27,17 +27,6 @@ namespace CasAuth
     public static class UseCasServerAuthMiddlewareExtensions
     {
 
-        private class HttpException : Exception
-        {
-
-            public HttpException(int code, string msg) : base(msg)
-            {
-                this.StatusCode = code;
-            }
-
-            public int StatusCode { get; set; }
-        }
-
         private static string GenerateSafeRandomString(int length)
         {
             RNGCryptoServiceProvider provider = new RNGCryptoServiceProvider();
@@ -356,7 +345,7 @@ namespace CasAuth
                         return context.Response.CompleteAsync();
 
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
                         context.Response.StatusCode = e.StatusCode;
                         return context.Response.WriteAsync(e.Message);
@@ -380,9 +369,9 @@ namespace CasAuth
                         var httpClient = httpClientFactory.CreateClient("cas");
 
                         // read flow, verify state and nonce
-                        if (!context.Request.Cookies.ContainsKey("authflow")) throw new HttpException(400, "authflow not provided");
+                        if (!context.Request.Cookies.ContainsKey("authflow")) throw new CasHttpException(400, "authflow not provided");
                         AuthFlow flow = JsonSerializer.Deserialize<AuthFlow>(context.Request.Cookies["authflow"]);
-                        if (context.Request.Form["state"] != flow.state) throw new HttpException(400, "state does not match");
+                        if (context.Request.Form["state"] != flow.state) throw new CasHttpException(400, "state does not match");
 
                         // throw error if one was returned
                         if (context.Request.Form.ContainsKey("error_description"))
@@ -515,7 +504,7 @@ namespace CasAuth
                         await context.Response.CompleteAsync();
 
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
                         context.Response.StatusCode = e.StatusCode;
                         await context.Response.WriteAsync(e.Message);
@@ -584,7 +573,7 @@ namespace CasAuth
                         await context.Response.WriteAsync(jwt);
 
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
                         context.Response.StatusCode = e.StatusCode;
                         await context.Response.WriteAsync(e.Message);
@@ -609,14 +598,14 @@ namespace CasAuth
                         string token = context.Request.Form["token"];
 
                         // ensure a token was passed
-                        if (string.IsNullOrEmpty(token)) throw new HttpException(400, "token was not provided for renewal");
+                        if (string.IsNullOrEmpty(token)) throw new CasHttpException(400, "token was not provided for renewal");
 
                         // see if it is eligible for reissue (an exception will be thrown if not)
                         var reissued = await tokenIssuer.ReissueToken(token);
                         await context.Response.WriteAsync(reissued);
 
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
                         context.Response.StatusCode = e.StatusCode;
                         await context.Response.WriteAsync(e.Message);
@@ -651,7 +640,7 @@ namespace CasAuth
                         return context.Response.WriteAsync(json);
 
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
                         context.Response.StatusCode = e.StatusCode;
                         return context.Response.WriteAsync(e.Message);
@@ -689,7 +678,7 @@ namespace CasAuth
                         await context.Response.WriteAsync(json);
 
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
                         context.Response.StatusCode = e.StatusCode;
                         await context.Response.WriteAsync(e.Message);
@@ -715,14 +704,14 @@ namespace CasAuth
 
                         // find the tokens in the headers
                         string sessionToken = context.Request.Headers["X-SESSION-TOKEN"];
-                        if (string.IsNullOrEmpty(sessionToken)) throw new HttpException(400, "X-SESSION-TOKEN header not found");
+                        if (string.IsNullOrEmpty(sessionToken)) throw new CasHttpException(400, "X-SESSION-TOKEN header not found");
                         string xsrfToken = context.Request.Headers["X-XSRF-TOKEN"];
-                        if (string.IsNullOrEmpty(xsrfToken)) throw new HttpException(400, "X-XSRF-TOKEN header not found");
+                        if (string.IsNullOrEmpty(xsrfToken)) throw new CasHttpException(400, "X-XSRF-TOKEN header not found");
 
                         // validate the session_token
                         var validatedSessionToken = await tokenIssuer.ValidateToken(sessionToken);
                         var xsrfclaim = validatedSessionToken.Payload.Claims.FirstOrDefault(c => c.Type == "xsrf");
-                        if (xsrfclaim == null) throw new HttpException(400, "xsrf claim not found in X-SESSION-TOKEN");
+                        if (xsrfclaim == null) throw new CasHttpException(400, "xsrf claim not found in X-SESSION-TOKEN");
 
                         // validate the xsrf_token (if it is signed)
                         string code = xsrfToken;
@@ -730,16 +719,16 @@ namespace CasAuth
                         {
                             var validatedXsrfToken = await tokenIssuer.ValidateToken(xsrfToken);
                             var codeclaim = validatedXsrfToken.Payload.Claims.FirstOrDefault(c => c.Type == "code");
-                            if (codeclaim == null) throw new HttpException(400, "code claim not found in X-XSRF-TOKEN");
+                            if (codeclaim == null) throw new CasHttpException(400, "code claim not found in X-XSRF-TOKEN");
                             code = codeclaim.Value;
                         }
 
                         // if the code matches, return OK
-                        if (xsrfclaim.Value != code) throw new HttpException(403, "xsrf claim does not match code claim");
+                        if (xsrfclaim.Value != code) throw new CasHttpException(403, "xsrf claim does not match code claim");
                         await context.Response.CompleteAsync();
 
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
                         context.Response.StatusCode = e.StatusCode;
                         await context.Response.WriteAsync(e.Message);
@@ -766,7 +755,7 @@ namespace CasAuth
                                 return context.Response.WriteAsync("Managed Identity / az CLI");
                         }
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
                         context.Response.StatusCode = e.StatusCode;
                         return context.Response.WriteAsync(e.Message);
@@ -815,7 +804,7 @@ namespace CasAuth
                         await context.Response.CompleteAsync();
 
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
                         context.Response.StatusCode = e.StatusCode;
                         await context.Response.WriteAsync(e.Message);
@@ -839,7 +828,7 @@ namespace CasAuth
                         var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
                         var commandPassword = await tokenIssuer.GetCommandPassword();
                         string password = context.Request.Form["password"];
-                        if (password != commandPassword) throw new HttpException(401, "user did not provide the valid command password");
+                        if (password != commandPassword) throw new CasHttpException(401, "user did not provide the valid command password");
 
                         // clear the caches
                         var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
@@ -852,7 +841,7 @@ namespace CasAuth
                         await context.Response.CompleteAsync();
 
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
                         context.Response.StatusCode = e.StatusCode;
                         await context.Response.WriteAsync(e.Message);

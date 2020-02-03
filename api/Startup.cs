@@ -22,6 +22,8 @@ namespace dotnetauth
             services.AddCasClientAuth();
 
             // add an HttpClient for the api that supports propogating headers and the proxy settings
+            //    NOTE: if you are not using AKS and microservices in an overlay network, you probably
+            //    do not want to implement these below lines
             services.AddSingleton<CasIntPropogateHeadersOptions>(p =>
             {
                 var options = new CasIntPropogateHeadersOptions();

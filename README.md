@@ -28,15 +28,15 @@ There are many ways to authenticate users. Some of the advantages of this approa
 
 -   Supports multi-tenant authentication
 
-To implement this service, check out the documentation [here](/implementation.md) or the video [here](https://youtu.be/Sen7H1Uix2k).
+To implement this service, check out the documentation [here](./implementation.md) or the video [here](https://youtu.be/Sen7H1Uix2k). You can find sample configurations [here](./configuration.md).
 
 ## Design
 
 This sample is composed of these pieces:
 
--   An application is composed of an **API** and **WFE** (web front end).
+-   An application is composed of an **API** (client) and **WFE** (web front end).
 
--   A centralized **auth** service provides authentication services for one or more applications.
+-   A centralized **auth** (server) service provides authentication services for one or more applications.
 
 -   A command line set of **tools** provides helper functions to generate and validate authentication requests.
 
@@ -178,9 +178,9 @@ This project has the following dependencies:
 
 -   Azure AD application
 
--   Azure App Configuration
+-   Azure App Configuration (optional)
 
--   Azure Key Vault
+-   Azure Key Vault (technically optional, but strongly recommended)
 
 Ideally, you would also host this application on a platform which support Managed Identity, for example:
 
@@ -271,7 +271,7 @@ The following procedure is used for the reissuing of an access_token:
 You can test the reissue process by POSTing an expired token to the reissue service. If all is working properly, you should get a new token as the body of the response.
 
 ```bash
-curl -i -X POST -d "token=ey...dQ" https://auth.plasne.com/api/auth/reissue
+curl -i -X POST -d "token=ey...dQ" https://auth.plasne.com/cas/reissue
 ```
 
 ## Roles Claims
@@ -352,7 +352,7 @@ These are the current lifetimes for tokens, but of course that could change.
 
 ## Using the Auth Service
 
-To start a login, the browser should navigate to the auth/authorize endpoint (ex. https://auth.plasne.com/api/auth/authorize). If you want to do an automatic login, you can make a REST call to the api/identity/me endpoint (ex. https://api.plasne.com/api/identity/me), if you receive a 401 Unauthorized, you can then redirect the browser to the auth/authorize endpoint.
+To start a login, the browser should navigate to the auth/authorize endpoint (ex. https://auth.plasne.com/cas/authorize). If you want to do an automatic login, you can make a REST call to the api/identity/me endpoint (ex. https://api.plasne.com/cas/me), if you receive a 401 Unauthorized, you can then redirect the browser to the auth/authorize endpoint.
 
 Whenever you make a call to an endpoint that requires authentication, you must:
 
@@ -447,8 +447,8 @@ There is a tools application that allows you do the following:
 # generated as a user
 dotnet run issue -o 00000000-0000-0000-0000-000000000000 -e pelasne@microsoft.com -n "Peter Lasne" -r user
 
-# generated as an admin and user (with a duration of 4 hours and a max-duration of 7 days)
-dotnet run issue -o 00000000-0000-0000-0000-000000000000 -e pelasne@microsoft.com -n "Peter Lasne" -r admin,user -d 240 -m 10800
+# generated as an admin and user
+dotnet run issue -o 00000000-0000-0000-0000-000000000000 -e pelasne@microsoft.com -n "Peter Lasne" -r admin,user
 ```
 
 -   validate-token - This allows you to validate a token and see its contents. If there is a problem validating the token, you will be informed why.
@@ -473,57 +473,28 @@ dotnet run get-user -o 00000000-0000-0000-0000-000000000000
 dotnet run get-user -e pelasne@microsoft.com
 ```
 
--   get-config - This will show all the configuration in Azure App Configuration.
-
-```bash
-dotnet run get-config
-```
-
 ## Debugging Locally
 
-You should create a .env file in the folder you will be running "dotnet run" from for each service (API and auth). You should include in that file a setting called HOST_URL that specifies the protocol and port that you want to run that service on. You might also include a more granular LOG_LEVEL and a PROXY if needed. These 3 settings must be set in the .env file (or by some other means to create an environment variable) as they are utilized prior to getting the configuration from Azure App Service. For example:
+A common configuration for running locally is...
 
-```bash
-HOST_URL=http://localhost:5100
+```
+PROXY=http://my_proxy
 LOG_LEVEL=Debug
-PROXY=http://proxy
+USE_INSECURE_DEFAULTS=true
+TENANT_ID=00000000-0000-0000-0000-000000000000
+CLIENT_ID=00000000-0000-0000-0000-000000000000
 ```
-
-If you are are going to host the WFE sample from this project, you also need to create a .env file where you will be running "node server.js" from. It should contain the HOST_URL (only the port is actually used) and CONFIG_URL:
-
-```bash
-HOST_URL=http://localhost:5000
-CONFIG_URL=http://localhost:5200/api/config/wfe
-```
-
-There will be some settings that are different for a local configuration. You can create additional configuration items in Azure App Configuration specifically for the local environment. You can specify all settings or you can simply override some settings. The environment variables are favored from left-to-right, so where there are local settings they would take precident and the dev settings would fill in the gaps if you did something like this:
-
-```bash
-CONFIG_KEYS=sample:auth:local:\*, sample:common:local:\*, sample:auth:dev:\*, sample:common:dev:\*
-```
-
-As an example, these were the settings I overwrote for my local environment:
-
-```json
-{
-    "sample:api:local:ALLOW_TOKEN_IN_HEADER": "true",
-    "sample:api:local:PRESENT_CONFIG_wfe": "sample:wfe:local:*, sample:wfe:dev:*",
-    "sample:api:local:REISSUE_URL": "http://localhost:5100/api/auth/reissue",
-    "sample:api:local:VERIFY_XSRF_HEADER": "false",
-    "sample:api:local:WELL_KNOWN_CONFIG_URL": "http://localhost:5100/api/auth/.well-known/openid-configuration",
-    "sample:auth:local:DEFAULT_REDIRECT_URL": "http://localhost:5000",
-    "sample:auth:local:PUBLIC_KEYS_URL": "http://localhost:5100/api/auth/keys",
-    "sample:auth:local:REDIRECT_URI": "http://localhost:5100/api/auth/token",
-    "sample:auth:local:REQUIRE_USER_ENABLED_ON_REISSUE": "true",
-    "sample:common:local:ALLOWED_ORIGINS": "http://localhost:5000",
-    "sample:common:local:BASE_DOMAIN": "localhost",
-    "sample:common:local:REQUIRE_SECURE_FOR_COOKIES": "false"
-}
-```
-
-You must add your local auth/token endpoint to the Reply URLs for the application you created. For example, http://localhost:5100/api/auth/token.
 
 One warning, at least in Chrome and Firefox, cookies without the Secure flag will not replace cookies with the Secure flag. Therefore, if you run with REQUIRE_SECURE_FOR_COOKIES with the default of "true" and then change it to "false", cookies could have been created that wouldn't get replaced and you will get errors that the state and nonce values don't match. You can manually delete those cookies should that happen.
+
+If it is easier to test, you might also consider the following, which allows session_tokens in the header or cookie and does not validate XSRF. Note that you should not run this configuration in production.
+
+```
+VERIFY_TOKEN_IN_COOKIE=true
+VERIFY_TOKEN_IN_HEADER=true
+VERIFY_XSRF_IN_COOKIE=false
+VERIFY_XSRF_IN_HEADER=false
+```
 
 ## Key Rotation
 
@@ -555,7 +526,7 @@ Example:
 curl -i -X POST -d "password=my-command-password&scope=validation-certificates" https://auth.plasne.com/api/auth/clear-cache
 
 # verify the certificates now show up
-curl -i https://auth.plasne.com/api/auth/keys
+curl -i https://auth.plasne.com/cas/keys
 ```
 
 6. Instruct your API service to clear the openid-configuration cache. This should allows the API service to see the new public certificate.
@@ -567,16 +538,16 @@ Example:
 dotnet run issue-token -o 123 -n "Peter Lasne" -e pelasne@microsoft.com -r admin -d 60 --xsrf secret
 
 # clear cache by providing admin credentials (use the token in the cookie)
-curl -i -X POST -d "scope=openid-configuration" --cookie "user=ey...fk" --header "X-XSRF-TOKEN: secret" https://api.plasne.com/api/admin/clear-cache
+curl -i -X POST -d "scope=openid-configuration" --cookie "user=ey...fk" --header "X-XSRF-TOKEN: secret" https://api.plasne.com/cas/clear-cache
 
 # get a list of all certificate thumbprints that are now used for validation
-curl -i --cookie "user=ey...fk" --header "X-XSRF-TOKEN: secret" https://api.plasne.com/api/admin/validation-thumbprints
+curl -i --cookie "user=ey...fk" --header "X-XSRF-TOKEN: secret" https://api.plasne.com/cas/validation-thumbprints
 ```
 
 7. Instruct your auth service to clear the signing-key cache. This should allow the auth service to issue tokens using the new private key.
 
 ```bash
-curl -i -X POST -d "password=my-secret-password&scope=signing-key" https://auth.plasne.com/api/auth/clear-cache
+curl -i -X POST -d "password=my-secret-password&scope=signing-key" https://auth.plasne.com/cas/clear-cache
 ```
 
 ## FAQ
@@ -617,13 +588,25 @@ If you do want to prevent having your users go back through authentication every
 
 ### Can I use this service to authenticate with APIM?
 
-Yes, see the instructions [here](/APIM.md).
+Yes, see the instructions [here](./APIM.md).
 
 ### When would I use an AuthCode flow?
 
 Several times in this documentation, I mentioned that used AuthCode is uncommon. Generally the claims you need put into your session_token can be obtained from the id_token, the Microsoft Graph (querying as a service principal), and from one or more databases.
 
 You would need to use the AuthCode flow because you are accessing a resource on-behalf-of the user. The common scenarios would involve Office 365 (email, OneDrive, calendar, etc.).
+
+To use AuthCode, check out the documentation [here](./authcode.md).
+
+### How do I inject custom claims?
+
+See the instructions [here](./custom-claims.md).
+
+### Sending the session_token to microservices in an overlay network is a larger header than needed, is there an alternative?
+
+Yes, this solution supports the safe authentication at the edge using everything described in this project. Then for internal services that are not exposed outside of the application's overlay network, we can simply send identity headers that don't require signature verification.
+
+This pattern is discussed [here](./internal-services.md).
 
 ### Do I have to register custom domain names?
 
@@ -638,5 +621,3 @@ Yes, it turns out that Mozilla keeps a list of cloud provider domains that host 
 ## TODO
 
 -   Reissue should requery the "role" claim as well.
-
--   Support service principal authentication via header and without XSRF protection
