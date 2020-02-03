@@ -70,28 +70,33 @@ namespace CasAuth
 
         public static void Add(this List<Claim> claims, string key, string value)
         {
+            if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(value)) return;
+
+            // normalize the key
             switch (key)
             {
                 case "name":
-                    claims.Add(new Claim("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name", value));
-                    return;
+                    key = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name";
+                    break;
                 case "email":
-                    claims.Add(new Claim("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress", value));
-                    return;
+                    key = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress";
+                    break;
                 case "role":
                 case "roles":
-                    claims.Add(new Claim("http://schemas.microsoft.com/ws/2008/06/identity/claims/role", value));
-                    return;
-                default:
-                    claims.Add(new Claim(key, value));
-                    return;
+                    key = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role";
+                    break;
             }
+
+            // trim the value
+            value = value.Trim();
+
+            // add if not a duplicate
+            var existing = claims.Find(c => string.Compare(c.Type, key, StringComparison.InvariantCultureIgnoreCase) == 0 &&
+                string.Compare(c.Value, value, StringComparison.InvariantCultureIgnoreCase) == 0);
+            if (existing == null) claims.Add(new Claim(key, value));
+
         }
 
-        public static IEnumerable<Claim> Distinct(this IEnumerable<Claim> claims)
-        {
-            return claims.GroupBy(c => c.Type + "=" + c.Value).Select(g => g.First());
-        }
 
 
 

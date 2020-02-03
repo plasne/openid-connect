@@ -1,8 +1,8 @@
 # Client Credentials Grant
 
-You may have service accounts that need to connect to services in an application protected by this authNZ service. To do that, you will use an Azure AD client credential grant. When this flow is used, a JWT will be generated like the user authentication process except that it will have a "typ" claim in the payload that will be set to "service" (instead of "user").
+You may have service accounts that need to connect to services in an application protected by this authNZ service. To do that, you will use an Azure AD client credential grant. When this flow is used, a JWT will be generated like the user authentication process except that it will have a "role" claim in the payload that will be set to "service" (or whatever else is configured for ROLE_FOR_SERVICE).
 
-Tokens generated for service accounts like this should always be passed in the "Authorization" header as a "Bearer" token. Even if VERIFY_TOKEN_IN_HEADER is set to "false", the token will be accepted if it has the "typ"="service" claim. In addition, no XSRF code will be required.
+Tokens generated for service accounts like this should always be passed in the "Authorization" header as a "Bearer" token. Even if VERIFY_TOKEN_IN_HEADER is set to "false", the token will be accepted if it has the "role"="service" claim. In addition, no XSRF code will be required.
 
 ## Lifetime
 
@@ -20,10 +20,12 @@ HEADERS:
     Content-Type:multipart/form-data
 
 BODY:
-    clientId:663c73c9-47e1-4a11-9a74-620d7e291c45
-    clientSecret:d6M[UzHBy[mru=.xq1r9oJfZ3NJPVRoT
-    scope:api://1d604a0c-5543-4583-810e-0441b2276cfe
+    clientId:00000000-0000-0000-0000-00000000000
+    clientSecret:my_client_secret
+    scope:api://00000000-0000-0000-0000-00000000000
 ```
+
+You can find the scope on the "Expose an API" tab in AAD.
 
 ## Client Certificate
 
@@ -58,7 +60,11 @@ HEADERS:
     Content-Type:multipart/form-data
 
 BODY:
-    clientId:663c73c9-47e1-4a11-9a74-620d7e291c45
+    clientId:00000000-0000-0000-0000-00000000000
     token:token_generated_from_above_code
-    scope:api://1d604a0c-5543-4583-810e-0441b2276cfe
+    scope:api://00000000-0000-0000-0000-00000000000
 ```
+
+You must upload the certificate on the "Certificates & secrets" tab in AAD.
+
+You can find the scope on the "Expose an API" tab in AAD.

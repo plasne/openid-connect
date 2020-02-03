@@ -98,16 +98,15 @@ namespace CasAuth
                     throw new Exception("only service account types are allowed in the header");
                 }
 
-                // propogate the claims and dedupe
+                // propogate the claims (this overload uses uri-names and dedupes)
                 var claims = new List<Claim>();
                 foreach (var claim in jwt.Payload.Claims)
                 {
                     claims.Add(claim.Type, claim.Value);
                 }
-                var dedupe = claims.Distinct();
 
                 // build the identity, principal, and ticket
-                var identity = new ClaimsIdentity(dedupe, Scheme.Name);
+                var identity = new ClaimsIdentity(claims, Scheme.Name);
                 var principal = new ClaimsPrincipal(identity);
                 var ticket = new AuthenticationTicket(principal, Scheme.Name);
                 return AuthenticateResult.Success(ticket);

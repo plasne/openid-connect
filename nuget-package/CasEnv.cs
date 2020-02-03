@@ -47,6 +47,18 @@ namespace CasAuth
         }
 
         /// <summary>
+        /// [OPTIONAL] If you have multiple roles (Auth, API, Web, etc.) on the same URL, you might specify
+        /// this setting which will act as a default for CLIENT_HOST_URL, SERVER_HOST_URL, and WEB_HOST_URL.
+        /// </summary>
+        public static string DefaultHostUrl
+        {
+            get
+            {
+                return System.Environment.GetEnvironmentVariable("DEFAULT_HOST_URL");
+            }
+        }
+
+        /// <summary>
         /// [OPTIONAL] This denotes the URL of the API service that is validating authentication tokens.
         /// If you have more than one, just specify one of them.
         /// Specifying this and SERVER_HOST_URL allows defaults to be calculated for:
@@ -58,7 +70,11 @@ namespace CasAuth
             get
             {
                 string s = System.Environment.GetEnvironmentVariable("CLIENT_HOST_URL");
-                if (string.IsNullOrEmpty(s) && UseInsecureDefaults) return "http://localhost:5200";
+                if (string.IsNullOrEmpty(s))
+                {
+                    if (!string.IsNullOrEmpty(DefaultHostUrl)) return DefaultHostUrl;
+                    if (UseInsecureDefaults) return "http://localhost:5200";
+                }
                 return s;
             }
         }
@@ -74,7 +90,11 @@ namespace CasAuth
             get
             {
                 string s = System.Environment.GetEnvironmentVariable("SERVER_HOST_URL");
-                if (string.IsNullOrEmpty(s) && UseInsecureDefaults) return "http://localhost:5100";
+                if (string.IsNullOrEmpty(s))
+                {
+                    if (!string.IsNullOrEmpty(DefaultHostUrl)) return DefaultHostUrl;
+                    if (UseInsecureDefaults) return "http://localhost:5100";
+                }
                 return s;
             }
         }
@@ -89,7 +109,11 @@ namespace CasAuth
             get
             {
                 string s = System.Environment.GetEnvironmentVariable("WEB_HOST_URL");
-                if (string.IsNullOrEmpty(s) && UseInsecureDefaults) return "http://localhost:5000";
+                if (string.IsNullOrEmpty(s))
+                {
+                    if (!string.IsNullOrEmpty(DefaultHostUrl)) return DefaultHostUrl;
+                    if (UseInsecureDefaults) return "http://localhost:5000";
+                }
                 return s;
             }
         }
@@ -195,6 +219,20 @@ namespace CasAuth
         }
 
         /// <summary>
+        /// [OPTIONAL] This allows you to specify the URL for the public keys endpoint.
+        /// Typically just set SERVER_HOST_URL and that URL will be calculated.
+        /// </summary>
+        public static string PublicKeysUrl
+        {
+            get
+            { // typically this should left default
+                string s = System.Environment.GetEnvironmentVariable("PUBLIC_KEYS_URL");
+                if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(ServerHostUrl)) return new Uri(ServerHostUrl).Append("/cas/keys").AbsoluteUri;
+                return s;
+            }
+        }
+
+        /// <summary>
         /// [OPTIONAL] This allows you to specify the URL for the reissue endpoint.
         /// Typically just set SERVER_HOST_URL and that URL will be calculated.
         /// </summary>
@@ -204,6 +242,8 @@ namespace CasAuth
             { // generally this should just go with default
                 string s = System.Environment.GetEnvironmentVariable("REISSUE_URL");
                 if (string.IsNullOrEmpty(s)) return new Uri(ServerHostUrl).Append("/cas/reissue").AbsoluteUri;
+                string[] negative = new string[] { "no", "false", "0" };
+                if (negative.Contains(s.ToLower())) return string.Empty;
                 return s;
             }
         }
@@ -308,7 +348,7 @@ namespace CasAuth
                 string v = System.Environment.GetEnvironmentVariable("VERIFY_TOKEN_IN_COOKIE");
                 if (string.IsNullOrEmpty(v)) return true;
                 string[] negative = new string[] { "no", "false", "0" };
-                return (!negative.Contains(v));
+                return (!negative.Contains(v.ToLower()));
             }
         }
 
@@ -718,20 +758,6 @@ namespace CasAuth
         }
 
         /// <summary>
-        /// [OPTIONAL] This allows you to specify the URL for the public keys endpoint.
-        /// Typically just set SERVER_HOST_URL and that URL will be calculated.
-        /// </summary>
-        public static string PublicKeysUrl
-        {
-            get
-            { // typically this should left default
-                string s = System.Environment.GetEnvironmentVariable("PUBLIC_KEYS_URL");
-                if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(ServerHostUrl)) return new Uri(ServerHostUrl).Append("/cas/keys").AbsoluteUri;
-                return s;
-            }
-        }
-
-        /// <summary>
         /// [OPTIONAL, default: true] When this is set to true, the Microsoft Graph will be queried to ensure
         /// the user is still enabled before reissuing a token.
         /// </summary>
@@ -747,7 +773,7 @@ namespace CasAuth
         }
 
         /// <summary>
-        /// [OPTIONAL] When issuing administrative commands against the server the command password ensures
+        /// [OPTIONAL, default: secret] When issuing administrative commands against the server the command password ensures
         /// the user is authorize to make the change. It is done this way instead of using ROLE_FOR_ADMIN
         /// in case the authentication is not working.
         /// </summary>
@@ -755,7 +781,9 @@ namespace CasAuth
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("COMMAND_PASSWORD");
+                var s = System.Environment.GetEnvironmentVariable("COMMAND_PASSWORD");
+                if (string.IsNullOrEmpty(s)) return "secret";
+                return s;
             }
         }
 

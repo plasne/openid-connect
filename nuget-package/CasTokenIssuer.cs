@@ -278,7 +278,7 @@ namespace CasAuth
 
         }
 
-        public async Task<dynamic> GetUserById(string query)
+        public async Task<dynamic> GetUserFromGraph(string query)
         {
 
             // get an access token

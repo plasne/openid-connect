@@ -13,7 +13,6 @@ using System.Threading.Tasks;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
-using System.Collections.Specialized;
 using System.Security.Cryptography.X509Certificates;
 using System.Net.Http;
 
@@ -416,12 +415,13 @@ namespace CasAuth
                         }
 
                         // populate the claims from the id_token
-                        // NOTE: claims.Add(key, value) is an extension method that normalizes the names to their URIs
+                        // NOTE: claims.Add(key, value) is an extension method that normalizes the names to their URIs,
+                        //    we do not want to use that here because we want the short names in the token
                         List<Claim> claims = new List<Claim>();
                         var email = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "email");
-                        if (email != null) claims.Add("email", email.Value);
+                        if (email != null) claims.Add(new Claim("email", email.Value));
                         var name = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "name");
-                        if (name != null) claims.Add("name", name.Value);
+                        if (name != null) claims.Add(new Claim("name", name.Value));
 
                         // get the oid
                         if (CasEnv.Authority.EndsWith("/common"))
@@ -435,14 +435,14 @@ namespace CasAuth
                             var oid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
                             if (oid != null)
                             {
-                                if (await tokenIssuer.GetUserById(oid.Value) == null)
+                                if (await tokenIssuer.GetUserFromGraph(oid.Value) == null)
                                 {
                                     // query by userPrincipalName
                                     var username = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "preferred_username");
                                     if (username != null)
                                     {
                                         string userId = username.Value.Replace("@", "_");
-                                        var users = await tokenIssuer.GetUserById($"?$filter=startsWith(userPrincipalName, '{userId}%23EXT%23')");
+                                        var users = await tokenIssuer.GetUserFromGraph($"?$filter=startsWith(userPrincipalName, '{userId}%23EXT%23')");
                                         if (users != null && users.value.Count > 0)
                                         {
                                             claims.Add(new Claim("oid", (string)users.value[0].id));
@@ -468,7 +468,7 @@ namespace CasAuth
                         var roles = idToken.Payload.Claims.Where(c => c.Type == "roles");
                         foreach (var role in roles)
                         {
-                            claims.Add("role", role.Value);
+                            claims.Add(new Claim("role", role.Value));
                         }
 
                         // ClaimBuilder: add custom claims, potentially from other databases
@@ -569,14 +569,14 @@ namespace CasAuth
                         if (oid != null) claims.Add(new Claim("oid", oid.Value));
 
                         // add the service details
-                        if (!string.IsNullOrEmpty(serviceName)) claims.Add("name", serviceName);
-                        claims.Add("role", CasEnv.RoleForService);
+                        if (!string.IsNullOrEmpty(serviceName)) claims.Add(new Claim("name", serviceName));
+                        claims.Add(new Claim("role", CasEnv.RoleForService));
 
                         // attempt to propogate roles
                         var roles = accessToken.Payload.Claims.Where(c => c.Type == "roles");
                         foreach (var role in roles)
                         {
-                            claims.Add("role", role.Value);
+                            claims.Add(new Claim("role", role.Value));
                         }
 
                         // return the newly issued token

@@ -1,15 +1,3 @@
-NOTICE: This documentation is out-of-date. I will write new documents in a few days, but if you need to use the solution prior to the update, you should use v1.0.0 (tagged).
-
-For the newest version, to run locally, you need the following for the server:
-
--   USE_INSECURE_DEFAULTS=true
--   TENANT_ID=???
--   CLIENT_ID=???
-
-And the following for the client:
-
--   USE_INSECURE_DEFAULTS=true
-
 # OpenID Connect Authentication Sample
 
 While this repository is named "openid-connect", this sample will actually encompass OpenID Connect (OIDC), AuthCode, and Service-to-Service (S2S) authentication and authorization techniques.

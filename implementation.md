@@ -1,13 +1,88 @@
 # Implementation
 
-This guide walks you through implementing this sample. There is also a video showing the implementation [here](https://youtu.be/Sen7H1Uix2k).
+There can be a lot of configuration settings, if you find that cumbersome, you might consider using Azure App Configuration.
 
-NOTE: The video shows publishing the auth, API, and WFE services to an Azure App Service using git, however, there are some steps that were not captured on the video that are important when using this method to publish. These are steps that were taken for publishing.
+This section will use the following definitions:
 
-1. I cloned the public git repo into a local folder.
-1. I deleted the .git subfolder in the new local folder.
-1. I copied the .gitignore file from the root into the auth, api, and wfe folders. This is very important because it keeps the .env files from being published.
-1. I ran "git init" in the auth, api, and wfe folders to create git repos that could be published separately.
+-   "server" refers to the service that is issuing authorization tokens.
+
+-   "client" refers to the service that is validating tokens and accepting them as authorization.
+
+-   "web" refers to the service that is hosting the static web assets.
+
+## Minimum Local-Debug Server Configuration
+
+The following shows a sample of a minimum configuration when running on localhost in an insecure manner...
+
+```
+USE_INSECURE_DEFAULTS=true
+TENANT_ID=00000000-0000-0000-0000-000000000000
+CLIENT_ID=00000000-0000-0000-0000-000000000000
+```
+
+## Minimum Deployed Server Configuration
+
+The following shows a sample of a minimum configuration when deployed...
+
+```
+SERVER_HOST_URL=http://auth.plasne.com
+CLIENT_HOST_URL=http://api.plasne.com
+WEB_HOST_URL=http://web.plasne.com
+TENANT_ID=00000000-0000-0000-0000-000000000000
+CLIENT_ID=00000000-0000-0000-0000-000000000000
+KEYVAULT_PRIVATE_KEY_URL=https://sample.vault.azure.net/private_key
+KEYVAULT_PRIVATE_KEY_PASSWORD_URL=https://sample.vault.azure.net/private_key_pw
+KEYVAULT_PUBLIC_CERT_PREFIX_URL=https://sample.vault.azure.net/public_cert_prefix
+```
+
+You can use DEFAULT_HOST_URL to act as a default for SERVER_HOST_URL, CLIENT_HOST_URL, and WEB_HOST_URL. In the rare event that you are hosting multiple roles on the same domain, this could save you a couple of settings.
+
+## Minimum Local-Debug Client Configuration
+
+You can startup a local client with even fewer settings...
+
+```
+USE_INSECURE_DEFAULTS=true
+```
+
+## Minimum Deployed Client Configuration
+
+For a deployed client, you can simply pass the URLs (or DEFAULT_HOST_URL if appropriate)...
+
+```
+SERVER_HOST_URL=http://auth.plasne.com
+CLIENT_HOST_URL=http://api.plasne.com
+WEB_HOST_URL=http://web.plasne.com
+```
+
+## Minimum Deployed Configuration on Azure App Configuration
+
+The following sample settings could be set by environment variable for the server...
+
+```
+APPCONFIG_RESOURCE_ID=/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config
+CONFIG_KEYS=sample:auth:dev:*, sample:common:dev:*
+```
+
+And for the client...
+
+```
+APPCONFIG_RESOURCE_ID=/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config
+CONFIG_KEYS=sample:api:dev:*, sample:common:dev:*
+```
+
+And then the following settings in Azure App Configuration...
+
+```
+sample:common:dev:SERVER_HOST_URL=http://auth.plasne.com
+sample:common:dev:CLIENT_HOST_URL=http://api.plasne.com
+sample:common:dev:WEB_HOST_URL=http://web.plasne.com
+sample:auth:dev:TENANT_ID=00000000-0000-0000-0000-000000000000
+sample:auth:dev:CLIENT_ID=00000000-0000-0000-0000-000000000000
+sample:auth:dev:KEYVAULT_PRIVATE_KEY_URL=https://sample.vault.azure.net/private_key
+sample:auth:dev:KEYVAULT_PRIVATE_KEY_PASSWORD_URL=https://sample.vault.azure.net/private_key_pw
+sample:auth:dev:KEYVAULT_PUBLIC_CERT_PREFIX_URL=https://sample.vault.azure.net/public_cert_prefix
+```
 
 ## AUTH_TYPE
 
@@ -26,9 +101,9 @@ I am of the opinion that Managed Identity should be used because it is the safes
 
 ## DNS and SSL
 
-You will always have at least 3 services and they will all need to share a base domain name, for example:
+Generally there are at least 3 roles for your application (the authentication service, the API, and the static web assets). Commonly you are going to host these on a different sub-domain sharing a base domain, for example:
 
--   WFE - wfe.plasne.com
+-   WEB - web.plasne.com
 
 -   API - api.plasne.com
 
@@ -37,6 +112,8 @@ You will always have at least 3 services and they will all need to share a base 
 All the services share the "plasne.com" base domain name. This is required because cookies will need to be scoped to that base domain so they can be shared. For instance, the auth service will issue a "user" cookie and "authflow" cookie that will need to passed on each call to the API service. The auth service will issue a "XSRF-TOKEN" cookie that will need to be read by the JavaScript in the WFE. The API service may need to reissue a "user" cookie.
 
 If you are using this as a centralized authentication service across multiple applications, all applications must share a common base domain.
+
+In the rare event that all of these roles are hosted on the same domain, you can take advantage of DEFAULT_HOST_URL.
 
 ## Azure AD Application
 
@@ -135,15 +212,11 @@ The setting options are described below with an example. You are encouraged to u
 
 ### Local
 
-Generally you need to specify local environment variables (this will also work in App Service Configuration) for each service to let the system know what to pull from Azure App Configuration.
+The settings below are commonly set as environment variables and their values determined before the optional Azure App Configuration is called for additional settings.
 
--   AUTH_TYPE - This can be either "mi" (default) or "app". If set to "mi", the AuthChooser will use a Managed Identity (or failback to use az CLI when running locally) every time it needs an access_token. If set to "app", the AuthChooser will use an application service principal (the application created in the above section).
+-   PROXY - This solution uses REST APIs to communicate with Azure services. If you require a proxy to access HTTPS endpoints, then you should set this value. You can also use HTTP_PROXY or HTTPS_PROXY.
 
--   AUTH_TYPE_CONFIG - Generally, you just need to use AUTH_TYPE which applies to everything, but if you needed a different method for accessing Azure Configuration, you can specify it specifically.
-
--   AUTH_TYPE_VAULT - Generally, you just need to use AUTH_TYPE which applies to everything, but if you needed a different method for accessing Azure Key Vault, you can specify it specifically.
-
--   AUTH_TYPE_GRAPH - Generally, you just need to use AUTH_TYPE which applies to everything, but if you needed a different method for accessing the Microsoft Graph, you can specify it specifically.
+-   AUTH_TYPE (default: mi) - This can be either "mi" (default) or "app". If set to "mi", the AuthChooser will use a Managed Identity (or failback to use az CLI when running locally) every time it needs an access_token. If set to "app", the AuthChooser will use an application service principal (the application created in the above section).
 
 -   APPCONFIG_RESOURCE_ID - This is the Resource ID of the App Configuration instance. You can get this from the Properties tab of the App Configuration resource in the Azure portal. (ex. /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config)
 
@@ -153,7 +226,9 @@ Generally you need to specify local environment variables (this will also work i
 
 -   HOST_URL - You may specify a fully qualified URL (including protocol) to host the application on (ex. https://localhost:5000 if hosting locally).
 
-If you are going to use AUTH_TYPE=mi, the above settings are the only things you need to set. If you are going to use AUTH_TYPE=app, you must supply the following settings:
+-   USE_INSECURE_DEFAULTS (default: false) - When running in localhost debug mode, some additional (though insecure) defaults can be used, most notably, default certificates can be used for signing and verifying the JWT. You will never run with this setting in production.
+
+If you are going to use AUTH_TYPE=mi, the above settings are the only things you will commonly set. If you are going to use AUTH_TYPE=app, you must supply the following settings:
 
 -   TENANT_ID - This is the tenant ID of the Azure AD directory that contains the CLIENT_ID.
 
@@ -161,45 +236,49 @@ If you are going to use AUTH_TYPE=mi, the above settings are the only things you
 
 -   CLIENT_SECRET - This is the client secret (step 3 from the Azure AD Application section above) for the CLIENT_ID. If you set this setting, you never need to set KEYVAULT_CLIENT_SECRET_URL.
 
-### Required
+### Recommended
 
--   app:common:env:ISSUER - This denotes the identity of the service that is issuing the session_token. You can put anything here, but I tend to use the URI of the centralized auth service.
+Generally, you should supply these settings. These are shown in the format that they would be used by Azure App Configuration, but you can always supply these via simple environment variable (ex. SERVER_HOST_URL).
 
--   app:common:env:AUDIENCE - This denotes the identity of the service that the session_token was generated for. You can put anything here, but I tend to use the URI of the application or a base URL if this is supporting more than one application.
+-   app:common:env:SERVER_HOST_URL - This allows you to specify the fully qualified URL of the authentication service (ex. https://auth.plasne.com). Using this setting in conjunction with CLIENT_HOST_URL and WEB_HOST_URL will be able to set many of the default values. When unspecified and USE_INSECURE_DEFAULTS is true, this will default to http://localhost:5100.
 
--   app:common:env:BASE_DOMAIN - This should be the common domain shared by the WFE, API, and auth services. It will used when the cookies are created to ensure they can be shared by all services. In my example, wfe.plasne.com, api.plasne.com, and auth.plasne.com share "plasne.com" as the BASE_DOMAIN.
+-   app:common:env:CLIENT_HOST_URL - This allows you to specify the fully qualified URL of the authentication service (ex. https://api.plasne.com). Using this setting in conjunction with SERVER_HOST_URL and WEB_HOST_URL will be able to set many of the default values. When unspecified and USE_INSECURE_DEFAULTS is true, this will default to http://localhost:5200.
 
--   app:auth:env:AUTHORITY - This is the Microsoft endpoint that will act as the authentication authority. It should be https://login.microsoftonline.com/your_tenant_id (no trailing slash). You can get them from "Endpoints" in the "Overview" tab of your Azure AD application.
-
--   app:auth:env:REDIRECT_URI - This is the URL that the Microsoft login process will deliver the id_token and code to. This must match the Redirect URI specified when creating the Azure AD application.
+-   app:common:env:WEB_HOST_URL - This allows you to specify the fully qualified URL of the static web assets (ex. https://web.plasne.com). Using this setting in conjunction with SERVER_HOST_URL and CLIENT_HOST_URL will be able to set many of the default values. When unspecified and USE_INSECURE_DEFAULTS is true, this will default to http://localhost:5000.
 
 -   app:auth:env:CLIENT_ID - This is the Client ID of the application that will be used to authenticate the user (step 5 from the Azure AD Application section above). You must have a CLIENT_ID, but it could have already been set by using AUTH_TYPE=app, and if that is the case, it does not need to be in the App Configuration settings.
 
--   app:auth:env:DEFAULT_REDIRECT_URL - When an authentication request is started, the client can pass a "redirecturi" querystring parameter to the auth/authorize endpoint. If it does not, the DEFAULT_REDIRECT_URL is used. When the authentication flow is done, this the URL that the auth/token endpoint will redirect the user back to.
-
--   app:auth:env:ALLOWED_ORIGINS - This should be a comma-delimited list of URLs that are allowed by CORS policy to access the auth services. You could use app:common:env:ALLOWED_ORIGINS if the origins were the same for the API.
+-   app:auth:env:TENANT_ID - This is the tenant ID of the Azure AD directory that contains the CLIENT_ID. You must have a CLIENT_ID, but it could have already been set by using AUTH_TYPE=app, and if that is the case, it does not need to be in the App Configuration settings.
 
 -   app:auth:env:KEYVAULT_PRIVATE_KEY_URL - This is the URL of the PFX file stored in step 4 of the Azure Key Vault section above.
 
--   app:auth:env:PRIVATE_KEY - Rather than store the base64-encoded PFX file in the Key Vault, it is possible to specify PRIVATE_KEY as an environment variable instead. Generally, you should store this in the Key Vault.
-
 -   app:auth:env:KEYVAULT_PRIVATE_KEY_PASSWORD_URL - This is the URL of the PFX file password stored in step 5 of the Azure Key Vault section above.
-
--   app:auth:env:PRIVATE_KEY_PASSWORD - Rather than store the PFX password in the Key Vault, it is possible to specify PRIVATE_KEY_PASSWORD as an environment variable instead. Generally, you should store this in the Key Vault.
 
 -   app:auth:env:KEYVAULT_PUBLIC_CERT_PREFIX_URL - This is the URL prefix for the public certificate stored in step 6 of the Azure Key Vault section above. You can have up to 4 public certificates available for verification, they are indexed 0, 1, 2, and 3. The URL you will use here is everything up to the index. (ex. "https://pelasne-keyvault.vault.azure.net/secrets/PUBLIC-CERT-")
 
--   app:auth:env:PUBLIC_CERT_index (0, 1, 2, 3) - Rather than store the public certificates in the Key Vault, it is possible to specify PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, and/or PUBLIC_CERT_3 as environment variables instead. Generally, you should store these in the Key Vault.
-
--   app:auth:env:PUBLIC_KEYS_URL - This is the URL of the auth/keys endpoint. The auth service presents an auth/.well-known/openid-configuration that contains this endpoint so that the API can validate the JWT signature using the public keys.
-
--   app:api:env:ALLOWED_ORIGINS - This should be a comma-delimited list of URLs that are allowed by CORS policy to access the API services. You could use app:common:env:ALLOWED_ORIGINS if the origins were the same for the auth service.
-
--   app:api:env:WELL_KNOWN_CONFIG_URL - This is the URL of the auth/.well-known/openid-configuration endpoint.
-
 ### Optional
 
--   app:common:env:REQUIRE_SECURE_FOR_COOKIES (default: true) - This determines whether cookies are marked "secure", meaning they will only be sent to HTTPS endpoints. If you are running the API and/or auth service locally without SSL, you need to set this to "false".
+Generally these settings do not need to be modified, but there are many configuration options available to use. These are shown in the format that they would be used by Azure App Configuration, but you can always supply these via simple environment variable (ex. DEFAULT_HOST_URL).
+
+-   app:common:env:DEFAULT_HOST_URL - This allows you to specify the fully qualified URL that will act as the default for SERVER_HOST_URL, CLIENT_HOST_URL, and WEB_HOST_URL. There is generally no need to set this unless you are using the same domain for all three.
+
+-   app:common:env:ISSUER (default: WEB_HOST_URL) - This denotes the identity of the service that is issuing the session_token. You can put anything here, but I tend to use the URI of the centralized auth service.
+
+-   app:common:env:AUDIENCE (default: SERVER_HOST_URL) - This denotes the identity of the service that the session_token was generated for. You can put anything here, but I tend to use the URI of the application or a base URL if this is supporting more than one application.
+
+-   app:common:env:BASE_DOMAIN (default: derived from SERVER_HOST_URL, CLIENT_HOST_URL, and WEB_HOST_URL) - This should be the common domain shared by the WFE, API, and auth services. It will used when the cookies are created to ensure they can be shared by all services. In my example, wfe.plasne.com, api.plasne.com, and auth.plasne.com share "plasne.com" as the BASE_DOMAIN. This can be automatically calculated when SERVER_HOST_URL, CLIENT_HOST_URL, and WEB_HOST_URL or DEFAULT_HOST_URL is supplied.
+
+-   app:auth:env:AUTHORITY (default: derived from TENANT_ID) - This is the Microsoft endpoint that will act as the authentication authority. It should be https://login.microsoftonline.com/your_tenant_id (no trailing slash). You can get them from "Endpoints" in the "Overview" tab of your Azure AD application.
+
+-   app:auth:env:REDIRECT_URI (default: derived from CLIENT_HOST_URL) - This is the URL that the Microsoft login process will deliver the id_token and code to. This must match the Redirect URI specified when creating the Azure AD application.
+
+-   app:common:env:ALLOWED_ORIGINS (default: WEB_HOST_URL) - This should be a comma-delimited list of URLs that are allowed by CORS policy to access the auth services.
+
+-   app:auth:env:APPLICATION_ID - You can optionally include a comma-delimited list of application IDs. If you do, the session_token will contain the roles from those applications. Each will be projected as a claim named as the APPLICATION_ID-roles. For this to work, the application specified by CLIENT_ID must have Directory.Read.All as a Microsoft Graph Application Permission (not Delegated) - this right requires administrative consent.
+
+-   app:auth:env:DEFAULT_REDIRECT_URL (default: WEB_HOST_URL) - When an authentication request is started, the client can pass a "redirecturi" querystring parameter to the auth/authorize endpoint. If it does not, the DEFAULT_REDIRECT_URL is used. When the authentication flow is done, this the URL that the auth/token endpoint will redirect the user back to.
+
+-   app:common:env:REQUIRE_SECURE_FOR_COOKIES (default: derived from SERVER_HOST_URL, CLIENT_HOST_URL, and WEB_HOST_URL) - This determines whether cookies are marked "secure", meaning they will only be sent to HTTPS endpoints. If your URLs are all HTTPS when this defaults to "true", otherwise "false".
 
 -   app:auth:env:JWT_DURATION (default: 240) - The number of minutes after an session_token is issued before it expires. This defaults to 4 hours (240 minutes).
 
@@ -207,27 +286,69 @@ If you are going to use AUTH_TYPE=mi, the above settings are the only things you
 
 -   app:auth:env:JWT_MAX_DURATION (default: 10080) - You can specify a number of minutes that determines the maximum time for an session_token is allowed to exist (including reissue). It defaults to 7 days (10080 minutes). You may also specify 0 to allow the token to be reissued forever.
 
--   app:auth:env:DOMAIN_HINT - If you want to provide a domain hint when authenticating, you can specify it.
+-   app:auth:env:PRIVATE_KEY - Rather than store the base64-encoded PFX file in the Key Vault, it is possible to specify PRIVATE_KEY as an environment variable instead. Generally, you should store this in the Key Vault.
 
--   app:auth:env:APPLICATION_ID - You can optionally include a comma-delimited list of application IDs. If you do, the session_token will contain the roles from those applications. Each will be projected as a claim named as the APPLICATION_ID-roles. For this to work, the application specified by CLIENT_ID must have Directory.Read.All as a Microsoft Graph Application Permission (not Delegated) - this right requires administrative consent.
+-   app:auth:env:PRIVATE_KEY_PASSWORD - Rather than store the PFX password in the Key Vault, it is possible to specify PRIVATE_KEY_PASSWORD as an environment variable instead. Generally, you should store this in the Key Vault.
+
+-   app:auth:env:PUBLIC_CERT_index (0, 1, 2, 3) - Rather than store the public certificates in the Key Vault, it is possible to specify PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, and/or PUBLIC_CERT_3 as environment variables instead. Generally, you should store these in the Key Vault.
+
+-   app:api:env:WELL_KNOWN_CONFIG_URL (default: derived from SERVER_HOST_URL) - This is the URL of the auth/.well-known/openid-configuration endpoint.
+
+-   app:auth:env:PUBLIC_KEYS_URL (default: derived from SERVER_HOST_URL) - This is the URL of the auth/keys endpoint. The auth service presents an auth/.well-known/openid-configuration that contains this endpoint so that the API can validate the JWT signature using the public keys.
+
+-   app:api:env:REISSUE_URL (default: derived from SERVER_HOST_URL) - This is the URL of the reissue endpoint. You could set this to "false" if you don't want tokens to be reissued.
+
+-   app:auth:env:DOMAIN_HINT - If you want to provide a domain hint when authenticating, you can specify it.
 
 -   app:auth:env:KEYVAULT_CLIENT_SECRET_URL - If you are going to use AuthCode, then you need to specify this parameter unless you have already specified CLIENT_SECRET. This would be the URL from step 7 under the Azure Key Vault section above.
 
--   app:auth:env:REQUIRE_USER_ENABLED_ON_REISSUE - Before a token is reissued, the "accountEnabled" status of the user is checked to ensure it is "true". However, if you set REQUIRE_USER_ENABLED_ON_REISSUE to "false", this check will be ignored. Querying the "accountEnabled" property of a user requires Directory.Read.All or User.Read.All.
+-   app:auth:env:REQUIRE_USER_ENABLED_ON_REISSUE (default: true) - Before a token is reissued, the "accountEnabled" status of the user is checked to ensure it is "true". However, if you set REQUIRE_USER_ENABLED_ON_REISSUE to "false", this check will be ignored. Querying the "accountEnabled" property of a user requires Directory.Read.All or User.Read.All.
 
 -   app:auth:env:KEYVAULT_COMMAND_PASSWORD_URL - You should specify a command password that must be sent to all command and control functions (like auth/clear-cache when reissuing tokens). You should prefer to store that in KeyVault and provide this URL, but you can also set it by COMMAND_PASSWORD.
 
--   app:auth:env:COMMAND_PASSWORD - Rather than store the command password in the Key Vault, it is possible to specify COMMAND_PASSWORD as an environment variable instead. Generally, you should store this in the Key Vault.
-
--   app:api:env:REISSUE_URL - If you are going to allow for tokens to be reissued, then you need to specify the URL of the auth/reissue endpoint.
+-   app:auth:env:COMMAND_PASSWORD (default: secret) - Rather than store the command password in the Key Vault, it is possible to specify COMMAND_PASSWORD as an environment variable instead. Generally, you should store this in the Key Vault.
 
 -   app:api:env:PRESENT_CONFIG_name - You may create one or more PRESENT_CONFIG_name keys that allow you to specify configurations that can be presented by your API at api/config/name. For example, you could create the following variable "PRESENT_CONFIG_wfedev=app:wfe:dev:\*". All keys under that filter would be returned when someone hit the /api/config/webdev endpoint. Primarily this is provided so your WFE can be configured by Azure App Configuration in the same way as the other services.
 
--   app:srv:env:PROXY - This solution uses REST APIs to communicate with Azure services. If you require a proxy to access HTTPS endpoints, then you should add the URL of the proxy as a setting for the right scope (ex. app:common:env:PROXY for every service).
+-   app:auth:env:USER_COOKIE_NAME (default: user) - The name of the cookie that is used for the session_token.
+
+-   app:auth:env:ROLE_FOR_ADMIN (default: admin) - The name of the role that must be verified in order to perform client administrative functions.
+
+-   app:auth:env:ROLE_FOR_SERVICE (default: service) - The name of the role that indicates this authentication is for a service (for instance, will accept an authentication bearer token).
+
+-   KEYVAULT_CLIENT_SECRET_GRAPH_URL
+
+### Alternate Service Authentication
+
+In some rare cases, you might need separate methods of authetication to Azure services, if so, you can use these settings.
+
+-   app:common:env:AUTH_TYPE_CONFIG (default: AUTH_TYPE) - Generally, you just need to use AUTH_TYPE which applies to everything, but if you needed a different method for accessing Azure App Configuration, you can specify it specifically.
+
+-   app:auth:env:AUTH_TYPE_VAULT (default: AUTH_TYPE) - Generally, you just need to use AUTH_TYPE which applies to everything, but if you needed a different method for accessing Azure Key Vault, you can specify it specifically.
+
+-   app:auth:env:AUTH_TYPE_GRAPH (default: AUTH_TYPE) - Generally, you just need to use AUTH_TYPE which applies to everything, but if you needed a different method for accessing the Microsoft Graph, you can specify it specifically.
+
+-   app:common:env:TENANT_ID_CONFIG (default: TENANT_ID) - Generally, you just need to use TENANT_ID which specifies the tenant to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure App Configuration, you can specify it specifically.
+
+-   app:common:env:CLIENT_ID_CONFIG (default: CLIENT_ID) - Generally, you just need to use CLIENT_ID which specifies the application ID to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure App Configuration, you can specify it specifically.
+
+-   app:common:env:CLIENT_SECRET_CONFIG (default: CLIENT_SECRET) - Generally, you just need to use CLIENT_SECRET which specifies the secret to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure App Configuration, you can specify it specifically.
+
+-   app:auth:env:TENANT_ID_VAULT (default: TENANT_ID) - Generally, you just need to use TENANT_ID which specifies the tenant to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Azure Key Vault, you can specify it specifically.
+
+-   app:auth:env:CLIENT_ID_VAULT (default: CLIENT_ID) - Generally, you just need to use CLIENT_ID which specifies the application ID to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure Key Vault, you can specify it specifically.
+
+-   app:auth:env:CLIENT_SECRET_VAULT (default: CLIENT_SECRET) - Generally, you just need to use CLIENT_SECRET which specifies the secret to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure Key Vault, you can specify it specifically.
+
+-   app:auth:env:TENANT_ID_GRAPH (default: TENANT_ID) - Generally, you just need to use TENANT_ID which specifies the tenant to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Microsoft Graph, you can specify it specifically.
+
+-   app:auth:env:CLIENT_ID_GRAPH (default: CLIENT_ID) - Generally, you just need to use CLIENT_ID which specifies the application ID to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Microsoft Graph, you can specify it specifically.
+
+-   app:auth:env:CLIENT_SECRET_GRAPH (default: CLIENT_SECRET) - Generally, you just need to use CLIENT_SECRET which specifies the secret to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Microsoft Graph, you can specify it specifically.
 
 ### Use Authorization Bearer Mode
 
-The normal behavior is for the session_token to be stored in a user cookie marked HttpOnly and the XSRF code to be stored in a XSRF-TOKEN cookie that is readable by JavaScript. When a request goes to the server, it validates based on the user cookie and the X-XSRF-TOKEN header. This pattern was developed by looking at the common pattern for Angular applications. This configuration is the default, but includes the following settings:
+For users, the normal behavior is for the session_token to be stored in a user cookie marked HttpOnly and the XSRF code to be stored in a XSRF-TOKEN cookie that is readable by JavaScript. When a request goes to the server, it validates based on the user cookie and the X-XSRF-TOKEN header. This pattern was developed by looking at the common pattern for Angular applications. This configuration is the default, but includes the following settings:
 
 -   app:common:env:REQUIRE_HTTPONLY_ON_USER_COOKIE = true
 
@@ -271,29 +392,9 @@ If verification allows for both a header and cookie, the header is always checke
 
 Whenever REQUIRE_HTTPONLY_ON_USER_COOKIE is "false", the XSRF code will be converted into a JWT and signed so that we can be sure it has not been tampered with.
 
-### Sample
+### Service Accounts
 
-In this sample configuration, my application is named "sample" and this configuration applies to my "dev" environment.
-
-```json
-{
-    "sample:api:dev:REISSUE_URL": "https://auth.plasne.com/api/auth/reissue",
-    "sample:api:dev:WELL_KNOWN_CONFIG_URL": "https://auth.plasne.com/api/auth/.well-known/openid-configuration",
-    "sample:auth:dev:AUTHORITY": "https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47",
-    "sample:auth:dev:CLIENT_ID": "a288039d-7569-4d16-af38-438d35a6e7b7",
-    "sample:auth:dev:KEYVAULT_COMMAND_PASSWORD_URL": "https://pelasne-keyvault.vault.azure.net/secrets/COMMANDPW",
-    "sample:auth:dev:DEFAULT_REDIRECT_URL": "https://wfe.plasne.com",
-    "sample:auth:dev:KEYVAULT_PRIVATE_KEY_PASSWORD_URL": "https://pelasne-keyvault.vault.azure.net/secrets/PRIVATEKEYPW",
-    "sample:auth:dev:KEYVAULT_PRIVATE_KEY_URL": "https://pelasne-keyvault.vault.azure.net/secrets/PRIVATEKEY",
-    "sample:auth:dev:KEYVAULT_PUBLIC_CERT_PREFIX_URL": "https://pelasne-keyvault.vault.azure.net/secrets/PUBLIC-CERT-",
-    "sample:auth:dev:PUBLIC_KEYS_URL": "https://auth.plasne.com/api/auth/keys",
-    "sample:auth:dev:REDIRECT_URI": "https://auth.plasne.com/api/auth/token",
-    "sample:common:dev:ALLOWED_ORIGINS": "https://wfe.plasne.com",
-    "sample:common:dev:AUDIENCE": "https://api.plasne.com",
-    "sample:common:dev:BASE_DOMAIN": "plasne.com",
-    "sample:common:dev:ISSUER": "https://auth.plasne.com"
-}
-```
+The validation of service account credentials always supports validation of the session_token via the Authorization Bearer token and validation of XSRF is skipped.
 
 ## Deploy the Services
 
@@ -313,7 +414,13 @@ Follow these steps to configure the Auth service...
 
 5. If using APPLICATION_ID or REQUIRE_USER_ENABLED_ON_REISSUE (which is a default), then the Managed Identity or Application Service Principal must be given rights to query all objects in the Microsoft Graph:
 
-    - Managed Identity - You should follow the steps outlined here: https://blog.bredvid.no/accessing-apis-using-azure-managed-service-identity-ff7802b887d?gi=f2307752395a. You should give Microsoft Graph Directory.Read.All rights. This will require consent of an Azure AD Global Administrator. It will give an error per https://stackoverflow.com/questions/48013011/msi-permissions-for-graph-api/48014153#48014153, but give it an hour or so to propogate and it should work anyway.
+    - Managed Identity - Follow these steps to assign grant access:
+
+    ```bash
+    # Directory.Read.All scope id 7ab1d382-f21e-4acd-a863-ba3e13f7da61
+    az ad app permission add --id $your_app_id --api 00000003-0000-0000-c000-000000000000 --api-permissions 7ab1d382-f21e-4acd-a863-ba3e13f7da61=Scope
+    az ad app permission grant --id $your_app_id --api 00000003-0000-0000-c000-000000000000
+    ```
 
     - Application Service Principal - You can give the Application (not Delegated) Microsoft Graph Directory.Read.All rights. This will require consent of an Azure AD Global Administrator.
 
@@ -325,7 +432,7 @@ You can test the following (use your URL, this is a sample):
 
 -   https://auth.plasne.com/api/auth/keys - This should show the public certificate for validating the session_token. If this is displayed, the AuthChooser is working and the account has access to the Key Vault.
 
--   https://auth.plasne.com/api/auth/check-requirements?scope=graph - This should return a 200 if the Microsoft Graph can be queried for all users (requires Directory.Read.All).
+-   https://auth.plasne.com/api/auth/check-requirements - This should return a 200 if the Microsoft Graph can be queried for all users (requires Directory.Read.All).
 
 ### API Service
 
@@ -374,26 +481,7 @@ node index.js
 
 ### Tools
 
-Follow these steps to configure the tools...
-
-1. Configure the following settings.
-
-    - ISSUER
-
-    - AUDIENCE
-
-    - PRIVATE_KEY or KEYVAULT_PRIVATE_KEY_URL
-
-    - PRIVATE_KEY_PASSWORD or KEYVAULT_PRIVATE_KEY_PASSWORD_URL
-
-    - PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, PUBLIC_CERT_3, and/or KEYVAULT_PUBLIC_CERT_PREFIX_URL
-
-You can probably just inherit them from the existing keys. Below is the configuration I used, but in keys were actually only used from "sample:auth:dev:\*" and "sample:common:dev:\*".
-
-```bash
-APPCONFIG_RESOURCE_ID=/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config
-CONFIG_KEYS=sample:tools:local:*, sample:auth:local:*, sample:common:local:*, sample:tools:dev:*, sample:auth:dev:*, sample:common:dev:*
-```
+Generally you need to set the .env file for tools the same as your server configuration.
 
 ### Multi-Tenant
 
@@ -412,3 +500,45 @@ When configured for multi-tenant the following changes can be observed:
 -   The oid that comes in the id_token is the id in the user's home directory, not their B2B id in your application's directory. Since, that is not useful, the claim written to the session_token is fixed so it is the oid in the application's directory.
 
 -   If there would be a "roles" claim for the primary application, it will not be included. This is an unfortunate side effect of the oid claim asserted in the id_token not being the id for the user in the application's directory. However, you can still include that application in the APPLICATION_ID list and it will be included as a separate claim.
+
+## Steps to implement using Visual Studio Online (Linux)
+
+[Clone Repository with Visual Studio Online](https://online.visualstudio.com/environments/new?name=Centralized%20Auth%20Service&repo=plasne/openid-connect)
+
+1. Open the link above.
+1. Create a Visual Studio Online plan associated with an active Azure subscription.
+1. Connect to the environment.
+1. Open a new terminal by `[ctrl]+[backtick]` and run `git checkout -b version1 origin/version1`.
+1. Install the package jq by running `sudo apt-get install jq`. It is used by the azure-deploy.sh script to manipulate json files.
+1. Copy the .gitignore file from the root into the auth, api, and wfe folders. This is very important because it keeps the .env files from being published.
+1. Change the _user set variables_ in the azure-deploy.sh file and save.
+1. In the terminal, run `bash azure-deploy.sh`. Note: the script uses the Azure CLI to create the resources; You must log in for it to work.
+1. After deployment is complete, run the following commands in three seperate terminals:
+
+```
+cd wfe/
+npm install
+node index.js
+```
+
+```
+cd api/
+dotnet run
+```
+
+```
+cd auth/
+dotnet run
+```
+
+### Port forwarding
+
+1. Open the Remote Explorer activity pane
+1. In the Environment Details panel, click the Forward Port button that appears when you hover over Forwarded Ports (#)
+1. Enter port 5000 in the prompt
+1. Accept the default name
+1. Repeat for ports 5100 and 5200
+1. Click the Copy Port URL button in the localhost:5000 title bar
+1. Paste the URL into the browser of your choice.
+
+Note: VS Online has forwarded the environment's port 5000 to a location you can now access
