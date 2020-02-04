@@ -102,171 +102,40 @@ The headers are implemented in the following way...
 
 ## Extensions
 
-using System.Linq;
-using System.Collections.Generic;
-using System.Security.Claims;
-using System;
+There are some extensions available on IEnumerable\<Claim> that can be used...
 
-namespace CasAuth
-{
+-   .Name() - returns the name of the user or service.
 
-    public static class CasListOfClaimsExtensions
-    {
+-   .Email() - returns the email address of the user.
 
-        public static string Name(this IEnumerable<Claim> claims)
-        {
-            return claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")?.Value;
-        }
+-   .EmailOrName() - first tries to return the .Email() but if not, it tries the .Name().
 
-        public static string Email(this IEnumerable<Claim> claims)
-        {
-            return claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value;
-        }
+-   .Roles() - returns an IEnumerable\<string> of roles.
 
-        public static string EmailOrName(this IEnumerable<Claim> claims)
-        {
-            return claims.Email() ?? claims.Name();
-        }
+-   .HasRole("role_name") - returns true if the user or service has the specified role.
 
-        public static IEnumerable<string> Roles(this IEnumerable<Claim> claims)
-        {
-            return claims.Where(c => c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role").Select(c => c.Value).Distinct();
-        }
+-   .IsAdmin() - returns true if the user or service contains the ROLE_FOR_ADMIN role.
 
-        public static bool HasRole(this IEnumerable<Claim> claims, string role)
-        {
-            return claims.Roles().FirstOrDefault(r => string.Compare(r, role, StringComparison.InvariantCultureIgnoreCase) == 0) != null;
-        }
+-   .IsService() - returns true if the user or service contains the ROLE_FOR_SERVICE role.
 
-        public static bool IsAdmin(this IEnumerable<Claim> claims)
-        {
-            return claims.HasRole(CasEnv.RoleForAdmin);
-        }
+There is also an extension available on List\<Claim>...
 
-        public static bool IsService(this IEnumerable<Claim> claims)
-        {
-            return claims.HasRole(CasEnv.RoleForService);
-        }
-
-        public static Dictionary<string, string> ToDictionary(this IEnumerable<Claim> claims)
-        {
-            var dict = new Dictionary<string, string>();
-            foreach (var claim in claims)
-            {
-                switch (claim.Type)
-                {
-                    case "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name":
-                        dict.Add("name", claim.Value);
-                        break;
-                    case "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress":
-                        dict.Add("email", claim.Value);
-                        break;
-                    case "http://schemas.microsoft.com/ws/2008/06/identity/claims/role":
-                        dict.Add("role", claim.Value);
-                        break;
-                    default:
-                        dict.Add(claim.Type, claim.Value);
-                        break;
-                }
-            }
-            return dict;
-        }
-
-        public static void Add(this List<Claim> claims, string key, string value)
-        {
-            if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(value)) return;
-
-            // normalize the key
-            switch (key)
-            {
-                case "name":
-                    key = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name";
-                    break;
-                case "email":
-                    key = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress";
-                    break;
-                case "role":
-                case "roles":
-                    key = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role";
-                    break;
-            }
-
-            // trim the value
-            value = value.Trim();
-
-            // add if not a duplicate
-            var existing = claims.Find(c => string.Compare(c.Type, key, StringComparison.InvariantCultureIgnoreCase) == 0 &&
-                string.Compare(c.Value, value, StringComparison.InvariantCultureIgnoreCase) == 0);
-            if (existing == null) claims.Add(new Claim(key, value));
-
-        }
-
-
-
-
-
-    }
-
-}
+-   .Add("claim_key", "claim_value") - adds a specified key/value to the claims using the URI-claim-name instead of the provided name (where there is one), and only if the key/value pair does not already exist.
 
 ## Unit Testing
 
-using System.Collections.Generic;
-using System.Security.Claims;
-using System.Linq;
-using System;
+There are also some extention methods that can be used for unit testing as shown here...
 
-namespace CasAuth
-{
+```c#
+// create a mock user with "user" role
+var principal = ClaimsExtensions.CreateClaimsPrincipalForUser("me@email.com", "user");
+var context = new Mock<HttpContext>();
+context.Setup(c => c.User).Returns(principal);
+controller.ControllerContext.HttpContext = context.Object;
 
-    public static class ClaimsPrincipalExtensions
-    {
-
-        /// <summary>
-        /// CreateClaimsPrincipalForUser is mostly used by unit tests to easily create an identity.
-        /// </summary>
-        /// <code>
-        /// var principal = ClaimsExtensions.CreateClaimsPrincipalForUser("me@email.com");
-        /// var context = new Mock<HttpContext>();
-        /// context.Setup(c => c.User).Returns(principal);
-        /// controller.ControllerContext.HttpContext = context.Object;
-        /// </code>
-        public static ClaimsPrincipal CreateClaimsPrincipalForUser(string email, params string[] roles)
-        {
-            var claims = new List<Claim>() {
-                new Claim("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress", email)
-            };
-            if (roles != null)
-            {
-                foreach (string role in roles)
-                {
-                    new Claim("http://schemas.microsoft.com/ws/2008/06/identity/claims/role", role);
-                }
-            }
-            var identity = new ClaimsIdentity(claims);
-            var principal = new ClaimsPrincipal(identity);
-            return principal;
-        }
-
-        /// <summary>
-        /// CreateClaimsPrincipalForUser is mostly used by unit tests to easily create an identity.
-        /// </summary>
-        /// <code>
-        /// var principal = ClaimsExtensions.CreateClaimsPrincipalForService("my-service");
-        /// var context = new Mock<HttpContext>();
-        /// context.Setup(c => c.User).Returns(principal);
-        /// controller.ControllerContext.HttpContext = context.Object;
-        /// </code>
-        public static ClaimsPrincipal CreateClaimsPrincipalForService()
-        {
-            var claims = new List<Claim>() {
-                new Claim("http://schemas.microsoft.com/ws/2008/06/identity/claims/role", CasEnv.RoleForService)
-            };
-            var identity = new ClaimsIdentity(claims);
-            var principal = new ClaimsPrincipal(identity);
-            return principal;
-        }
-
-    }
-
-}
+// create a mock service account
+var principal = ClaimsExtensions.CreateClaimsPrincipalForService("my-service");
+var context = new Mock<HttpContext>();
+context.Setup(c => c.User).Returns(principal);
+controller.ControllerContext.HttpContext = context.Object;
+```

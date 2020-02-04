@@ -2,6 +2,10 @@
 
 If you already know how to implement this solution and are just looking for samples configs, look [here](./configuration.md).
 
+## Implementing the Authentication Service
+
+With regards to authentication, you can also think of this as the "server". It will generate tokens that will verified and used by the APIs or "clients".
+
 ## AUTH_TYPE
 
 When using Service-to-Service authentication (including reading configuration from Azure App Configuration and Azure Key Vault) you will need access_tokens issued. You should decide up-front how you will are going to get those access_tokens.
