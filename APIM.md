@@ -25,7 +25,7 @@ This reads the user cookie and makes it an Authorization Bearer token header. It
                 }</value>
         </set-header>
         <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized">
-            <openid-config url="https://auth2.plasne.com/api/auth/.well-known/openid-configuration" />
+            <openid-config url="https://auth2.plasne.com/cas/.well-known/openid-configuration" />
             <audiences>
                 <audience>https://api2.plasne.com</audience>
             </audiences>

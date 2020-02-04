@@ -17,14 +17,24 @@ namespace CasAuth
     public static class CasEnv
     {
 
+        /// <summary>
+        /// [OPTIONAL] To support proxy on all HttpClient connections.
+        /// </summary>
         public static string Proxy
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("PROXY");
+                return System.Environment.GetEnvironmentVariable("PROXY") ??
+                    System.Environment.GetEnvironmentVariable("HTTPS_PROXY") ??
+                    System.Environment.GetEnvironmentVariable("HTTP_PROXY");
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] This can be enabled for a local debug scenarios where you don't want to set:
+        /// CLIENT_HOST_URL, SERVER_HOST_URL, PRIVATE_KEY, PRIVATE_KEY_PASSWORD, and PUBLIC_CERT_0.
+        /// Never run this production!
+        /// </summary>
         public static bool UseInsecureDefaults
         {
             get
@@ -36,26 +46,81 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] If you have multiple roles (Auth, API, Web, etc.) on the same URL, you might specify
+        /// this setting which will act as a default for CLIENT_HOST_URL, SERVER_HOST_URL, and WEB_HOST_URL.
+        /// </summary>
+        public static string DefaultHostUrl
+        {
+            get
+            {
+                return System.Environment.GetEnvironmentVariable("DEFAULT_HOST_URL");
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL] This denotes the URL of the API service that is validating authentication tokens.
+        /// If you have more than one, just specify one of them.
+        /// Specifying this and SERVER_HOST_URL allows defaults to be calculated for:
+        /// ALLOWED_ORIGINS, BASE_DOMAIN, AUDIENCE, ISSUER, DEFAULT_REDIRECT_URL, REQUIRE_SECURE_FOR_COOKIES,
+        /// WELL_KNOWN_CONFIG_URL, REDIRECT_URL, and REISSUE_URL.
+        /// </summary>
         public static string ClientHostUrl
         {
             get
             {
                 string s = System.Environment.GetEnvironmentVariable("CLIENT_HOST_URL");
-                if (string.IsNullOrEmpty(s) && UseInsecureDefaults) return "http://localhost:5200";
+                if (string.IsNullOrEmpty(s))
+                {
+                    if (!string.IsNullOrEmpty(DefaultHostUrl)) return DefaultHostUrl;
+                    if (UseInsecureDefaults) return "http://localhost:5200";
+                }
                 return s;
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] This denotes the URL of the Authentication service that is issuing authentication tokens.
+        /// Specifying this and CLIENT_HOST_URL allows defaults to be calculated for:
+        /// ALLOWED_ORIGINS, BASE_DOMAIN, AUDIENCE, ISSUER, DEFAULT_REDIRECT_URL, REQUIRE_SECURE_FOR_COOKIES,
+        /// WELL_KNOWN_CONFIG_URL, REDIRECT_URL, and REISSUE_URL.
+        /// </summary>
         public static string ServerHostUrl
         {
             get
             {
                 string s = System.Environment.GetEnvironmentVariable("SERVER_HOST_URL");
-                if (string.IsNullOrEmpty(s) && UseInsecureDefaults) return "http://localhost:5100";
+                if (string.IsNullOrEmpty(s))
+                {
+                    if (!string.IsNullOrEmpty(DefaultHostUrl)) return DefaultHostUrl;
+                    if (UseInsecureDefaults) return "http://localhost:5100";
+                }
                 return s;
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] This denotes the URL of the web front end.
+        /// [OPTIONAL] Specifying this allows for better defaults to be calculated for:
+        /// ALLOWED_ORIGINS and DEFAULT_REDIRECT_URL.
+        /// </summary>
+        public static string WebHostUrl
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("WEB_HOST_URL");
+                if (string.IsNullOrEmpty(s))
+                {
+                    if (!string.IsNullOrEmpty(DefaultHostUrl)) return DefaultHostUrl;
+                    if (UseInsecureDefaults) return "http://localhost:5000";
+                }
+                return s;
+            }
+        }
+
+        /// <summary>
+        /// [READ-ONLY] "true" if both CLIENT_HOST_URL and SERVER_HOST_URL use a hostname of "localhost".
+        /// </summary>
         public static bool IsLocalhost
         {
             get
@@ -65,6 +130,9 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [READ-ONLY] "true" if both CLIENT_HOST_URL and SERVER_HOST_URL use a protocol of "https".
+        /// </summary>
         public static bool IsHttps
         {
             get
@@ -74,12 +142,17 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] Allows you to specify the domain of all cookies so they can be shared when the client and
+        /// server are on different URLs. Typically, just set CLIENT_HOST_URL and SERVER_HOST_URL and this can be
+        /// calculated.
+        /// </summary>
         public static string BaseDomain
         {
             get
             {
                 string s = System.Environment.GetEnvironmentVariable("BASE_DOMAIN");
-                if (string.IsNullOrEmpty(s) && UseInsecureDefaults)
+                if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(ClientHostUrl) && !string.IsNullOrEmpty(ServerHostUrl))
                 {
                     var list = new Stack<char>();
                     string u1 = new Uri(ClientHostUrl).Host;
@@ -103,6 +176,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] Allows you to specify the "iss" in the JWT that is issued by the server component.
+        /// Typically just set SERVER_HOST_URL and that URL will be used.
+        /// </summary>
         public static string Issuer
         {
             get
@@ -113,6 +190,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] Allows you to specify the "aud" in the JWT that is issued by the server component.
+        /// Typically just set CLIENT_HOST_URL and that URL will be used.
+        /// </summary>
         public static string Audience
         {
             get
@@ -123,6 +204,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] This allows you to specify the URL for the well-known-config endpoint.
+        /// Typically just set SERVER_HOST_URL and that URL will be calculated.
+        /// </summary>
         public static string WellKnownConfigUrl
         {
             get
@@ -133,16 +218,40 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] This allows you to specify the URL for the public keys endpoint.
+        /// Typically just set SERVER_HOST_URL and that URL will be calculated.
+        /// </summary>
+        public static string PublicKeysUrl
+        {
+            get
+            { // typically this should left default
+                string s = System.Environment.GetEnvironmentVariable("PUBLIC_KEYS_URL");
+                if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(ServerHostUrl)) return new Uri(ServerHostUrl).Append("/cas/keys").AbsoluteUri;
+                return s;
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL] This allows you to specify the URL for the reissue endpoint.
+        /// Typically just set SERVER_HOST_URL and that URL will be calculated.
+        /// </summary>
         public static string ReissueUrl
         {
             get
             { // generally this should just go with default
                 string s = System.Environment.GetEnvironmentVariable("REISSUE_URL");
                 if (string.IsNullOrEmpty(s)) return new Uri(ServerHostUrl).Append("/cas/reissue").AbsoluteUri;
+                string[] negative = new string[] { "no", "false", "0" };
+                if (negative.Contains(s.ToLower())) return string.Empty;
                 return s;
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] This allows you to specify a common delimited list of domain names that will be given
+        /// a CORS response. If you have WEB_HOST_URL, it will default to that, otherwise it will use CLIENT_HOST_URL.
+        /// </summary>
         public static string[] AllowedOrigins
         {
             get
@@ -150,9 +259,9 @@ namespace CasAuth
                 string origins = System.Environment.GetEnvironmentVariable("ALLOWED_ORIGINS");
                 if (string.IsNullOrEmpty(origins))
                 {
-                    if (UseInsecureDefaults && IsLocalhost)
+                    if (!string.IsNullOrEmpty(WebHostUrl))
                     {
-                        return new string[] { "http://localhost:5000" };
+                        return new string[] { WebHostUrl };
                     }
                     else if (!string.IsNullOrEmpty(ClientHostUrl))
                     {
@@ -167,6 +276,11 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] This allows you to control where cookies is issued with the "secure" flag.
+        /// Typically just set CLIENT_HOST_URL and SERVER_HOST_URL and this will be set automatically 
+        /// (true if both are https protocol, false otherwise).
+        /// </summary>
         public static bool RequireSecureForCookies
         {
             get
@@ -178,6 +292,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL, default: true] This can be set to "false" for certain authentication scenarios, but it is very
+        /// uncommon, and can easily be a security risk.
+        /// </summary>
         public static bool RequireHttpOnlyOnUserCookie
         {
             get
@@ -189,6 +307,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL, default: false] This can be set to "true" for certain authentication scenarios, but it is very
+        /// uncommon, though not insecure.
+        /// </summary>
         public static bool RequireHttpOnlyOnXsrfCookie
         {
             get
@@ -200,6 +322,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL, default: false] This can be set to "true" for certain authentication scenarios, but it is very
+        /// uncommon, and can easily be a security risk.
+        /// </summary>
         public static bool VerifyTokenInHeader
         {
             get
@@ -211,6 +337,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL, default: true] This can be set to "false" for certain authentication scenarios, but it is very
+        /// uncommon, and can easily be a security risk.
+        /// </summary>
         public static bool VerifyTokenInCookie
         {
             get
@@ -218,10 +348,14 @@ namespace CasAuth
                 string v = System.Environment.GetEnvironmentVariable("VERIFY_TOKEN_IN_COOKIE");
                 if (string.IsNullOrEmpty(v)) return true;
                 string[] negative = new string[] { "no", "false", "0" };
-                return (!negative.Contains(v));
+                return (!negative.Contains(v.ToLower()));
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL, default: true] This can be set to "false" for certain authentication scenarios, but it is very
+        /// uncommon, and can easily be a security risk.
+        /// </summary>
         public static bool VerifyXsrfInHeader
         {
             get
@@ -233,6 +367,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL, default: false] This can be set to "true" for certain authentication scenarios, but it is very
+        /// uncommon, and can easily be a security risk.
+        /// </summary>
         public static bool VerifyXsrfInCookie
         {
             get
@@ -244,6 +382,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL, default: user] This allows you to control the name of the cookie that is issued for the
+        /// user's session. Typically, just leave it as "user".
+        /// </summary>
         public static string UserCookieName
         {
             get
@@ -254,16 +396,39 @@ namespace CasAuth
             }
         }
 
-        public static string RoleForAdminFunctions
+        /// <summary>
+        /// [OPTIONAL, default: admin] This allows you to specify the name of the role that should be used for
+        /// administration. Typically, just leave it as "user".
+        /// </summary>
+        public static string RoleForAdmin
         {
             get
             { // generally this should just go with default
-                string v = System.Environment.GetEnvironmentVariable("ROLE_FOR_ADMIN_FUNCTIONS");
+                string v = System.Environment.GetEnvironmentVariable("ROLE_FOR_ADMIN");
                 if (string.IsNullOrEmpty(v)) return "admin";
                 return v;
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL, default: admin] This allows you to specify the name of the role that should be used for
+        /// service accounts. Typically, just leave it as "service".
+        /// </summary>
+        public static string RoleForService
+        {
+            get
+            { // generally this should just go with default
+                string v = System.Environment.GetEnvironmentVariable("ROLE_FOR_SERVICE");
+                if (string.IsNullOrEmpty(v)) return "service";
+                return v;
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL] This allows you to specify the Azure Active Directory Tenant ID to use for authentication.
+        /// If you do not specify this, you need to specify AUTHORITY. You also require this on the server and/or
+        /// client if you are using AUTH_TYPE=app.
+        /// </summary>
         public static string TenantId
         {
             get
@@ -272,6 +437,12 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [REQUIRED (server)] This allows you to specify the Client ID that will be used for the /authorize endpoint,
+        /// AuthCode, and AUTH_TYPE=app. You might also specify specific options for
+        /// CLIENT_ID_CONFIG, CLIENT_ID_GRAPH, and CLIENT_ID_VAULT for AUTH_TYPE=app only (you still need).
+        /// CLIENT_ID for /authorize and AuthCode.
+        /// </summary>
         public static string ClientId
         {
             get
@@ -280,6 +451,11 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] This allows you to specify the Client Secret that will be used for AuthCode and/or AUTH_TYPE=app.
+        /// If you do not need those features, this is not required. You might also specify specific options for
+        /// CLIENT_SECRET_CONFIG, CLIENT_SECRET_GRAPH, and CLIENT_SECRET_VAULT.
+        /// </summary>
         public static string ClientSecret
         {
             get
@@ -288,6 +464,147 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] When using AUTH_TYPE=app, you may specify an Azure Active Directory Tenant ID that is
+        /// specifically used only for communicating with Azure App Config. If you do not specify this variable,
+        /// then TENANT_ID is used.
+        /// </summary>
+        public static string TenantIdConfig
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("TENANT_ID_CONFIG");
+                if (string.IsNullOrEmpty(s)) return TenantId;
+                return s;
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL] When using AUTH_TYPE=app, you may specify a Client ID that is
+        /// specifically used only for communicating with Azure App Config. If you do not specify this variable,
+        /// then CLIENT_ID is used.
+        /// </summary>
+        public static string ClientIdConfig
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("CLIENT_ID_CONFIG");
+                if (string.IsNullOrEmpty(s)) return ClientId;
+                return s;
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL] When using AUTH_TYPE=app, you may specify a Client Secret that is
+        /// specifically used only for communicating with Azure App Config. If you do not specify this variable,
+        /// then CLIENT_SECRET is used.
+        /// </summary>
+        public static string ClientSecretConfig
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("CLIENT_SECRET_CONFIG");
+                if (string.IsNullOrEmpty(s)) return ClientSecret;
+                return s;
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL] When using AUTH_TYPE=app, you may specify an Azure Active Directory Tenant ID that is
+        /// specifically used only for communicating with the Microsoft Graph. If you do not specify this variable,
+        /// then TENANT_ID is used.
+        /// </summary>
+        public static string TenantIdGraph
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("TENANT_ID_GRAPH");
+                if (string.IsNullOrEmpty(s)) return TenantId;
+                return s;
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL] When using AUTH_TYPE=app, you may specify a Client ID that is
+        /// specifically used only for communicating with the Microsoft Graph. If you do not specify this variable,
+        /// then CLIENT_ID is used.
+        /// </summary>
+        public static string ClientIdGraph
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("CLIENT_ID_GRAPH");
+                if (string.IsNullOrEmpty(s)) return ClientId;
+                return s;
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL] When using AUTH_TYPE=app, you may specify a Client Secret that is
+        /// specifically used only for communicating with the Microsoft Graph. If you do not specify this variable,
+        /// then CLIENT_SECRET is used.
+        /// </summary>
+        public static string ClientSecretGraph
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("CLIENT_SECRET_GRAPH");
+                if (string.IsNullOrEmpty(s)) return ClientSecret;
+                return s;
+            }
+        }
+
+
+        /// <summary>
+        /// [OPTIONAL] When using AUTH_TYPE=app, you may specify an Azure Active Directory Tenant ID that is
+        /// specifically used only for communicating with Azure Key Vault. If you do not specify this variable,
+        /// then TENANT_ID is used.
+        /// </summary>
+        public static string TenantIdVault
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("TENANT_ID_VAULT");
+                if (string.IsNullOrEmpty(s)) return TenantId;
+                return s;
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL] When using AUTH_TYPE=app, you may specify a Client ID that is
+        /// specifically used only for communicating with Azure Key Vault. If you do not specify this variable,
+        /// then CLIENT_ID is used.
+        /// </summary>
+        public static string ClientIdVault
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("CLIENT_ID_VAULT");
+                if (string.IsNullOrEmpty(s)) return ClientId;
+                return s;
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL] When using AUTH_TYPE=app, you may specify a Client Secret that is
+        /// specifically used only for communicating with Azure Key Vault. If you do not specify this variable,
+        /// then CLIENT_SECRET is used.
+        /// </summary>
+        public static string ClientSecretVault
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("CLIENT_SECRET_VAULT");
+                if (string.IsNullOrEmpty(s)) return ClientSecret;
+                return s;
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL] You may specify the URL that is used for the OIDC authority, but typically, you will
+        /// specify TENANT_ID and this URL will be built for you. If you are going to use this for multi-tenant
+        /// authentication, then you must set AUTHORITY to "https://login.microsoftonline.com/common".
+        /// </summary>
         public static string Authority
         {
             get
@@ -298,27 +615,39 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] You may specify the URL that is used for the /cas/token endpoint that will built the JWT.
+        /// Typically, you will set SERVER_HOST_URL and this URL will be built for you.
+        /// </summary>
         public static string RedirectUri
         {
             get
             { // generally this should just go with default
                 string s = System.Environment.GetEnvironmentVariable("REDIRECT_URI");
-                if (string.IsNullOrEmpty(s)) return new Uri(ServerHostUrl).Append("/cas/token").AbsoluteUri;
+                if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(ServerHostUrl)) return new Uri(ServerHostUrl).Append("/cas/token").AbsoluteUri;
                 return s;
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] You may specify the URL that the user will be redirected to after authentication.
+        /// If you do not specify this, it will default to WEB_HOST_URL and then CLIENT_HOST_URL.
+        /// </summary>
         public static string DefaultRedirectUrl
         {
             get
             { // generally this should be set because the default is unlikely to be right
                 // note: it is not required because they /authorize request can specify a callback
                 string s = System.Environment.GetEnvironmentVariable("DEFAULT_REDIRECT_URL");
-                if (string.IsNullOrEmpty(s)) return ClientHostUrl;
+                if (string.IsNullOrEmpty(s)) return WebHostUrl ?? ClientHostUrl;
                 return s;
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] If you want to query the Microsoft Graph when a JWT is issued that will show roles for
+        /// multiple applications, you should set this to a comma-delimited list of application GUIDs.
+        /// </summary>
         public static string[] ApplicationIds
         {
             get
@@ -329,6 +658,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] If you want to provide a hint for the domain so that users can authenticate easier,
+        /// you can specify that. Generally it is best to leave it unset.
+        /// </summary>
         public static string DomainHint
         {
             get
@@ -337,6 +670,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] Rather than specify CLIENT_SECRET for the AuthCode flow requirement only, you may
+        /// store it in a Key Vault.
+        /// </summary>
         public static string KeyvaultClientSecretUrl
         {
             get
@@ -345,6 +682,21 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] Rather than specify CLIENT_SECRET_GRAPH, you may store it in a Key Vault.
+        /// </summary>
+        public static string KeyvaultClientSecretGraphUrl
+        {
+            get
+            {
+                return System.Environment.GetEnvironmentVariable("KEYVAULT_CLIENT_SECRET_GRAPH_URL");
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL, default: 4 hours] You may specify a number of minutes for the JWT expiry when generated
+        /// for user authentication.
+        /// </summary>
         public static int JwtDuration
         {
             get
@@ -362,6 +714,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] You may specify a number of minutes for the JWT expiry when generated
+        /// for service authentication. If this is not specified, the duration is the same as JWT_DURATION.
+        /// </summary>
         public static int JwtServiceDuration
         {
             get
@@ -379,12 +735,16 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL, default: 7 days] This setting determines the maximum duration from the initial
+        /// issuing of the JWT. If this duration is exceeded the reissue process will not issue a replacement
+        /// token.
+        /// </summary>
         public static int JwtMaxDuration
         {
             get
             {
                 // value is provided in minutes
-                // only needed for AutoRenewJwt
                 string duration = System.Environment.GetEnvironmentVariable("JWT_MAX_DURATION");
                 if (int.TryParse(duration, out int result))
                 {
@@ -397,16 +757,10 @@ namespace CasAuth
             }
         }
 
-        public static string PublicKeysUrl
-        {
-            get
-            { // typically this should left default
-                string s = System.Environment.GetEnvironmentVariable("PUBLIC_KEYS_URL");
-                if (string.IsNullOrEmpty(s)) return new Uri(ServerHostUrl).Append("/cas/keys").AbsoluteUri;
-                return s;
-            }
-        }
-
+        /// <summary>
+        /// [OPTIONAL, default: true] When this is set to true, the Microsoft Graph will be queried to ensure
+        /// the user is still enabled before reissuing a token.
+        /// </summary>
         public static bool RequireUserEnabledOnReissue
         {
             get
@@ -418,14 +772,24 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL, default: secret] When issuing administrative commands against the server the command password ensures
+        /// the user is authorize to make the change. It is done this way instead of using ROLE_FOR_ADMIN
+        /// in case the authentication is not working.
+        /// </summary>
         public static string CommandPassword
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("COMMAND_PASSWORD");
+                var s = System.Environment.GetEnvironmentVariable("COMMAND_PASSWORD");
+                if (string.IsNullOrEmpty(s)) return "secret";
+                return s;
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] Rather than specify COMMAND_PASSWORD, you may store it in a Key Vault.
+        /// </summary>
         public static string KeyvaultCommandPasswordUrl
         {
             get
@@ -434,6 +798,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] The server requires a private key to sign the JWT. This can be obtained by setting
+        /// PRIVATE_KEY, KEYVAULT_PRIVATE_KEY_URL, or USE_INSECURE_DEFAULTS (localhost debugging only).
+        /// </summary>
         public static string PrivateKey
         {
             get
@@ -441,13 +809,99 @@ namespace CasAuth
                 string s = System.Environment.GetEnvironmentVariable("PRIVATE_KEY");
                 if (string.IsNullOrEmpty(s) && string.IsNullOrEmpty(KeyvaultPrivateKeyUrl) && UseInsecureDefaults)
                 {
-                    // this is intended to allow the application to work for localhost debug only
-                    return "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";
+                    // NOTE: this is intended to allow the application to work for localhost debug only
+                    // NOTE: this is generated for 10 years from 01/31/2020
+                    return @"MIIPWQIBAzCCDx8GCSqGSIb3DQEHAaCCDxAEgg8MMIIPCDCCBT8GCSqGSIb3DQEH
+                        BqCCBTAwggUsAgEAMIIFJQYJKoZIhvcNAQcBMBwGCiqGSIb3DQEMAQYwDgQI66P6
+                        bfpDrKICAggAgIIE+KL7yE+LJQJZ4SrXcRrbIkZGfWahdLFb/3Vqp2zUkJjPYnMA
+                        SCg5Jqb/a/jnAac21/72J8pdfY5nTcc7KAsHQ2lXJmIXTTeF/3LVt8VHobIaGrey
+                        KZ0oFhji2TJwYQmmG4s8kclmJFPw6d7uSr8+kONH7l3lfn4guXXqMx/NIJ4G669e
+                        q3yxHua1KlZHh0TiWY4RFPa0rC1JHQ3LyqJIypdEMLQcUFddvN+PhmM2clDCkxhn
+                        KNTTnqx1et4Nj+zwOXbDaC9LsQ1FdKypgP/WmbFuGxGbzry8/9ujQZI8oyPyfBt3
+                        gUXwTua/fSkEcj/VMdzjBYygWt9LN8rkrduGpz9BmUvkj58671l7AIX8FtetaJSW
+                        /PvuEKOPLo2DqB0DZbwNBl370EsjOfMT4ixIyqssX4nfiELhCrnTc6iQI7AWR28D
+                        kuhVVKAGrxcSFFAinQ6c1nave5d6+haP4q8mz52wkrDbbIsBKI6jmrBODDjWXSyI
+                        xv7bjpI/akzWyl9IBvnWsVDg8Lvz9kxFYVX6Z5gwKqvpgZj8RKJOofu8W+r+UKQW
+                        r3fudy7PB7UtC07nId3Li65Zyg8MpMr51XiWqgjVP3GWaQ6s+zjWtV8Xcop3td3I
+                        CqgvbIe7dZOw3L+WQwjXMhPY4ps7My8GATVPl2z6FEIvse3iciVPpa6uq60bczDc
+                        D+noCEaU2xJFDp9mARNLjOlxnZ7IErBEU0mQkQ/UN0jaA3b+cDtxtIew82E4xek0
+                        FYIfoIXDqZuFcj/ebuqiWcGUOIoA9tXsjllYH1qh2Oqrs8kt1XtXoaSDl7kI/x9R
+                        P91Yqw1tK2q5d8wDg4eRBQeEAg/64Op+l6uDad1vgokdSftDyJb43dEpqB5tf82H
+                        uHDAAvynznoseoeZBEchLOdHpi/jiPUfBdfNsmq0SCQt3YenWzOHBpzLJI9kKd2V
+                        7rrG5jObDpCafufWRuHL+B79v5a2iwciRS77txAPhKzJb//feYgSDxzZH63upeyY
+                        mbuuosST9+GT4qKyoXH3hJchULabCgaJBqdE8zRgnuKCeBi/0lWxRprdShADdnD5
+                        jaULSbNiZjgMjCeQP3fKYEpOh00wtouV4cdNk2MyKdDivsw1oL8RhrdJv3MeTncx
+                        /9aV0seNhLPY50oID39sIyyQN5H8saglwH8qWlqAUFigm0ahXXZBx5AX051t15gd
+                        jib1nmp/L3VrnV3EsDlM54HYo3Yjf25/7NommRatMvkWmyvqS2EgfvjGq3bjPvp+
+                        VdQwBQ/i7JzSzL5JAT56PWDJyjKOyEW9UDxGYG4zQ2bSVcfhP7W0kIFgVhBvw4aq
+                        Iz5rsJerUOQHopqmnikxglFSoOhCCD2fN55ZxA1jRHc6A+qMceJHnsQ2nlc4GSOv
+                        bXh0OP6f/MKrEE48LQFLUKpCfp5uZwZcx3VUetFv/6JvRzE04hsOy9O9p8WrFE8Q
+                        ZSUZ0aoP9lyAuXBW/lAkNLetWEGy1BU8FmOmx6Z4pCTqtJWPLmWEnwsCpbkLNiOq
+                        6sCYzpDhEGZO+CnLbJo7CapXI6uzLWXHg/rgOPhh2FaVyIn+PkH+mLCH+C6MPtD1
+                        BS9tr4C36Ys/HVj/JdRvTc69gZjfF0H5UNjxHfGNZCbA3TOhsUdFHO5JJbK1Krq9
+                        Vm54RhK24ZOg95qc/LvLHnvPRVOb+K/DoCVMf9qKCZIXBPUGUDCCCcEGCSqGSIb3
+                        DQEHAaCCCbIEggmuMIIJqjCCCaYGCyqGSIb3DQEMCgECoIIJbjCCCWowHAYKKoZI
+                        hvcNAQwBAzAOBAjfD2wM3nAA+gICCAAEgglINm8K49ztNxW+UO0TONMUOlpy9/hd
+                        tvpSuzyRIUhSdGA8nHd4hy8pyDkjyaH5o2Fss/2qnz0ILk2r3G5ELFd2IPXeJkjD
+                        ssG2gzuPxDACf5+zNX81hkrYB0jsoMvFC7nreiSeSxHoPrsCk1ULrdRSiC2uK+WV
+                        eKqDj7NJ/+XpzdY8bmEjpa+Apivl31bD+94dpZMeSSZAR/WyUdzpwgqeK5s6SCVK
+                        Hl4GLBOexf3j2uOpq0Bktbs2pvDGdMzgzBiOKBMFV5PR+BWYDHB8Y1NUTzX1V/Zw
+                        0igVcYFRv9h26VUWiNWqwU3vU7Ts/wWXhylel5lO1NNzMnQQZt3zNvTpgWVa0A9x
+                        C7v/EqxIl3saiynn3BEaFYMneRmJX46KuzZVt/HtwoQ0dM6I2BwswY0+BrBs0Ow4
+                        svODyhAD3g/VP9l0hVyV8ra4j9lgZ7DHabcWk2OEnpmvQ4fMA9uotZAt4ULwz31V
+                        mt6/HpuFCYgPoDl0Wx8kKJmFvgphbsuUGPhm8mm2D1L1XkveOeQesdSBNxZeHtxf
+                        itGC2DPTM/MnC78t1l84I6MD0YgQpGOLbs49gJoT3yJkJH3NUQkmFSosWFdFaYKf
+                        YNToTqUj6WMtoB1nTonKVY+l9MEoOZgXBam8gdo8ZjxlLFTUF40uUWtzIg6Mvttk
+                        FNMaJSnetO141cWfaPswZtF+b3Wj2KnO/i3U4VCBbHUuXSfpl2neFqlmWRtpsQCS
+                        uAyQptRQR8hff/Z3UK6aDOKiyUEye7Cu/MAP7hH5apgYAv0E9bjkhcBAqwXayAfl
+                        IAFHTN85j5VZmLRzmAxGwFIoreuiVIqmmSeRRRYrrSVBtkjfs+cJfc7ajh3l6S+l
+                        ZbOkf/qY4q0CK+AhGFJ+lkHLwPOoHNRufo67C9tN8wTlT9OPC++B8uq0Y7Za1d6Q
+                        Hx9/Aax13fq/xZooW2VU0KfsHTqBe9RpdUg2rXQsN2HbFgWibI+wvpf4HSnz/DPG
+                        ouqdvPLpW4HISdI9i2nd78yyS7Nbdm/NOsHiFQSO6hODuJ7/kQHlPxtxAWC4wYgW
+                        //mii7bpBAKncjtGW4AsZJUYd/NDJmw0a1iM4fl+hXDo6Zfbno3hM2Q+2ayyzucZ
+                        y8iGy7f3OuYXKu3CwmYxLQaxNCqlfxiXC4hsBOwJ6p7H+rUD0Aq7HIXFTDp33vFi
+                        5a61Wql4CYLKiVcQsZCL1/4WZd73IrHDMsg79EFebYrxPn3YLt4OYesENje/bX5c
+                        c3bDPzHvL9T+ZuYAj7gfCIg3lbin51wRpcPLT+I3rM3k0XVaN7sQj0oI8NCGQjm2
+                        R+Vgm5m/YrWSXnlZp/cWIekZz3ynuhIScnxXB/DpWuay70r0WK7+1wSA/Vcq1trS
+                        ktw25dUYjWR+7NtosHWYffhmZlc+AHpBmeylVkomL51pe8L61qItr9e6crwnz5Os
+                        Z7Jq+maRKJtYsyGLMY0zz5L6uPP00jAbMc2AdvddwRHXPeyVi7qoRun133FzZLvv
+                        bRuGXcF3GleR5F5pSKAJ9gfONr2r7hKOl1G+sEklTOXw/Bid/6v1UHvV4h/7dS5z
+                        LPoi8PnssYNjD7Zup6Xt0Afa9Cd2AConcflMdGyK9knhKL3FzQHXKtxxzh6qJiiO
+                        T0d50TddcUxaoqjgFLdbM1U9EV9WLewB2gKkCi6CISfIgdcm+16aVuqij3XqaZum
+                        JJVA/IvWXOfNnVQfnHq+iEmvN85ydQTk3GLM6t5kq87LTxC2enElh3ZQOT+UAnuU
+                        MWd4+325AO9UYDX1iPHCFmqMbdZ3dP+1rwDBbg3uF4UUlgFeSnan/yMqXC8r1tH4
+                        +7exGiALC+CkjCQT8RURlDvXWup5EaWohnTXsWdRCs69lPf4Ls4JcpTvg/U0SM9Q
+                        BSAne0sf7jF8klVUprw17Mb4+gfcC36KA38Tb8PSWvibkkzNqSIikhujCqKiZPBx
+                        3izA4V3Fd4ajnP2AGBMIv+LRlt+EDmuRULOJzJp/2i1af89jjFqyxYzOiizzjwFt
+                        QIiKTvjDQiwOUyiZY5ZBVwW9WFKPZmf5VcolXtvHtLIbC2NAxjn3UV4ygsQRKfgb
+                        w8GkGZB9cSas57tvrX6lVitWIkjGD9qgUSxMU3DPwxO/hR8hx7P68U0RqqyGN8Le
+                        01rj8DbJ9ujIO6PYUmL1qYtYKHL+8LuszDRiaddEEBzMV1MHCf3JyO3ECcsJlf+T
+                        qgwbC6//v8GrE5TdDC7PPR+Fz2CpR4vWbjTK9zQMiUr/Q1gA3a8nSyRXl7cElhaL
+                        upQ3Y5kky6kOtL/KJviF++NxyKGVR73fd7OzThHNEfGB3k0pgHEUpdv/c8ehnSer
+                        SNJfqKJfhf+skXKLraHlnGCQoKMCpYxUrfQgS4C87OSq4jwggGr5JZPwhobw6wKs
+                        LAQ/RLj34i/2ANxHenbTdLTM75ovRNTeiR74aX09spFQMVEKhcjGGvVA25k5cCNl
+                        T5lMOQozLa0838/9C0t0elvCvaNMAe3LUifpkYUrbNeQezM5F2Xq5H32WrBn6e3v
+                        vHO+IVkhPITMaWMmnC6ZIrYJg5EsbKCZRWWEjdpoCkGS1Kj1botwsfKB+ITiCRAN
+                        FJkIrRQl/0UEXXZTn8DgSqtf3+Y2f6SfPxYcfCeWpp1mS8VpImuWnQIivM8Sac0E
+                        nUNsF0WFoQQXnAnRl3jWW27dT6cC1mkzpxpyNk/k0lv8YsoOcoT96dpaZhFNg6Nu
+                        Zm9V4tMXwDTeZ9/6JLxjpvjW3P0BM0ZJAEp5NaAXMmsIjXF1R/USozrrML7eu7OS
+                        yYeBcktrd9fXa9NyJvWT+jH4m7EfBaZsdXq5LhYGpE1fZDUey71XYMEJBsC+EI1k
+                        W8LmFu3aIaBO6jk3LMCnHA/Rcv0Q215sXRxT+1E4W43RaXWnNYtXcPOtEk4FBb5x
+                        bwWtmYiJwcdaicJ72jpdRXCdzXlb/QUt4lGtCIi0U1A4UHrlg2sXoXSe76XKQUpR
+                        tMMvYKrwnXwiqwI3+UBJs8PI+BtAJpOhml1V9x7I6tdMETx9kXEIbO8/wuMaz+UN
+                        QlDZov+8/6VBxjOdZzQJjTXUlr/duAposFakz4YuhKp5w73nwRPocG/AL5Yck8Ee
+                        io/0SRRG33g+OH+3CPirVDYm9BZ6J3hRcpKXinCcbohZUzC6XFgsOofXWs+caaEB
+                        7LULMSUwIwYJKoZIhvcNAQkVMRYEFCmOnNCgq5wbNyXJ9PF1IwY7yA6gMDEwITAJ
+                        BgUrDgMCGgUABBSCCb4i0bVxO1wFo7w/FB+2IPpFRgQIh+R+IQq1RO4CAggA";
                 }
                 return s;
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] The server requires a private key to sign the JWT. This can be obtained by setting
+        /// PRIVATE_KEY, KEYVAULT_PRIVATE_KEY_URL, or USE_INSECURE_DEFAULTS (localhost debugging only).
+        /// </summary>
         public static string KeyvaultPrivateKeyUrl
         {
             get
@@ -456,6 +910,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] The server requires that the private key be secured by a password. This can be obtained by setting
+        /// PRIVATE_KEY_PASSWORD, KEYVAULT_PRIVATE_KEY_PASSWORD_URL, or USE_INSECURE_DEFAULTS (localhost debugging only).
+        /// </summary>
         public static string PrivateKeyPassword
         {
             get
@@ -470,6 +928,10 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] The server requires that the private key be secured by a password. This can be obtained by setting
+        /// PRIVATE_KEY_PASSWORD, KEYVAULT_PRIVATE_KEY_PASSWORD_URL, or USE_INSECURE_DEFAULTS (localhost debugging only).
+        /// </summary>
         public static string KeyvaultPrivateKeyPasswordUrl
         {
             get
@@ -478,6 +940,11 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] The server requires public certificates that can be used to verify that this server issued
+        /// the JWT. This can be obtained by setting PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, PUBLIC_CERT_3,
+        /// KEYVAULT_PUBLIC_CERT_PREFIX_URL, or USE_INSECURE_DEFAULTS (localhost debugging only).
+        /// </summary>
         public static string[] PublicCertificates
         {
             get
@@ -491,12 +958,43 @@ namespace CasAuth
                 if (list.Count < 1 && string.IsNullOrEmpty(KeyvaultPublicCertPrefixUrl) && UseInsecureDefaults)
                 {
                     // this is intended to allow the application to work for localhost debug only
-                    list.Add("-----BEGIN CERTIFICATE-----MIIEljCCAn4CCQDsm/eax4C4aTANBgkqhkiG9w0BAQsFADANMQswCQYDVQQGEwJVUzAeFw0yMDAxMTEwMDQ5MzRaFw0yMTAxMTAwMDQ5MzRaMA0xCzAJBgNVBAYTAlVTMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA7QJ2KzBfDd/iIU6y37uyf2V3YeXKQd8QyF5j/L/UQTROk9kSc0VdLGnbeYFdk2EJCb5OxhdJ7vKflpz270DmcAs22LfMxNn4eRWr9xVrpAKjASKy1WQFmRpa4b7PJairHJt9Ug4qJgB8FWPeZzehTClyit0RuoJNWOZZxH+1zyJhkYLcxWglvijwRkBg2+AB/6p2CszVHKB7ZksVXOy3uGpr8ZDP3p0Ak9p1GqsjACIC48TFUMbj1vSFimkOexx24Ji/PKNtQxZzBNOtGNCPDFWgtDZHs2aVm7ddceFvpW0YgxrJ/DjGpIUAZdT3dsI5alG7OD7UxVjWMORD4RQi/hYRgKkW/o5mv7xW9pJqTiOOaiNifIyfYJJgBq8WdJolQV977HHnSIblFlQK2ZzNNlsf+vIzBzC+98NcptgJ4wjmQ1ALz9jGGsG06qVula2PLkPchXBm5toN/y8LF5mfJcjYFLAcFyS+YKLnVj2ro1R3V+xTFG6ytg8AajUsQfLSCPMa1jvdGHP4/NwhpDAHb6lUVC5pjBx0jtZn/Rl6ynuN1sxmLBC9UAUCG9NP+5JZC7lYV+v1MPlrUNqFsFO0BGqZ+AiQU3PBCBVdRbVuYO7HaOJszQSbyW0cAafS5uuxQzgGA8/aHeuqajweBw46Qrh+2Odwz6+Ou5mt7pofp6sCAwEAATANBgkqhkiG9w0BAQsFAAOCAgEAqej5HxwsK5hBZKhWdAIAQqZdSfn16TvJr1SYM9VYqum0sJBvdwgruVKqRIRyLLS7ZbBTpyNkznEM9GYDTacuV5lDUewVwXV2KL2a/LtK0DF9qinCbyqdCMeTr/Vt9JS9XyBfRi3sPZljzp+EchLh6k2pqDA17fzUjmisEjuka5CFSBOpt5Zzl1rY9a7Et8Jk4tUuiPDlRV3WVCLM0VUX3AIo7Fh/DAo0Afsklbb70YpEMqgK43dAmeVCDQtCweHM8j45HVX5CMp8nJOSZ1COvbbstqgMeRYgL+ESo+law0tU0ZzjiIM1pkNwUSgni5JBMDzWSbb1XgbPOVbKN4Wpp76mb4PmKL5kecy4twCh5pgKU7/dxG3l8fOMVvwvxynS6wawg+I6cb7Xjf+IQ1XfNLptBqG4gk9wbztbdCfVJyDDsOc2ZpmgLWayt5Up51snc2f1lTOa9OPnJibrRTtYkG9fp18FHZMM+ug1ibcxuMPaUcobxYa2tEjIFfWymxLb4LsQcxEkPq4kKKhueRNJPPfWqsvfQRNcD0vKlnWTdKWtYzlb3ay91fEjvuHZpKJgaLP0c4JEI0WFViKOeQmhor6LvcsTBXYAgOBNaDP28a6AhW8/OvLMC7CCkAKx+JVatZwnNYOemXLfPMTZA5whACZAhoT3on97RjWkekTRnys=-----END CERTIFICATE-----");
+                    list.Add(@"-----BEGIN CERTIFICATE-----
+                        MIIEljCCAn4CCQD50gnTNYT+YTANBgkqhkiG9w0BAQsFADANMQswCQYDVQQGEwJV
+                        UzAeFw0yMDAyMDEwMDQxMTFaFw0zMDAxMjkwMDQxMTFaMA0xCzAJBgNVBAYTAlVT
+                        MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAtt3sn0kjsr6D+ZBOD/N4
+                        9GBY53gNwa7STqmA+RGwp09//ulAqcu3oDVQVw/cVdbU1YMmvLsRsFxBERBmUN6q
+                        x9HNX4LF8pNZTEFhnMaJOuToaHV86tCmJbC0H1lBPkV7QBuyTh30VO17zbT6jvnI
+                        kheoo5N7vKQriimb7h8O+1cgKlP6SJ4tsH9IyguduM9k82POAZmde+R8OCovpttE
+                        +E68maM71CXVHxrBONX5ZZ+c5MxPkDHquBhhhWAPYsocdFWV6LrOy3SGI6ksPmlV
+                        WOYWMSvQ0ihXXk2lFeG+9+WuBn3yVLRXMJGUOSNGAPn8Rb/UhHUokS90A5UcCO3Q
+                        ELXuV3dVozY1czOwNXn/Fw3TJxJYarkC+uRNiHNc8dIkUQTg6Khu/kel6vF5bwPZ
+                        zOwwvBDWMf8q9OZhsXM0bQ3xz2KMO2+LZQ1m5nhn6QKls4AgHkuewUWVbnR3N4GQ
+                        aqrYeevf+qBWm1XtIiHKGGA6GcWc9npG3ZtSDHXckWE0zT5RbIgBhaZBGkKCknYa
+                        EI8AM/t9r3nAJCx8SfZIwhvnHmXwEPHHWGkLVEkn5vGEC/U5GEjFy5T8mJwQwrQ1
+                        yuvGLP1XvwLfz/GzhMMVDofrCzIwcl9u9HcmaS4gpdaIpZJHhYtEJZ+MFTTxqQVz
+                        SfxIQqbb4+oXPqBFvR9YRFcCAwEAATANBgkqhkiG9w0BAQsFAAOCAgEApDXK6Uts
+                        LFMMEWyw1rTZcLVCAO+Y309n3QWtiNtc1wZ8Gug9m7nvcdUdWo5MkuviudegkLrU
+                        PIzUZMmgVYytcpgVgQ6v5onTgXl8/8xEkWwNZMC4oWr9gnQx8TlSqj9MRWByciyY
+                        j/GTtfyjkS2Wom4I6Qp9tBnREt+7lonjKhVO2byuIbs0fVNOKkvG+I4tjez4QwTL
+                        YYSkDrPacfp+MVay7yovUzZPq/Nnlyt8Rz3Vk3evSJX43ALfgMDxCwA91Zsc9sap
+                        7ZhbNFebIyaBe+OtIFvd9ruzu0+cnUcV1m2NZIChUF31E/gpCW4z0TpElboaD/Q6
+                        hsWV0GjSKG9apvxW+udkzICHHKSbPGPnemLNsp/CG0nJCptaAfZ2oblsLzlA9MCc
+                        bsXrIwn7DPh7nOJrJ7f1jeeOlvxRAuPSY/a33EkcmkVmZUrbAh5C5WDKTO0cl21T
+                        PigaqiVXI376VF2cuJ6s/YM7Zc7HkKl+qgHd2s2Q2hcwj6J9Nr3zCJL2zW2RsKZ+
+                        BWgJChVKYLzCrdkIdDq/HDjYqUn7kW6p/R61uJ2r0HhV3j3bUy4Z79+KWVOykmCg
+                        azVj1MubtEdScZvrJrv8wwZ4JiE0QaKD5f6QmJtJQi/I2xzZ4KHVNzNUGxjlAQeG
+                        rZvYuY1wwqr2AHQjRrLwwT4N3ms7dPVeSHg=
+                        -----END CERTIFICATE-----");
                 }
                 return list.ToArray();
             }
         }
 
+        /// <summary>
+        /// [OPTIONAL] The server requires public certificates that can be used to verify that this server issued
+        /// the JWT. This can be obtained by setting PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, PUBLIC_CERT_3,
+        /// KEYVAULT_PUBLIC_CERT_PREFIX_URL, or USE_INSECURE_DEFAULTS (localhost debugging only).
+        /// </summary>
         public static string KeyvaultPublicCertPrefixUrl
         {
             get
@@ -505,6 +1003,9 @@ namespace CasAuth
             }
         }
 
+        /// <summary>
+        /// [READ-ONLY] This resolves the KEYVAULT_PUBLIC_CERT_PREFIX_URL to actual URLs.
+        /// </summary>
         public static string[] KeyvaultPublicCertificateUrls
         {
             get

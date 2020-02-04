@@ -1,11 +1,12 @@
-﻿using System;
+using System;
 using dotenv.net;
-using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using CasAuth;
+using Microsoft.AspNetCore;
 
-namespace dotnetauth
+namespace internal_svc
 {
     public class Program
     {
@@ -22,7 +23,7 @@ namespace dotnetauth
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("HOST_URL") ?? CasEnv.ClientHostUrl;
+                return System.Environment.GetEnvironmentVariable("HOST_URL");
             }
         }
 
@@ -51,7 +52,6 @@ namespace dotnetauth
             if (!string.IsNullOrEmpty(HostUrl)) builder.UseUrls(HostUrl);
             return builder;
         }
-
 
     }
 }

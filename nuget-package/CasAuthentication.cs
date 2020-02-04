@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
@@ -66,7 +67,9 @@ namespace CasAuth
 
                     // attempt to reissue
                     Logger.LogDebug("attempted to reissue an expired token...");
-                    token = CasTokenValidator.ReissueToken(token);
+                    var httpClientFactory = Request.HttpContext.RequestServices.GetService(typeof(IHttpClientFactory)) as IHttpClientFactory;
+                    var httpClient = httpClientFactory.CreateClient("cas");
+                    token = await CasTokenValidator.ReissueToken(httpClient, token);
                     Logger.LogDebug("reissued token successfully");
 
                     // rewrite the cookie
@@ -87,19 +90,22 @@ namespace CasAuth
                 var jwt = await this.CasTokenValidator.ValidateToken(token);
 
                 // if the token was in the header and that wasn't allowed, it had better be a service account
-                if (isTokenFromHeader && !CasEnv.VerifyTokenInHeader)
+                if (isTokenFromHeader &&
+                    !CasEnv.VerifyTokenInHeader &&
+                    !jwt.Payload.Claims.IsService()
+                )
                 {
-                    var typ = jwt.Payload.Claims.FirstOrDefault(c => c.Type == "typ");
-                    if (typ.Value != "service") throw new Exception("only service account types are allowed in the header");
+                    throw new Exception("only service account types are allowed in the header");
                 }
 
-                // build the identity, principal, and ticket
+                // propogate the claims (this overload uses uri-names and dedupes)
                 var claims = new List<Claim>();
                 foreach (var claim in jwt.Payload.Claims)
                 {
-                    claims.Add(claim);
-                    if (claim.Type == "roles") claims.Add(new Claim("http://schemas.microsoft.com/ws/2008/06/identity/claims/role", (string)claim.Value));
+                    claims.Add(claim.Type, claim.Value);
                 }
+
+                // build the identity, principal, and ticket
                 var identity = new ClaimsIdentity(claims, Scheme.Name);
                 var principal = new ClaimsPrincipal(identity);
                 var ticket = new AuthenticationTicket(principal, Scheme.Name);

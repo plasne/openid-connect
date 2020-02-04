@@ -19,14 +19,14 @@ namespace CasAuth
             return (app.Contains(type.ToLower())) ? "app" : "mi";
         }
 
-        public static async Task<string> GetAccessTokenByApplication(string resourceId)
+        public static async Task<string> GetAccessTokenByApplication(string resourceId, string tenantId, string clientId, string clientSecret)
         {
 
             // builder
             var app = ConfidentialClientApplicationBuilder
-                .Create(CasEnv.ClientId)
-                .WithTenantId(CasEnv.TenantId)
-                .WithClientSecret(CasEnv.ClientSecret)
+                .Create(clientId)
+                .WithTenantId(tenantId)
+                .WithClientSecret(clientSecret)
                 .Build();
 
             // ensure resourceId does not have trailing /
@@ -45,10 +45,26 @@ namespace CasAuth
             return await tokenProvider.GetAccessTokenAsync(resourceId);
         }
 
-        public static Task<string> GetAccessToken(string resourceId, string authTypeKey)
+        public static async Task<string> GetAccessToken(string resourceId, string authTypeKey, CasTokenIssuer issuer = null)
         {
-            if (AuthType(authTypeKey) == "app") return GetAccessTokenByApplication(resourceId);
-            return GetAccessTokenByManagedIdentity(resourceId);
+            switch (AuthType(authTypeKey))
+            {
+                case "app":
+                    switch (authTypeKey)
+                    {
+                        case "AUTH_TYPE_CONFIG":
+                            return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdConfig, CasEnv.ClientIdConfig, CasEnv.ClientSecretConfig);
+                        case "AUTH_TYPE_GRAPH":
+                            var graphSecret = (issuer != null) ? await issuer.GetClientSecretGraph() : CasEnv.ClientSecretGraph;
+                            return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdGraph, CasEnv.ClientIdGraph, graphSecret);
+                        case "AUTH_TYPE_VAULT":
+                            return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdVault, CasEnv.ClientIdVault, CasEnv.ClientSecretVault);
+                        default:
+                            throw new Exception("GetAccessToken requires an authTypeKey when using AUTH_TYPE=app");
+                    }
+                default:
+                    return await GetAccessTokenByManagedIdentity(resourceId);
+            }
         }
 
     }

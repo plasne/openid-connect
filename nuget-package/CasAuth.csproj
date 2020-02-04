@@ -1,11 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
+    <Title>CasAuth</Title>
     <RootNamespace>CasAuth</RootNamespace>
     <PackageId>CasAuth</PackageId>
-    <Version>1.2.6</Version>
+    <Version>2.0.0</Version>
     <Authors>Peter Lasne</Authors>
     <Company>Microsoft</Company>
+    <PackageDescription>The Comprehensive Authentication Solution (or CasAuth) was developed to provide an opinionated way to handle user and service authentication for APIs.</PackageDescription>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/plasne/openid-connect</RepositoryUrl>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>

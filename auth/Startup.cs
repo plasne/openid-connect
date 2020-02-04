@@ -1,8 +1,10 @@
-﻿using CasAuth;
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using CasAuth;
+using ext = CasAuth.UseCasServerAuthMiddlewareExtensions;
+using System.Net.Http;
 
 namespace dotnetauth
 {
@@ -28,7 +30,24 @@ namespace dotnetauth
         {
             app.UseRouting();
             app.UseCors();
-            app.UseCasServerAuth();
+            app.UseCasServerAuth(() =>
+            {
+                var opt = new ext.CasServerAuthOptions()
+                {
+                    AuthCodeFunc = async (getAccessToken) =>
+                    {
+                        var token1 = await getAccessToken("offline_access https://graph.microsoft.com/user.read");
+                        // var token2 = await getAccessToken("offline_access https://graph.microsoft.com/group.read");
+                    },
+                    ClaimBuilderFunc = (inClaims, outClaims) =>
+                    {
+                        outClaims.Add(new System.Security.Claims.Claim("color", "yellow"));
+                    }
+                };
+                opt.Scopes.Add("https://graph.microsoft.com/user.read");
+                // opt.Scopes.Add("https://graph.microsoft.com/group.read");
+                return opt;
+            });
         }
 
     }

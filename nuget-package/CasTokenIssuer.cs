@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Net;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using Microsoft.IdentityModel.Tokens;
@@ -11,6 +10,7 @@ using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using System.Net.Http;
 
 namespace CasAuth
 {
@@ -18,205 +18,209 @@ namespace CasAuth
     public class CasTokenIssuer
     {
 
-        public CasTokenIssuer(ILogger<CasTokenIssuer> logger)
+        public CasTokenIssuer(ILogger<CasTokenIssuer> logger, IHttpClientFactory httpClientFactory)
         {
             this.Logger = logger;
+            this.HttpClient = httpClientFactory.CreateClient("cas");
             this.ConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>($"{CasEnv.Authority}/.well-known/openid-configuration", new OpenIdConnectConfigurationRetriever());
         }
 
         private ILogger Logger { get; }
+        private HttpClient HttpClient { get; }
         public ConfigurationManager<OpenIdConnectConfiguration> ConfigManager { get; }
 
         private string _clientSecret;
 
-        public string ClientSecret
+        public async Task<string> GetClientSecret()
         {
-            get
+
+            // see if there is an env for CLIENT_SECRET
+            if (string.IsNullOrEmpty(_clientSecret)) _clientSecret = CasEnv.ClientSecret;
+
+            // see if there is an env for KEYVAULT_CLIENT_SECRET_URL
+            if (string.IsNullOrEmpty(_clientSecret))
             {
-
-                // see if there is an env for CLIENT_SECRET
-                if (string.IsNullOrEmpty(_clientSecret)) _clientSecret = CasEnv.ClientSecret;
-
-                // see if there is an env for KEYVAULT_CLIENT_SECRET_URL
-                if (string.IsNullOrEmpty(_clientSecret))
-                {
-                    string url = CasEnv.KeyvaultClientSecretUrl;
-                    if (string.IsNullOrEmpty(url)) throw new Exception("either CLIENT_SECRET or KEYVAULT_CLIENT_SECRET_URL must be defined");
-                    var pw = GetFromKeyVault(url);
-                    pw.Wait();
-                    _clientSecret = pw.Result;
-                }
-
-                return _clientSecret;
+                string url = CasEnv.KeyvaultClientSecretUrl;
+                if (string.IsNullOrEmpty(url)) throw new Exception("either CLIENT_SECRET or KEYVAULT_CLIENT_SECRET_URL must be defined");
+                _clientSecret = await CasTokenIssuer.GetFromKeyVault(this.HttpClient, url);
             }
+
+            return _clientSecret;
+        }
+
+        private string _clientSecretGraph;
+
+        public async Task<string> GetClientSecretGraph()
+        {
+
+            // see if there is an env for CLIENT_SECRET_GRAPH
+            if (string.IsNullOrEmpty(_clientSecretGraph)) _clientSecretGraph = CasEnv.ClientSecret;
+
+            // see if there is an env for KEYVAULT_CLIENT_SECRET_GRAPH_URL
+            if (string.IsNullOrEmpty(_clientSecretGraph))
+            {
+                string url = CasEnv.KeyvaultClientSecretGraphUrl;
+                if (!string.IsNullOrEmpty(url))
+                {
+                    _clientSecretGraph = await CasTokenIssuer.GetFromKeyVault(this.HttpClient, url);
+                }
+                else
+                {
+                    _clientSecretGraph = await GetClientSecret();
+                }
+            }
+
+            return _clientSecretGraph;
         }
 
         private string _commandPassword;
 
-        public string CommandPassword
+        public async Task<string> GetCommandPassword()
         {
-            get
+
+            // see if there is an env for COMMAND_PASSWORD
+            if (string.IsNullOrEmpty(_commandPassword)) _commandPassword = CasEnv.CommandPassword;
+
+            // see if there is an env for KEYVAULT_COMMAND_PASSWORD_URL
+            if (string.IsNullOrEmpty(_commandPassword))
             {
-
-                // see if there is an env for COMMAND_PASSWORD
-                if (string.IsNullOrEmpty(_commandPassword)) _commandPassword = CasEnv.CommandPassword;
-
-                // see if there is an env for KEYVAULT_COMMAND_PASSWORD_URL
-                if (string.IsNullOrEmpty(_commandPassword))
+                string url = CasEnv.KeyvaultCommandPasswordUrl;
+                if (!string.IsNullOrEmpty(url))
                 {
-                    string url = CasEnv.KeyvaultCommandPasswordUrl;
-                    if (!string.IsNullOrEmpty(url))
-                    {
-                        var pw = GetFromKeyVault(url);
-                        pw.Wait();
-                        _commandPassword = pw.Result;
-                    }
+                    _commandPassword = await CasTokenIssuer.GetFromKeyVault(this.HttpClient, url);
                 }
-
-                return _commandPassword;
             }
+
+            return _commandPassword;
         }
 
         private string _privateKey;
 
-        public string PrivateKey
+        public async Task<string> GetPrivateKey()
         {
-            get
+
+            // see if there is an env for PRIVATE_KEY
+            if (string.IsNullOrEmpty(_privateKey)) _privateKey = CasEnv.PrivateKey;
+
+            // see if there is an env for KEYVAULT_PRIVATE_KEY_URL
+            if (string.IsNullOrEmpty(_privateKey))
             {
-
-                // see if there is an env for PRIVATE_KEY
-                if (string.IsNullOrEmpty(_privateKey)) _privateKey = CasEnv.PrivateKey;
-
-                if (string.IsNullOrEmpty(_privateKey))
-                {
-                    string url = CasEnv.KeyvaultPrivateKeyUrl;
-                    if (string.IsNullOrEmpty(url)) throw new Exception("either PRIVATE_KEY or KEYVAULT_PRIVATE_KEY_URL must be defined");
-                    var key = GetFromKeyVault(url);
-                    key.Wait();
-                    _privateKey = key.Result;
-                }
-
-                return _privateKey;
+                string url = CasEnv.KeyvaultPrivateKeyUrl;
+                if (string.IsNullOrEmpty(url)) throw new Exception("either PRIVATE_KEY or KEYVAULT_PRIVATE_KEY_URL must be defined");
+                _privateKey = await CasTokenIssuer.GetFromKeyVault(this.HttpClient, url);
             }
+
+            return _privateKey;
         }
 
         private string _privateKeyPw;
 
-        public string PrivateKeyPassword
+        public async Task<string> GetPrivateKeyPassword()
         {
-            get
+
+            // see if there is an env for PRIVATE_KEY
+            if (string.IsNullOrEmpty(_privateKeyPw)) _privateKeyPw = CasEnv.PrivateKeyPassword;
+
+            if (string.IsNullOrEmpty(_privateKeyPw))
             {
-
-                // see if there is an env for PRIVATE_KEY
-                if (string.IsNullOrEmpty(_privateKeyPw)) _privateKeyPw = CasEnv.PrivateKeyPassword;
-
-                if (string.IsNullOrEmpty(_privateKeyPw))
-                {
-                    string url = CasEnv.KeyvaultPrivateKeyPasswordUrl;
-                    if (string.IsNullOrEmpty(url)) throw new Exception("either PRIVATE_KEY_PASSWORD or KEYVAULT_PRIVATE_KEY_PASSWORD_URL must be defined");
-                    var key = GetFromKeyVault(url);
-                    key.Wait();
-                    _privateKeyPw = key.Result;
-                }
-
-                return _privateKeyPw;
+                string url = CasEnv.KeyvaultPrivateKeyPasswordUrl;
+                if (string.IsNullOrEmpty(url)) throw new Exception("either PRIVATE_KEY_PASSWORD or KEYVAULT_PRIVATE_KEY_PASSWORD_URL must be defined");
+                _privateKeyPw = await CasTokenIssuer.GetFromKeyVault(this.HttpClient, url);
             }
+
+            return _privateKeyPw;
         }
 
         private X509SigningCredentials _signingCredentials;
 
-        private X509SigningCredentials SigningCredentials
+        private async Task<X509SigningCredentials> GetSigningCredentials()
         {
-            get
+            if (_signingCredentials == null)
             {
-                if (_signingCredentials == null)
-                {
-                    var bytes = Convert.FromBase64String(PrivateKey);
-                    var certificate = new X509Certificate2(bytes, PrivateKeyPassword);
-                    _signingCredentials = new X509SigningCredentials(certificate, SecurityAlgorithms.RsaSha256);
-                }
-                return _signingCredentials;
+                var privateKey = await GetPrivateKey();
+                var bytes = Convert.FromBase64String(privateKey);
+                var privateKeyPassword = await GetPrivateKeyPassword();
+                var certificate = new X509Certificate2(bytes, privateKeyPassword);
+                _signingCredentials = new X509SigningCredentials(certificate, SecurityAlgorithms.RsaSha256);
             }
+            return _signingCredentials;
         }
 
         private List<X509Certificate2> _validationCertificates;
 
-        public List<X509Certificate2> ValidationCertificates
+        public async Task<List<X509Certificate2>> GetValidationCertificates()
         {
-            get
+            if (_validationCertificates == null)
             {
-                if (_validationCertificates == null)
-                {
-                    _validationCertificates = new List<X509Certificate2>();
+                _validationCertificates = new List<X509Certificate2>();
 
-                    // attempt to read from environment variables
-                    foreach (string raw in CasEnv.PublicCertificates)
+                // attempt to read from environment variables
+                foreach (string raw in CasEnv.PublicCertificates)
+                {
+                    byte[] bytes = GetBytesFromPEM(raw, "CERTIFICATE");
+                    var x509 = new X509Certificate2(bytes);
+                    _validationCertificates.Add(x509);
+                }
+
+                // attempt to get certificates indexed 0-3 at the same time
+                var tasks = new List<Task<string>>();
+                foreach (string url in CasEnv.KeyvaultPublicCertificateUrls)
+                {
+                    var task = GetFromKeyVault(this.HttpClient, url, ignore404: true);
+                    tasks.Add(task);
+                }
+
+                // wait for all the tasks to complete
+                await Task.WhenAll(tasks.ToArray());
+
+                // add to certificates
+                foreach (var task in tasks)
+                {
+                    if (!string.IsNullOrEmpty(task.Result))
                     {
-                        byte[] bytes = GetBytesFromPEM(raw, "CERTIFICATE");
+                        byte[] bytes = GetBytesFromPEM(task.Result, "CERTIFICATE");
                         var x509 = new X509Certificate2(bytes);
                         _validationCertificates.Add(x509);
                     }
-
-                    // attempt to get certificates indexed 0-3 at the same time
-                    var tasks = new List<Task<string>>();
-                    foreach (string url in CasEnv.KeyvaultPublicCertificateUrls)
-                    {
-                        var task = GetFromKeyVault(url, ignore404: true);
-                        tasks.Add(task);
-                    }
-
-                    // wait for all the tasks to complete
-                    Task.WaitAll(tasks.ToArray());
-
-                    // add to certificates
-                    foreach (var task in tasks)
-                    {
-                        if (!string.IsNullOrEmpty(task.Result))
-                        {
-                            byte[] bytes = GetBytesFromPEM(task.Result, "CERTIFICATE");
-                            var x509 = new X509Certificate2(bytes);
-                            _validationCertificates.Add(x509);
-                        }
-                    }
-
-                    // make sure there is at least 1
-                    if (_validationCertificates.Count() < 1) throw new Exception("there are no PUBLIC_CERT_# variables defined");
-
                 }
-                return _validationCertificates;
+
+                // make sure there is at least 1
+                if (_validationCertificates.Count() < 1) throw new Exception("there are no PUBLIC_CERT_# variables defined");
+
             }
+            return _validationCertificates;
         }
 
-        private async Task<string> GetFromKeyVault(string url, bool ignore404 = false)
+        private static async Task<string> GetFromKeyVault(HttpClient httpClient, string url, bool ignore404 = false)
         {
-            try
+
+            // get an access token
+            var accessToken = await CasAuthChooser.GetAccessToken("https://vault.azure.net", "AUTH_TYPE_VAULT");
+
+            // get from the keyvault
+            using (var request = new HttpRequestMessage()
             {
-
-                // get an access token
-                var accessToken = await CasAuthChooser.GetAccessToken("https://vault.azure.net", "AUTH_TYPE_VAULT");
-
-                // get from the keyvault
-                using (var client = new WebClient())
+                RequestUri = new Uri($"{url}?api-version=7.0"),
+                Method = HttpMethod.Get
+            })
+            {
+                request.Headers.Add("Authorization", $"Bearer {accessToken}");
+                using (var response = await httpClient.SendAsync(request))
                 {
-                    if (!string.IsNullOrEmpty(CasEnv.Proxy)) client.Proxy = new WebProxy(CasEnv.Proxy);
-                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
-                    string raw = client.DownloadString(new Uri($"{url}?api-version=7.0"));
+                    var raw = await response.Content.ReadAsStringAsync();
+                    if (ignore404 && (int)response.StatusCode == 404) // Not Found
+                    {
+                        return string.Empty;
+                    }
+                    else if (!response.IsSuccessStatusCode)
+                    {
+                        throw new Exception($"CasTokenIssuer.GetFromKeyVault: HTTP {(int)response.StatusCode} - {raw}");
+                    }
                     dynamic json = JObject.Parse(raw);
                     return (string)json.value;
                 }
+            };
 
-            }
-            catch (WebException e)
-            {
-                if (ignore404 && e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.NotFound)
-                {
-                    return string.Empty; // 404 Not Found is acceptible
-                }
-                else
-                {
-                    throw;
-                }
-            }
         }
 
         private static byte[] GetBytesFromPEM(string pemString, string section = "CERTIFICATE")
@@ -246,71 +250,68 @@ namespace CasAuth
         {
 
             // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH");
+            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this);
 
-            // catch the possible 403 Forbidden because access rights have not been granted
-            try
+            // check for enabled
+            using (var request = new HttpRequestMessage()
             {
-
-                // check for enabled
-                using (var client = new WebClient())
+                RequestUri = new Uri($"https://graph.microsoft.com/beta/users/{userId}?$select=accountEnabled"),
+                Method = HttpMethod.Get
+            })
+            {
+                request.Headers.Add("Authorization", $"Bearer {accessToken}");
+                using (var response = await this.HttpClient.SendAsync(request))
                 {
-                    if (!string.IsNullOrEmpty(CasEnv.Proxy)) client.Proxy = new WebProxy(CasEnv.Proxy);
-                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
-                    string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{userId}?$select=accountEnabled"));
+                    var raw = await response.Content.ReadAsStringAsync();
+                    if ((int)response.StatusCode == 403) // Forbidden
+                    {
+                        throw new Exception("CasTokenIssuer.IsUserEnabled: the auth identity does not have the Directory.Read.All right");
+                    }
+                    else if (!response.IsSuccessStatusCode)
+                    {
+                        throw new Exception($"CasTokenIssuer.IsUserEnabled: HTTP {(int)response.StatusCode} - {raw}");
+                    }
                     dynamic json = JObject.Parse(raw);
                     return (bool)json.accountEnabled;
                 }
-
-            }
-            catch (WebException e)
-            {
-                if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.Forbidden)
-                {
-                    throw new Exception("the auth identity does not have the Directory.Read.All right", e);
-                }
-                else
-                {
-                    throw;
-                }
-            }
+            };
 
         }
 
-        public async Task<dynamic> GetUserById(string query)
+        public async Task<dynamic> GetUserFromGraph(string query)
         {
 
             // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH");
+            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this);
 
             // get the user info
-            try
+            using (var request = new HttpRequestMessage()
             {
-                using (var client = new WebClient())
+                RequestUri = new Uri($"https://graph.microsoft.com/beta/users/{query}"),
+                Method = HttpMethod.Get
+            })
+            {
+                request.Headers.Add("Authorization", $"Bearer {accessToken}");
+                using (var response = await this.HttpClient.SendAsync(request))
                 {
-                    if (!string.IsNullOrEmpty(CasEnv.Proxy)) client.Proxy = new WebProxy(CasEnv.Proxy);
-                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
-                    string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{query}"));
+                    var raw = await response.Content.ReadAsStringAsync();
+                    if ((int)response.StatusCode == 404) // Not Found
+                    {
+                        return null;
+                    }
+                    else if ((int)response.StatusCode == 403) // Forbidden
+                    {
+                        throw new Exception("CasTokenIssuer.GetUserById: the auth identity does not have the Directory.Read.All right");
+                    }
+                    else if (!response.IsSuccessStatusCode)
+                    {
+                        throw new Exception($"CasTokenIssuer.GetUserById: HTTP {(int)response.StatusCode} - {raw}");
+                    }
                     dynamic json = JObject.Parse(raw);
                     return json;
                 }
-            }
-            catch (WebException e)
-            {
-                if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.NotFound)
-                {
-                    // the user was not found, but the query was valid
-                    return null;
-                }
-                else if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.Forbidden)
-                {
-                    throw new Exception("the auth identity does not have the Directory.Read.All right", e);
-                }
-                else
-                {
-                    throw;
-                }
-            }
+            };
+
         }
 
         public class RoleAssignments
@@ -334,20 +335,31 @@ namespace CasAuth
             if (appIds.Count() < 1) return assignments;
 
             // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH");
+            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this);
 
             // lookup all specified applications
             //   NOTE: catch the possible 403 Forbidden because access rights have not been granted
             List<AppRoles> apps = new List<AppRoles>();
-            try
+            string filter = "$filter=" + string.Join(" or ", appIds.Select(appId => $"appId eq '{appId}'"));
+            string select = "$select=appId,appRoles";
+            using (var request = new HttpRequestMessage()
             {
-                using (var client = new WebClient())
+                RequestUri = new Uri($"https://graph.microsoft.com/beta/applications/?{filter}&{select}"),
+                Method = HttpMethod.Get
+            })
+            {
+                request.Headers.Add("Authorization", $"Bearer {accessToken}");
+                using (var response = await this.HttpClient.SendAsync(request))
                 {
-                    if (!string.IsNullOrEmpty(CasEnv.Proxy)) client.Proxy = new WebProxy(CasEnv.Proxy);
-                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
-                    string filter = "$filter=" + string.Join(" or ", appIds.Select(appId => $"appId eq '{appId}'"));
-                    string select = "$select=appId,appRoles";
-                    string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/applications/?{filter}&{select}"));
+                    var raw = await response.Content.ReadAsStringAsync();
+                    if ((int)response.StatusCode == 403) // Forbidden
+                    {
+                        throw new Exception("CasTokenIssuer.GetRoleAssignments: the auth identity does not have the Directory.Read.All right");
+                    }
+                    else if (!response.IsSuccessStatusCode)
+                    {
+                        throw new Exception($"CasTokenIssuer.GetRoleAssignments: HTTP {(int)response.StatusCode} - {raw}");
+                    }
                     dynamic json = JObject.Parse(raw);
                     var values = (JArray)json.value;
                     foreach (dynamic value in values)
@@ -360,27 +372,28 @@ namespace CasAuth
                         }
                     }
                 }
-            }
-            catch (WebException e)
-            {
-                if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.Forbidden)
-                {
-                    throw new Exception("the auth identity does not have the Directory.Read.All right", e);
-                }
-                else
-                {
-                    throw;
-                }
-            }
+            };
 
             // get the roles that the user is in
-            try
+            using (var request = new HttpRequestMessage()
             {
-                using (var client = new WebClient())
+                RequestUri = new Uri($"https://graph.microsoft.com/beta/users/{userId}/appRoleAssignments"),
+                Method = HttpMethod.Get
+            })
+            {
+                request.Headers.Add("Authorization", $"Bearer {accessToken}");
+                using (var response = await this.HttpClient.SendAsync(request))
                 {
-                    if (!string.IsNullOrEmpty(CasEnv.Proxy)) client.Proxy = new WebProxy(CasEnv.Proxy);
-                    client.Headers.Add("Authorization", $"Bearer {accessToken}");
-                    string raw = client.DownloadString(new Uri($"https://graph.microsoft.com/beta/users/{userId}/appRoleAssignments"));
+                    var raw = await response.Content.ReadAsStringAsync();
+                    if ((int)response.StatusCode == 404) // Not Found
+                    {
+                        // ignore, the user might not be in the directory
+                        return assignments;
+                    }
+                    else if (!response.IsSuccessStatusCode)
+                    {
+                        throw new Exception($"CasTokenIssuer.GetRoleAssignments: HTTP {(int)response.StatusCode} - {raw}");
+                    }
                     dynamic json = JObject.Parse(raw);
                     var values = (JArray)json.value;
                     foreach (dynamic value in values)
@@ -404,22 +417,7 @@ namespace CasAuth
                         }
                     }
                 }
-            }
-            catch (WebException e)
-            {
-                if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.NotFound)
-                {
-                    // ignore, the user might not be in the directory
-                }
-                else if (e.Response != null && ((HttpWebResponse)e.Response).StatusCode == HttpStatusCode.Forbidden)
-                {
-                    throw new Exception("the auth identity does not have the Directory.Read.All right", e);
-                }
-                else
-                {
-                    throw;
-                }
-            }
+            };
 
             return assignments;
         }
@@ -453,8 +451,10 @@ namespace CasAuth
             }
 
             // determine the signing duration
-            var typ = claims.FirstOrDefault(c => c.Type == "typ");
-            var duration = (typ != null && typ.Value == "service") ? CasEnv.JwtServiceDuration : CasEnv.JwtDuration;
+            var duration = (claims.IsService()) ? CasEnv.JwtServiceDuration : CasEnv.JwtDuration;
+
+            // get the signing creds
+            var signingCredentials = await GetSigningCredentials();
 
             // generate the token
             var jwt = new JwtSecurityToken(
@@ -462,7 +462,7 @@ namespace CasAuth
                 audience: CasEnv.Audience,
                 claims: claims,
                 expires: DateTime.UtcNow.AddMinutes(duration),
-                signingCredentials: SigningCredentials);
+                signingCredentials: signingCredentials);
 
             // serialize
             try
@@ -484,12 +484,15 @@ namespace CasAuth
 
         }
 
-        public string IssueXsrfToken(string code)
+        public async Task<string> IssueXsrfToken(string code)
         {
 
             // add the claims
             List<Claim> claims = new List<Claim>();
             claims.Add(new Claim("code", code));
+
+            // get the signing creds
+            var signingCredentials = await GetSigningCredentials();
 
             // generate the token
             var jwt = new JwtSecurityToken(
@@ -497,7 +500,7 @@ namespace CasAuth
                 audience: CasEnv.Audience,
                 claims: claims,
                 expires: DateTime.UtcNow.AddMinutes(CasEnv.JwtMaxDuration).AddMinutes(60), // good beyond the max-duration
-                signingCredentials: SigningCredentials);
+                signingCredentials: signingCredentials);
 
             // serialize
             try
@@ -519,11 +522,12 @@ namespace CasAuth
 
         }
 
-        public JwtSecurityToken ValidateToken(string token)
+        public async Task<JwtSecurityToken> ValidateToken(string token)
         {
 
             // get keys from certificates
-            var keys = ValidationCertificates.Select(c => new X509SecurityKey(c));
+            var certs = await GetValidationCertificates();
+            var keys = certs.Select(c => new X509SecurityKey(c));
 
             // parameters to validate
             var handler = new JwtSecurityTokenHandler();
@@ -546,7 +550,7 @@ namespace CasAuth
             return validatedJwt;
         }
 
-        private JwtSecurityToken IsTokenExpiredButEligibleForRenewal(string token)
+        private async Task<JwtSecurityToken> IsTokenExpiredButEligibleForRenewal(string token)
         {
 
             // read the token
@@ -554,14 +558,14 @@ namespace CasAuth
             var jwt = handler.ReadJwtToken(token);
 
             // shortcut if not expired
-            if (DateTime.UtcNow < jwt.Payload.ValidTo.ToUniversalTime()) throw new Exception("token is not expired");
+            if (DateTime.UtcNow < jwt.Payload.ValidTo.ToUniversalTime()) throw new CasHttpException(400, "token is not expired");
 
-            // make sure it is typ=user
-            var typ = jwt.Payload.Claims.FirstOrDefault(c => c.Type == "typ");
-            if (typ == null || typ.Value != "user") throw new Exception("only user tokens can be reissued");
+            // make sure it is not a service account
+            if (jwt.Payload.Claims.IsService()) throw new CasHttpException(403, "only user tokens can be reissued");
 
             // get keys from certificates
-            var keys = ValidationCertificates.Select(c => new X509SecurityKey(c));
+            var certs = await GetValidationCertificates();
+            var keys = certs.Select(c => new X509SecurityKey(c));
 
             // validate everything but the expiry
             SecurityToken validatedSecurityToken = null;
@@ -581,7 +585,7 @@ namespace CasAuth
             }
             catch (Exception e)
             {
-                throw new Exception("token cannot be validated (excepting lifetime)", e);
+                throw new CasHttpException(400, "token cannot be validated (excepting lifetime) - " + e.Message);
             }
             JwtSecurityToken validatedJwt = validatedSecurityToken as JwtSecurityToken;
 
@@ -596,7 +600,7 @@ namespace CasAuth
             }
             else
             {
-                throw new Exception("token is too old to renew");
+                throw new CasHttpException(403, "token is too old to renew");
             }
 
         }
@@ -605,15 +609,15 @@ namespace CasAuth
         {
 
             // make sure the token is eligible
-            var jwt = IsTokenExpiredButEligibleForRenewal(token);
+            var jwt = await IsTokenExpiredButEligibleForRenewal(token);
 
             // make sure the user is eligible
             var oid = jwt.Payload.FirstOrDefault(claim => claim.Key == "oid");
-            if (oid.Value == null) throw new Exception("oid is not specified in the token");
+            if (oid.Value == null) throw new CasHttpException(403, "oid is not specified in the token");
             if (CasEnv.RequireUserEnabledOnReissue)
             {
                 bool enabled = await IsUserEnabled((string)oid.Value);
-                if (!enabled) throw new Exception("user is not enabled");
+                if (!enabled) throw new CasHttpException(403, "user is not enabled");
             }
 
             // strip inappropriate claims
