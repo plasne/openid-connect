@@ -79,6 +79,13 @@ namespace CasAuth
                     claims.Add("email", xemail);
                 }
 
+                // extract from x-name
+                string xname = GetHeaderValue("X-NAME");
+                if (!string.IsNullOrEmpty(xname))
+                {
+                    claims.Add("name", xname);
+                }
+
                 // extract from x-roles
                 var xroles = Request.Headers["X-ROLES"];
                 foreach (var lroles in xroles)

@@ -20,10 +20,8 @@ namespace dotnetauth
 
         public void ConfigureServices(IServiceCollection services)
         {
-
-            // setup CasAuth
             services.AddCasServerAuth();
-
+            services.AddControllers();
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -47,6 +45,10 @@ namespace dotnetauth
                 opt.Scopes.Add("https://graph.microsoft.com/user.read");
                 // opt.Scopes.Add("https://graph.microsoft.com/group.read");
                 return opt;
+            });
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
             });
         }
 

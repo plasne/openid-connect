@@ -51,35 +51,12 @@ namespace CasAuth
                 CasConfig.Require("ALLOWED_ORIGINS", CasEnv.AllowedOrigins, logger);
                 CasConfig.Require("BASE_DOMAIN", CasEnv.BaseDomain, logger);
                 CasConfig.Require("PUBLIC_KEYS_URL", CasEnv.PublicKeysUrl, logger);
-                if (
-                    !CasConfig.Optional("PRIVATE_KEY", CasEnv.PrivateKey, logger) &&
-                    !CasConfig.Optional("KEYVAULT_PRIVATE_KEY_URL", CasEnv.KeyvaultPrivateKeyUrl, logger)
-                )
-                {
-                    logger.LogError("You must specify either PRIVATE_KEY or KEYVAULT_PRIVATE_KEY_URL.");
-                    throw new Exception("You must specify either PRIVATE_KEY or KEYVAULT_PRIVATE_KEY_URL.");
-                }
-                if (
-                    !CasConfig.Optional("PRIVATE_KEY_PASSWORD", CasEnv.PrivateKeyPassword, logger) &&
-                    !CasConfig.Optional("KEYVAULT_PRIVATE_KEY_PASSWORD_URL", CasEnv.KeyvaultPrivateKeyPasswordUrl, logger)
-                )
-                {
-                    logger.LogError("You must specify either PRIVATE_KEY_PASSWORD or KEYVAULT_PRIVATE_KEY_PASSWORD_URL.");
-                    throw new Exception("You must specify either PRIVATE_KEY_PASSWORD or KEYVAULT_PRIVATE_KEY_PASSWORD_URL.");
-                }
-                CasConfig.Optional("PUBLIC_CERT_0", logger);
-                CasConfig.Optional("PUBLIC_CERT_1", logger);
-                CasConfig.Optional("PUBLIC_CERT_2", logger);
-                CasConfig.Optional("PUBLIC_CERT_3", logger);
-                CasConfig.Optional("KEYVAULT_PUBLIC_CERT_PREFIX_URL", logger);
-                if (
-                    (CasEnv.PublicCertificates.Length < 1) &&
-                    (CasEnv.KeyvaultPublicCertificateUrls.Length < 1)
-                )
-                {
-                    logger.LogError("You must specify one of PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, PUBLIC_CERT_3, or KEYVAULT_PUBLIC_CERT_PREFIX_URL.");
-                    throw new Exception("You must specify one of PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, PUBLIC_CERT_3, or KEYVAULT_PUBLIC_CERT_PREFIX_URL.");
-                }
+                CasConfig.Require("PRIVATE_KEY", CasEnv.PrivateKey, logger);
+                CasConfig.Require("PRIVATE_KEY_PASSWORD", CasEnv.PrivateKeyPassword, logger);
+                CasConfig.Require("PUBLIC_CERT_0", CasEnv.PublicCert0, logger);
+                CasConfig.Optional("PUBLIC_CERT_1", CasEnv.PublicCert1, logger);
+                CasConfig.Optional("PUBLIC_CERT_2", CasEnv.PublicCert2, logger);
+                CasConfig.Optional("PUBLIC_CERT_3", CasEnv.PublicCert3, logger);
                 CasConfig.Optional("AUTH_TYPE", authType, logger);
                 if (authType == "app")
                 {
@@ -87,15 +64,14 @@ namespace CasAuth
                 }
                 else
                 {
-                    // NOTE: an id and secret are needed for authcode
+                    // required for authcode
                     CasConfig.Optional("CLIENT_SECRET", CasEnv.ClientSecret, logger);
-                    CasConfig.Optional("KEYVAULT_CLIENT_SECRET_URL", CasEnv.KeyvaultClientSecretUrl, logger);
                 }
                 CasConfig.Optional("AUTH_TYPE_CONFIG", CasAuthChooser.AuthType("AUTH_TYPE_CONFIG"), logger);
                 CasConfig.Optional("AUTH_TYPE_VAULT", CasAuthChooser.AuthType("AUTH_TYPE_VAULT"), logger);
                 CasConfig.Optional("AUTH_TYPE_GRAPH", CasAuthChooser.AuthType("AUTH_TYPE_GRAPH"), logger);
-                CasConfig.Optional("APPCONFIG_RESOURCE_ID", CasConfig.AppConfigResourceId, logger);
-                CasConfig.Optional("CONFIG_KEYS", CasConfig.ConfigKeys, logger);
+                CasConfig.Optional("APPCONFIG", CasEnv.AppConfig, logger);
+                CasConfig.Optional("CONFIG_KEYS", CasEnv.ConfigKeys, logger);
                 CasConfig.Optional("APPLICATION_ID", CasEnv.ApplicationIds, logger);
                 CasConfig.Optional("REQUIRE_SECURE_FOR_COOKIES", CasEnv.RequireSecureForCookies, logger);
                 CasConfig.Optional("REQUIRE_USER_ENABLED_ON_REISSUE", CasEnv.RequireUserEnabledOnReissue, logger);
@@ -114,7 +90,7 @@ namespace CasAuth
             {
                 services.AddCors(options =>
                    {
-                       options.AddDefaultPolicy(builder =>
+                       options.AddPolicy("cas-server", builder =>
                        {
                            builder.WithOrigins(CasEnv.AllowedOrigins)
                            .AllowAnyHeader()

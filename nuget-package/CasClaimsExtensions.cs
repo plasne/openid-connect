@@ -6,7 +6,7 @@ using System;
 namespace CasAuth
 {
 
-    public static class CasListOfClaimsExtensions
+    public static class CasClaimsExtensions
     {
 
         public static string Name(this IEnumerable<Claim> claims)
@@ -44,28 +44,43 @@ namespace CasAuth
             return claims.HasRole(CasEnv.RoleForService);
         }
 
-        public static Dictionary<string, string> ToDictionary(this IEnumerable<Claim> claims)
+        public static List<Claim> FilterToSignificant(this IEnumerable<Claim> claims)
         {
-            var dict = new Dictionary<string, string>();
-            foreach (var claim in claims)
+            var filter = new string[] { "xsrf", "old", "exp", "iss", "aud" };
+            var filtered = claims.ToList();
+            filtered.RemoveAll(c => filter.Contains(c.Type) || c.Type.StartsWith("http://schemas.microsoft.com/"));
+            return filtered;
+        }
+
+        public static string ShortType(this Claim claim)
+        {
+            switch (claim.Type)
             {
-                switch (claim.Type)
-                {
-                    case "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name":
-                        dict.Add("name", claim.Value);
-                        break;
-                    case "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress":
-                        dict.Add("email", claim.Value);
-                        break;
-                    case "http://schemas.microsoft.com/ws/2008/06/identity/claims/role":
-                        dict.Add("role", claim.Value);
-                        break;
-                    default:
-                        dict.Add(claim.Type, claim.Value);
-                        break;
-                }
+                case "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name":
+                    return "name";
+                case "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress":
+                    return "email";
+                case "http://schemas.microsoft.com/ws/2008/06/identity/claims/role":
+                    return "role";
+                default:
+                    return claim.Type;
             }
-            return dict;
+        }
+
+        public static string LongType(this Claim claim)
+        {
+            switch (claim.Type)
+            {
+                case "name":
+                    return "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name";
+                case "email":
+                    return "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress";
+                case "role":
+                case "roles":
+                    return "http://schemas.microsoft.com/ws/2008/06/identity/claims/role";
+                default:
+                    return claim.Type;
+            }
         }
 
         public static void Add(this List<Claim> claims, string key, string value)

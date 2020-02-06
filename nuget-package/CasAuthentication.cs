@@ -38,6 +38,12 @@ namespace CasAuth
             try
             {
 
+                // drop all internal identity headers so they aren't propogated
+                Request.Headers.Remove("X-IDENTITY");
+                Request.Headers.Remove("X-EMAIL");
+                Request.Headers.Remove("X-NAME");
+                Request.Headers.Remove("X-ROLES");
+
                 // check first for header
                 string token = string.Empty;
                 var header = Request.Headers["Authorization"];

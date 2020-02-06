@@ -30,9 +30,9 @@ CLIENT_HOST_URL=http://api.plasne.com
 WEB_HOST_URL=http://web.plasne.com
 TENANT_ID=00000000-0000-0000-0000-000000000000
 CLIENT_ID=00000000-0000-0000-0000-000000000000
-KEYVAULT_PRIVATE_KEY_URL=https://sample.vault.azure.net/private_key
-KEYVAULT_PRIVATE_KEY_PASSWORD_URL=https://sample.vault.azure.net/private_key_pw
-KEYVAULT_PUBLIC_CERT_PREFIX_URL=https://sample.vault.azure.net/public_cert_prefix
+PRIVATE_KEY=https://sample.vault.azure.net/private_key
+PRIVATE_KEY_PASSWORD=https://sample.vault.azure.net/private_key_pw
+PUBLIC_CERT_PREFIX=https://sample.vault.azure.net/public_cert_prefix
 ```
 
 You can use DEFAULT_HOST_URL to act as a default for SERVER_HOST_URL, CLIENT_HOST_URL, and WEB_HOST_URL. In the rare event that you are hosting multiple roles on the same domain, this could save you a couple of settings.
@@ -79,7 +79,7 @@ sample:common:dev:CLIENT_HOST_URL=http://api.plasne.com
 sample:common:dev:WEB_HOST_URL=http://web.plasne.com
 sample:auth:dev:TENANT_ID=00000000-0000-0000-0000-000000000000
 sample:auth:dev:CLIENT_ID=00000000-0000-0000-0000-000000000000
-sample:auth:dev:KEYVAULT_PRIVATE_KEY_URL=https://sample.vault.azure.net/private_key
-sample:auth:dev:KEYVAULT_PRIVATE_KEY_PASSWORD_URL=https://sample.vault.azure.net/private_key_pw
-sample:auth:dev:KEYVAULT_PUBLIC_CERT_PREFIX_URL=https://sample.vault.azure.net/public_cert_prefix
+sample:auth:dev:PRIVATE_KEY=https://sample.vault.azure.net/private_key
+sample:auth:dev:PRIVATE_KEY_PASSWORD=https://sample.vault.azure.net/private_key_pw
+sample:auth:dev:PUBLIC_CERT_PREFIX=https://sample.vault.azure.net/public_cert_prefix
 ```

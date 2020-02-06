@@ -1,134 +1,32 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.Net;
 using System.Threading.Tasks;
 using System.Net.Http;
-using System.Text;
-using System.Security.Cryptography;
-using System.Net.Http.Headers;
-using System.IO;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json; // System.Text.Json was not deserializing properly
 
 namespace CasAuth
 {
 
-    public class CasConfig
+    public static class CasConfig
     {
 
-        public static string AppConfigResourceId
+        private class AppConfigItems
         {
-            get
-            {
-                return System.Environment.GetEnvironmentVariable("APPCONFIG_RESOURCE_ID");
-            }
+            public AppConfigItem[] items = null;
         }
 
-        public static string[] ParseFilterString(string compact)
+        private class AppConfigItem
         {
-            if (string.IsNullOrEmpty(compact)) return new string[] { };
-            return compact.Split(',').Select(id => id.Trim()).ToArray();
-        }
-
-        public static string[] ConfigKeys
-        {
-            get
-            {
-                return ParseFilterString(System.Environment.GetEnvironmentVariable("CONFIG_KEYS"));
-            }
-        }
-
-        private static void Sign(HttpRequestMessage request, string credential, byte[] secret)
-        {
-            // from: https://github.com/Azure/AppConfiguration/blob/master/docs/REST/authentication.md
-            string host = request.RequestUri.Authority;
-            string verb = request.Method.ToString().ToUpper();
-            DateTimeOffset utcNow = DateTimeOffset.UtcNow;
-            string contentHash = Convert.ToBase64String(ComputeSha256Hash(request.Content));
-
-            // sign
-            string signedHeaders = "date;host;x-ms-content-sha256"; // Semicolon separated header names
-            var stringToSign = $"{verb}\n{request.RequestUri.PathAndQuery}\n{utcNow.ToString("r")};{host};{contentHash}";
-            string signature;
-            using (var hmac = new HMACSHA256(secret))
-            {
-                signature = Convert.ToBase64String(hmac.ComputeHash(Encoding.ASCII.GetBytes(stringToSign)));
-            }
-
-            // add headers
-            request.Headers.Date = utcNow;
-            request.Headers.Add("x-ms-content-sha256", contentHash);
-            request.Headers.Authorization = new AuthenticationHeaderValue("HMAC-SHA256", $"Credential={credential}, SignedHeaders={signedHeaders}, Signature={signature}");
-
-        }
-
-        private static byte[] ComputeSha256Hash(HttpContent content)
-        {
-            // from: https://github.com/Azure/AppConfiguration/blob/master/docs/REST/authentication.md
-            using (var stream = new MemoryStream())
-            {
-                if (content != null)
-                {
-                    content.CopyToAsync(stream).Wait();
-                    stream.Seek(0, SeekOrigin.Begin);
-                }
-                using (var alg = SHA256.Create())
-                {
-                    return alg.ComputeHash(stream.ToArray());
-                }
-            }
-        }
-
-        private class Keys
-        {
-            public Key[] value = null;
-        }
-
-        private class Key
-        {
-            public string id = null;
-            public string value = null;
-        }
-
-        private async static Task<(string, string)> GetIdAndSecret(HttpClient httpClient)
-        {
-            string accessToken = await CasAuthChooser.GetAccessToken("https://management.azure.com", "AUTH_TYPE_CONFIG");
-            string url = $"https://management.azure.com{AppConfigResourceId}/ListKeys?api-version=2019-10-01";
-            using (var request = new HttpRequestMessage()
-            {
-                RequestUri = new Uri(url),
-                Method = HttpMethod.Post
-            })
-            {
-                request.Headers.Add("Authorization", $"Bearer {accessToken}");
-                using (var response = await httpClient.SendAsync(request))
-                {
-                    var raw = await response.Content.ReadAsStringAsync();
-                    if ((int)response.StatusCode == 401 || (int)response.StatusCode == 403)
-                    {
-                        throw new Exception($"CasConfig.GetIdAndSecret: The identity is not authorized to get management keys for the AppConfig: {AppConfigResourceId}; make sure this is the right instance and that you have granted rights to the Managed Identity or Service Principal. If running locally, make sure you have run an \"az login\" with the correct account and subscription.");
-                    }
-                    else if (!response.IsSuccessStatusCode)
-                    {
-                        throw new Exception($"CasConfig.GetIdAndSecret: HTTP {(int)response.StatusCode} - {raw}");
-                    }
-                    var keys = JsonConvert.DeserializeObject<Keys>(raw);
-                    var pri = keys.value.First();
-                    return ((string)pri.id, (string)pri.value);
-                }
-            };
-        }
-
-        private class Items
-        {
-            public Item[] items = null;
-        }
-
-        private class Item
-        {
+            public string content_type = null;
             public string key = null;
             public string value = null;
+        }
+
+        private class KeyVaultRef
+        {
+            public string uri = null;
         }
 
         public async static Task<Dictionary<string, string>> Load(HttpClient httpClient, string[] filters, bool useFullyQualifiedName = false)
@@ -138,22 +36,21 @@ namespace CasAuth
             Dictionary<string, string> kv = new Dictionary<string, string>();
             if (filters.Length < 1) return kv;
 
-            // get the id and secret
-            var (appConfigId, appConfigSecret) = await CasConfig.GetIdAndSecret(httpClient);
+            // get an accessToken
+            string accessToken = await CasAuthChooser.GetAccessToken($"https://{CasEnv.AppConfig}", "AUTH_TYPE_CONFIG");
 
             // process each key filter request
             foreach (var filter in filters)
             {
 
                 // make authenticated calls to Azure AppConfig
-                string appConfigName = AppConfigResourceId.Split("/").Last();
                 using (var request = new HttpRequestMessage()
                 {
-                    RequestUri = new Uri($"https://{appConfigName}.azconfig.io/kv?key={filter}"),
+                    RequestUri = new Uri($"https://{CasEnv.AppConfig}/kv?key={filter}"),
                     Method = HttpMethod.Get
                 })
                 {
-                    Sign(request, appConfigId, Convert.FromBase64String(appConfigSecret));
+                    request.Headers.Add("Authorization", $"Bearer {accessToken}");
                     using (var response = await httpClient.SendAsync(request))
                     {
 
@@ -161,7 +58,7 @@ namespace CasAuth
                         var raw = await response.Content.ReadAsStringAsync();
                         if ((int)response.StatusCode == 401 || (int)response.StatusCode == 403)
                         {
-                            throw new Exception($"CasConfig.Load: The identity is not authorized to get key/value pairs from the AppConfig: {AppConfigResourceId}; make sure this is the right instance and that you have granted rights to the Managed Identity or Service Principal. If running locally, make sure you have run an \"az login\" with the correct account and subscription.");
+                            throw new Exception($"CasConfig.Load: The identity is not authorized to get key/value pairs from the AppConfig: {CasEnv.AppConfig}; make sure this is the right instance and that you have granted rights to the Managed Identity or Service Principal. If running locally, make sure you have run an \"az login\" with the correct account and subscription.");
                         }
                         else if (!response.IsSuccessStatusCode)
                         {
@@ -169,11 +66,16 @@ namespace CasAuth
                         }
 
                         // look for key/value pairs
-                        var json = JsonConvert.DeserializeObject<Items>(raw);
+                        var json = JsonConvert.DeserializeObject<AppConfigItems>(raw);
                         foreach (var item in json.items)
                         {
-                            var key = (useFullyQualifiedName) ? (string)item.key : ((string)item.key).Split(":").Last().ToUpper();
-                            var val = (string)item.value;
+                            var key = (useFullyQualifiedName) ? item.key : item.key.Split(":").Last();
+                            key = key.ToUpper();
+                            var val = item.value;
+                            if (item.content_type.Contains("vnd.microsoft.appconfig.keyvaultref", StringComparison.InvariantCultureIgnoreCase))
+                            {
+                                val = JsonConvert.DeserializeObject<KeyVaultRef>(item.value).uri;
+                            }
                             if (!kv.ContainsKey(key)) kv.Add(key, val);
                         }
 
@@ -189,7 +91,7 @@ namespace CasAuth
         {
 
             // load the config
-            if (filters == null) filters = ConfigKeys;
+            if (filters == null) filters = CasEnv.ConfigKeys;
             Dictionary<string, string> kv = await CasConfig.Load(httpClient, filters);
 
             // apply the config
@@ -197,6 +99,43 @@ namespace CasAuth
             {
                 System.Environment.SetEnvironmentVariable(pair.Key, pair.Value);
             }
+
+        }
+
+        private class KeyVaultItem
+        {
+            public string value = null;
+        }
+
+        public static async Task<string> GetFromKeyVault(HttpClient httpClient, string url, bool ignore404 = false)
+        {
+
+            // get an access token
+            var accessToken = await CasAuthChooser.GetAccessToken("https://vault.azure.net", "AUTH_TYPE_VAULT");
+
+            // get from the keyvault
+            using (var request = new HttpRequestMessage()
+            {
+                RequestUri = new Uri($"{url}?api-version=7.0"),
+                Method = HttpMethod.Get
+            })
+            {
+                request.Headers.Add("Authorization", $"Bearer {accessToken}");
+                using (var response = await httpClient.SendAsync(request))
+                {
+                    var raw = await response.Content.ReadAsStringAsync();
+                    if (ignore404 && (int)response.StatusCode == 404) // Not Found
+                    {
+                        return string.Empty;
+                    }
+                    else if (!response.IsSuccessStatusCode)
+                    {
+                        throw new Exception($"CasTokenIssuer.GetFromKeyVault: HTTP {(int)response.StatusCode} - {raw}");
+                    }
+                    var item = JsonConvert.DeserializeObject<KeyVaultItem>(raw);
+                    return item.value;
+                }
+            };
 
         }
 

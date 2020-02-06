@@ -29,22 +29,28 @@ namespace CasAuth
         {
             try
             {
+                Logger.LogDebug("CasXsrfHandler: start authorization check for XSRF...");
 
                 // if there is no requirement for XSRF, then don't check for it
                 if (!CasEnv.VerifyXsrfInHeader && !CasEnv.VerifyXsrfInCookie)
                 {
+                    Logger.LogDebug("CasXsrfHandler: neither VERIFY_XSRF_IN_HEADER or VERIFY_XSRF_IN_COOKIE are \"true\" so the authorization check is a success.");
                     context.Succeed(requirement);
                     return Task.CompletedTask;
                 }
 
                 // get the identity of the authenticated user
-                var identity = context.User.Identity as ClaimsIdentity;
-                if (identity == null) throw new Exception("identity not found");
-                if (!identity.IsAuthenticated) throw new Exception("user is not authenticated");
+                var identity = context.User?.Identity as ClaimsIdentity;
+                if (identity == null || !identity.IsAuthenticated)
+                {
+                    Logger.LogDebug("CasXsrfHandler: authentication failed, so the authorization check is a failure.");
+                    throw new Exception("user is not authenticated");
+                }
 
                 // if this is a service account, no XSRF is required
                 if (identity.Claims.IsService())
                 {
+                    Logger.LogDebug("CasXsrfHandler: the identity is a service account, XSRF is not required, so the authorization check is a success.");
                     context.Succeed(requirement);
                     return Task.CompletedTask;
                 }
@@ -54,30 +60,51 @@ namespace CasAuth
                 if (CasEnv.VerifyXsrfInHeader)
                 {
                     code = ContextAccessor.HttpContext.Request.Headers["X-XSRF-TOKEN"];
+                    Logger.LogDebug($"CasXsrfHandler: the XSRF token was obtained from a header as \"{code}\"...");
                 }
                 if (CasEnv.VerifyXsrfInCookie && string.IsNullOrEmpty(code))
                 {
                     code = ContextAccessor.HttpContext.Request.Cookies["XSRF-TOKEN"];
+                    Logger.LogDebug($"CasXsrfHandler: the XSRF token was obtained from a cookie as \"{code}\"...");
                 }
-                if (string.IsNullOrEmpty(code)) throw new Exception("XSRF code not found");
+                if (string.IsNullOrEmpty(code))
+                {
+                    Logger.LogDebug("CasXsrfHandler: the XSRF code was null or empty, so the authorization check is a failure.");
+                    throw new Exception("XSRF code not found");
+                }
 
                 // validate the signature if signed
                 //  NOTE: it will be signed if the source claim was accessible via JavaScript
                 if (!CasEnv.RequireHttpOnlyOnUserCookie)
                 {
+                    Logger.LogDebug($"CasXsrfHandler: the XSRF token is signed, it will be verified...");
                     var validate = this.Validator.ValidateToken(code);
                     validate.Wait();
                     var validated = validate.Result;
                     var codeclaim = validated.Payload.Claims.FirstOrDefault(c => c.Type == "code");
-                    if (codeclaim == null) throw new Exception("xsrf signed token did not contain a code");
+                    if (codeclaim == null)
+                    {
+                        Logger.LogDebug("CasXsrfHandler: the signed XSRF token did not contain a code, so the authorization check is a failure.");
+                        throw new Exception("xsrf signed token did not contain a code");
+                    }
                     code = codeclaim.Value;
+                    Logger.LogDebug($"CasXsrfHandler: the XSRF token is signed, it was verified successfully as extracted as \"{code}\"...");
                 }
 
                 // verify that it matches the XSRF claim
                 var xsrfclaim = identity.FindFirst(c => c.Type == "xsrf");
-                if (xsrfclaim == null) throw new Exception("xsrf claim not found");
-                if (code != xsrfclaim.Value) throw new Exception("xsrf claim does not match code");
+                if (xsrfclaim == null)
+                {
+                    Logger.LogDebug("CasXsrfHandler: the identity did not contain an XSRF code, so the authorization check is a failure.");
+                    throw new Exception("xsrf claim not found");
+                }
+                if (code != xsrfclaim.Value)
+                {
+                    Logger.LogDebug($"CasXsrfHandler: the XSRF code did not match, expected \"{xsrfclaim.Value}\", received \"{code}\", so the authorization check is a failure.");
+                    throw new Exception("xsrf claim does not match code");
+                }
 
+                Logger.LogDebug("CasXsrfHandler: the codes matched, so the authorization check is a success.");
                 context.Succeed(requirement);
             }
             catch (Exception e)

@@ -156,7 +156,7 @@ If you are going to use AUTH_TYPE=mi, the above settings are the only things you
 
 -   CLIENT_ID - This is the Client ID of the application that will be used to authenticate the user (step 5 from the Azure AD Application section above).
 
--   CLIENT_SECRET - This is the client secret (step 3 from the Azure AD Application section above) for the CLIENT_ID. If you set this setting, you never need to set KEYVAULT_CLIENT_SECRET_URL.
+-   CLIENT_SECRET - This is the client secret (step 3 from the Azure AD Application section above) for the CLIENT_ID.
 
 ### Recommended
 
@@ -168,15 +168,9 @@ Generally, you should supply these settings. These are shown in the format that 
 
 -   app:common:env:WEB_HOST_URL - This allows you to specify the fully qualified URL of the static web assets (ex. https://web.plasne.com). Using this setting in conjunction with SERVER_HOST_URL and CLIENT_HOST_URL will be able to set many of the default values. When unspecified and USE_INSECURE_DEFAULTS is true, this will default to http://localhost:5000.
 
--   app:auth:env:CLIENT_ID - This is the Client ID of the application that will be used to authenticate the user (step 5 from the Azure AD Application section above). You must have a CLIENT_ID, but it could have already been set by using AUTH_TYPE=app, and if that is the case, it does not need to be in the App Configuration settings.
-
 -   app:auth:env:TENANT_ID - This is the tenant ID of the Azure AD directory that contains the CLIENT_ID. You must have a CLIENT_ID, but it could have already been set by using AUTH_TYPE=app, and if that is the case, it does not need to be in the App Configuration settings.
 
--   app:auth:env:KEYVAULT_PRIVATE_KEY_URL - This is the URL of the PFX file stored in step 4 of the Azure Key Vault section above.
-
--   app:auth:env:KEYVAULT_PRIVATE_KEY_PASSWORD_URL - This is the URL of the PFX file password stored in step 5 of the Azure Key Vault section above.
-
--   app:auth:env:KEYVAULT_PUBLIC_CERT_PREFIX_URL - This is the URL prefix for the public certificate stored in step 6 of the Azure Key Vault section above. You can have up to 4 public certificates available for verification, they are indexed 0, 1, 2, and 3. The URL you will use here is everything up to the index. (ex. "https://pelasne-keyvault.vault.azure.net/secrets/PUBLIC-CERT-")
+-   app:auth:env:CLIENT_ID - This is the Client ID of the application that will be used to authenticate the user (step 5 from the Azure AD Application section above). You must have a CLIENT_ID, but it could have already been set by using AUTH_TYPE=app, and if that is the case, it does not need to be in the App Configuration settings.
 
 ### Optional
 
@@ -198,6 +192,8 @@ Generally these settings do not need to be modified, but there are many configur
 
 -   app:auth:env:APPLICATION_ID - You can optionally include a comma-delimited list of application IDs. If you do, the session_token will contain the roles from those applications. Each will be projected as a claim named as the APPLICATION_ID-roles. For this to work, the application specified by CLIENT_ID must have Directory.Read.All as a Microsoft Graph Application Permission (not Delegated) - this right requires administrative consent.
 
+-   app:auth:env:CLIENT_SECRET - This is the Client Secret of the application that will be used to authenticate the user (step 5 from the Azure AD Application section above). You only need this if using AuthCode. This could have already been set if using AUTH_TYPE=app. This commonly will be a URL to a secret in the Key Vault.
+
 -   app:auth:env:DEFAULT_REDIRECT_URL (default: WEB_HOST_URL) - When an authentication request is started, the client can pass a "redirecturi" querystring parameter to the auth/authorize endpoint. If it does not, the DEFAULT_REDIRECT_URL is used. When the authentication flow is done, this the URL that the auth/token endpoint will redirect the user back to.
 
 -   app:common:env:REQUIRE_SECURE_FOR_COOKIES (default: derived from SERVER_HOST_URL, CLIENT_HOST_URL, and WEB_HOST_URL) - This determines whether cookies are marked "secure", meaning they will only be sent to HTTPS endpoints. If your URLs are all HTTPS when this defaults to "true", otherwise "false".
@@ -208,11 +204,11 @@ Generally these settings do not need to be modified, but there are many configur
 
 -   app:auth:env:JWT_MAX_DURATION (default: 10080) - You can specify a number of minutes that determines the maximum time for an session_token is allowed to exist (including reissue). It defaults to 7 days (10080 minutes). You may also specify 0 to allow the token to be reissued forever.
 
--   app:auth:env:PRIVATE_KEY - Rather than store the base64-encoded PFX file in the Key Vault, it is possible to specify PRIVATE_KEY as an environment variable instead. Generally, you should store this in the Key Vault.
+-   app:auth:env:PRIVATE_KEY - This is the key that will be used to sign the JWTs issued by the auth service. This commonly will be a URL to a secret in the Key Vault.
 
--   app:auth:env:PRIVATE_KEY_PASSWORD - Rather than store the PFX password in the Key Vault, it is possible to specify PRIVATE_KEY_PASSWORD as an environment variable instead. Generally, you should store this in the Key Vault.
+-   app:auth:env:PRIVATE_KEY_PASSWORD - The private key is in PFX format, which requires a password for export. This allows you to specify the password you used when creating the PFX. This commonly will be a URL to a secret in the Key Vault.
 
--   app:auth:env:PUBLIC_CERT_index (0, 1, 2, 3) - Rather than store the public certificates in the Key Vault, it is possible to specify PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, and/or PUBLIC_CERT_3 as environment variables instead. Generally, you should store these in the Key Vault.
+-   app:auth:env:PUBLIC_CERT_index (0, 1, 2, 3) - Rather than store the public certificates in the Key Vault, it is possible to specify PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, and/or PUBLIC_CERT_3 as environment variables instead. These commonly will be URLs to secrets in the Key Vault.
 
 -   app:api:env:WELL_KNOWN_CONFIG_URL (default: derived from SERVER_HOST_URL) - This is the URL of the auth/.well-known/openid-configuration endpoint.
 
@@ -222,13 +218,9 @@ Generally these settings do not need to be modified, but there are many configur
 
 -   app:auth:env:DOMAIN_HINT - If you want to provide a domain hint when authenticating, you can specify it.
 
--   app:auth:env:KEYVAULT_CLIENT_SECRET_URL - If you are going to use AuthCode, then you need to specify this parameter unless you have already specified CLIENT_SECRET. This would be the URL from step 7 under the Azure Key Vault section above.
-
 -   app:auth:env:REQUIRE_USER_ENABLED_ON_REISSUE (default: true) - Before a token is reissued, the "accountEnabled" status of the user is checked to ensure it is "true". However, if you set REQUIRE_USER_ENABLED_ON_REISSUE to "false", this check will be ignored. Querying the "accountEnabled" property of a user requires Directory.Read.All or User.Read.All.
 
--   app:auth:env:KEYVAULT_COMMAND_PASSWORD_URL - You should specify a command password that must be sent to all command and control functions (like auth/clear-cache when reissuing tokens). You should prefer to store that in KeyVault and provide this URL, but you can also set it by COMMAND_PASSWORD.
-
--   app:auth:env:COMMAND_PASSWORD (default: secret) - Rather than store the command password in the Key Vault, it is possible to specify COMMAND_PASSWORD as an environment variable instead. Generally, you should store this in the Key Vault.
+-   app:auth:env:COMMAND_PASSWORD (default: secret) - Administrative functions for the authentication service require a command password as proof of authority (this is because the authentication might not be working for the actual authentication service). This commonly will be a URL to a secret in the Key Vault.
 
 -   app:api:env:PRESENT_CONFIG_name - You may create one or more PRESENT_CONFIG_name keys that allow you to specify configurations that can be presented by your API at api/config/name. For example, you could create the following variable "PRESENT_CONFIG_wfedev=app:wfe:dev:\*". All keys under that filter would be returned when someone hit the /api/config/webdev endpoint. Primarily this is provided so your WFE can be configured by Azure App Configuration in the same way as the other services.
 
@@ -237,8 +229,6 @@ Generally these settings do not need to be modified, but there are many configur
 -   app:auth:env:ROLE_FOR_ADMIN (default: admin) - The name of the role that must be verified in order to perform client administrative functions.
 
 -   app:auth:env:ROLE_FOR_SERVICE (default: service) - The name of the role that indicates this authentication is for a service (for instance, will accept an authentication bearer token).
-
--   KEYVAULT_CLIENT_SECRET_GRAPH_URL
 
 ### Alternate Service Authentication
 
@@ -266,7 +256,7 @@ In some rare cases, you might need separate methods of authetication to Azure se
 
 -   app:auth:env:CLIENT_ID_GRAPH (default: CLIENT_ID) - Generally, you just need to use CLIENT_ID which specifies the application ID to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Microsoft Graph, you can specify it specifically.
 
--   app:auth:env:CLIENT_SECRET_GRAPH (default: CLIENT_SECRET) - Generally, you just need to use CLIENT_SECRET which specifies the secret to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Microsoft Graph, you can specify it specifically.
+-   app:auth:env:CLIENT_SECRET_GRAPH (default: CLIENT_SECRET) - Generally, you just need to use CLIENT_SECRET which specifies the secret to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Microsoft Graph, you can specify it specifically. If specified, this commonly will be a URL to a secret in the Key Vault.
 
 ### Use Authorization Bearer Mode
 

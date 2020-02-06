@@ -8,6 +8,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Net.Http;
+using Microsoft.AspNetCore.Authorization;
 
 namespace CasAuth
 {
@@ -38,6 +39,13 @@ namespace CasAuth
             builder.UseEndpoints(endpoints =>
             {
 
+                // define options preflight
+                endpoints.MapMethods("/cas/{**all}", new string[] { "OPTIONS" }, context =>
+                {
+                    context.Response.StatusCode = 204;
+                    return context.Response.CompleteAsync();
+                }).RequireCors("cas-client");
+
                 // define the configuration endpoint
                 endpoints.MapGet("/cas/config/{name}", async context =>
                 {
@@ -50,8 +58,9 @@ namespace CasAuth
 
                         // look for env that would allow this config
                         string compact = System.Environment.GetEnvironmentVariable($"PRESENT_CONFIG_{name.ToUpper()}");
-                        var filters = CasConfig.ParseFilterString(compact);
-                        if (filters.Length < 1) throw new HttpException(404, $"config name of '{name}' is not found.");
+                        if (string.IsNullOrEmpty(compact)) throw new HttpException(404, $"config name of '{name}' is not found (1).");
+                        var filters = compact.Split(',').Select(id => id.Trim()).ToArray();
+                        if (filters.Count() < 1) throw new HttpException(404, $"config name of '{name}' is not found (2).");
 
                         // return the config
                         var httpClientFactory = context.RequestServices.GetService<IHttpClientFactory>();
@@ -74,7 +83,7 @@ namespace CasAuth
                         logger.LogError(e, "Exception in /cas/config/{name}");
                         await context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-client");
 
                 // define the "me" endpoint
                 endpoints.MapGet("/cas/me", context =>
@@ -82,33 +91,29 @@ namespace CasAuth
                     try
                     {
 
-                        // ensure user is authorized
-                        if (context.User == null) throw new HttpException(401, "user is not authenticated");
-
                         // filter the claims
-                        var filter = new string[] { "xsrf", "old", "exp", "iss", "aud" };
-                        var filtered = context.User.Claims.ToList();
-                        filtered.RemoveAll(c => filter.Contains(c.Type) || c.Type.StartsWith("http://schemas.microsoft.com/"));
+                        var filtered = context.User.Claims.FilterToSignificant();
 
                         // project to a dictionary
                         var projected = new Dictionary<string, object>();
                         foreach (var claim in filtered)
                         {
-                            if (projected.ContainsKey(claim.Type))
+                            string key = claim.ShortType();
+                            if (projected.ContainsKey(key))
                             {
-                                var obj = projected[claim.Type];
+                                var obj = projected[key];
                                 if (obj is string)
                                 {
-                                    projected[claim.Type] = new List<string>() { (string)obj, claim.Value };
+                                    projected[key] = new List<string>() { (string)obj, claim.Value };
                                 }
                                 else
                                 {
-                                    ((List<string>)projected[claim.Type]).Add(claim.Value);
+                                    ((List<string>)projected[key]).Add(claim.Value);
                                 }
                             }
                             else
                             {
-                                projected.Add(claim.Type, claim.Value);
+                                projected.Add(key, claim.Value);
                             }
                         }
 
@@ -130,17 +135,13 @@ namespace CasAuth
                         logger.LogError(e, "Exception in /cas/me");
                         return context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-client").RequireAuthorization(new AuthorizeAttribute("cas"));
 
                 // define the clear-client-cache endpoint
                 endpoints.MapPost("/cas/clear-client-cache", context =>
                 {
                     try
                     {
-
-                        // ensure user is authorized
-                        if (context.User == null) throw new HttpException(401, "user is not authenticated");
-                        if (!context.User.Claims.HasRole(CasEnv.RoleForAdmin)) throw new HttpException(403, "user is not authorized");
 
                         // find the validator and use it to clear cache
                         var validator = context.RequestServices.GetService<CasTokenValidator>();
@@ -162,17 +163,13 @@ namespace CasAuth
                         logger.LogError(e, "Exception in /cas/clear-client-cache");
                         return context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-client").RequireAuthorization(new AuthorizeAttribute("cas") { Roles = CasEnv.RoleForAdmin });
 
                 // define the validation thumbprints endpoint
                 endpoints.MapGet("/cas/validation-thumbprints", async context =>
                 {
                     try
                     {
-
-                        // ensure user is authorized
-                        if (context.User == null) throw new HttpException(401, "user is not authenticated");
-                        if (!context.User.Claims.HasRole(CasEnv.RoleForAdmin)) throw new HttpException(403, "user is not authorized");
 
                         // get the configuration
                         var list = new List<string>();
@@ -201,7 +198,7 @@ namespace CasAuth
                         logger.LogError(e, "Exception in /cas/validation-thumbprints");
                         await context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-client").RequireAuthorization(new AuthorizeAttribute("cas") { Roles = CasEnv.RoleForAdmin });
 
             });
             return builder;

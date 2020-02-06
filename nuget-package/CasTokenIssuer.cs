@@ -29,106 +29,28 @@ namespace CasAuth
         private HttpClient HttpClient { get; }
         public ConfigurationManager<OpenIdConnectConfiguration> ConfigManager { get; }
 
-        private string _clientSecret;
+        private Dictionary<string, string> ValueOrKeyVaultCache { get; } = new Dictionary<string, string>();
 
-        public async Task<string> GetClientSecret()
+        public async Task<string> ValueOrKeyVault(string key, string value)
         {
 
-            // see if there is an env for CLIENT_SECRET
-            if (string.IsNullOrEmpty(_clientSecret)) _clientSecret = CasEnv.ClientSecret;
+            // look first to the cache
+            if (ValueOrKeyVaultCache.ContainsKey(key)) return ValueOrKeyVaultCache[key];
 
-            // see if there is an env for KEYVAULT_CLIENT_SECRET_URL
-            if (string.IsNullOrEmpty(_clientSecret))
+            // pull from key-vault if a URL
+            if (
+                !string.IsNullOrEmpty(value) &&
+                value.StartsWith("https://", StringComparison.InvariantCultureIgnoreCase) &&
+                value.Contains(".vault.azure.net/", StringComparison.InvariantCultureIgnoreCase)
+            )
             {
-                string url = CasEnv.KeyvaultClientSecretUrl;
-                if (string.IsNullOrEmpty(url)) throw new Exception("either CLIENT_SECRET or KEYVAULT_CLIENT_SECRET_URL must be defined");
-                _clientSecret = await CasTokenIssuer.GetFromKeyVault(this.HttpClient, url);
+                value = await CasConfig.GetFromKeyVault(this.HttpClient, value);
             }
 
-            return _clientSecret;
-        }
+            // cache
+            ValueOrKeyVaultCache.Add(key, value);
 
-        private string _clientSecretGraph;
-
-        public async Task<string> GetClientSecretGraph()
-        {
-
-            // see if there is an env for CLIENT_SECRET_GRAPH
-            if (string.IsNullOrEmpty(_clientSecretGraph)) _clientSecretGraph = CasEnv.ClientSecret;
-
-            // see if there is an env for KEYVAULT_CLIENT_SECRET_GRAPH_URL
-            if (string.IsNullOrEmpty(_clientSecretGraph))
-            {
-                string url = CasEnv.KeyvaultClientSecretGraphUrl;
-                if (!string.IsNullOrEmpty(url))
-                {
-                    _clientSecretGraph = await CasTokenIssuer.GetFromKeyVault(this.HttpClient, url);
-                }
-                else
-                {
-                    _clientSecretGraph = await GetClientSecret();
-                }
-            }
-
-            return _clientSecretGraph;
-        }
-
-        private string _commandPassword;
-
-        public async Task<string> GetCommandPassword()
-        {
-
-            // see if there is an env for COMMAND_PASSWORD
-            if (string.IsNullOrEmpty(_commandPassword)) _commandPassword = CasEnv.CommandPassword;
-
-            // see if there is an env for KEYVAULT_COMMAND_PASSWORD_URL
-            if (string.IsNullOrEmpty(_commandPassword))
-            {
-                string url = CasEnv.KeyvaultCommandPasswordUrl;
-                if (!string.IsNullOrEmpty(url))
-                {
-                    _commandPassword = await CasTokenIssuer.GetFromKeyVault(this.HttpClient, url);
-                }
-            }
-
-            return _commandPassword;
-        }
-
-        private string _privateKey;
-
-        public async Task<string> GetPrivateKey()
-        {
-
-            // see if there is an env for PRIVATE_KEY
-            if (string.IsNullOrEmpty(_privateKey)) _privateKey = CasEnv.PrivateKey;
-
-            // see if there is an env for KEYVAULT_PRIVATE_KEY_URL
-            if (string.IsNullOrEmpty(_privateKey))
-            {
-                string url = CasEnv.KeyvaultPrivateKeyUrl;
-                if (string.IsNullOrEmpty(url)) throw new Exception("either PRIVATE_KEY or KEYVAULT_PRIVATE_KEY_URL must be defined");
-                _privateKey = await CasTokenIssuer.GetFromKeyVault(this.HttpClient, url);
-            }
-
-            return _privateKey;
-        }
-
-        private string _privateKeyPw;
-
-        public async Task<string> GetPrivateKeyPassword()
-        {
-
-            // see if there is an env for PRIVATE_KEY
-            if (string.IsNullOrEmpty(_privateKeyPw)) _privateKeyPw = CasEnv.PrivateKeyPassword;
-
-            if (string.IsNullOrEmpty(_privateKeyPw))
-            {
-                string url = CasEnv.KeyvaultPrivateKeyPasswordUrl;
-                if (string.IsNullOrEmpty(url)) throw new Exception("either PRIVATE_KEY_PASSWORD or KEYVAULT_PRIVATE_KEY_PASSWORD_URL must be defined");
-                _privateKeyPw = await CasTokenIssuer.GetFromKeyVault(this.HttpClient, url);
-            }
-
-            return _privateKeyPw;
+            return value;
         }
 
         private X509SigningCredentials _signingCredentials;
@@ -137,9 +59,9 @@ namespace CasAuth
         {
             if (_signingCredentials == null)
             {
-                var privateKey = await GetPrivateKey();
+                var privateKey = await ValueOrKeyVault("PRIVATE_KEY", CasEnv.PrivateKey);
                 var bytes = Convert.FromBase64String(privateKey);
-                var privateKeyPassword = await GetPrivateKeyPassword();
+                var privateKeyPassword = await ValueOrKeyVault("PRIVATE_KEY_PASSWORD", CasEnv.PrivateKeyPassword);
                 var certificate = new X509Certificate2(bytes, privateKeyPassword);
                 _signingCredentials = new X509SigningCredentials(certificate, SecurityAlgorithms.RsaSha256);
             }
@@ -154,21 +76,12 @@ namespace CasAuth
             {
                 _validationCertificates = new List<X509Certificate2>();
 
-                // attempt to read from environment variables
-                foreach (string raw in CasEnv.PublicCertificates)
-                {
-                    byte[] bytes = GetBytesFromPEM(raw, "CERTIFICATE");
-                    var x509 = new X509Certificate2(bytes);
-                    _validationCertificates.Add(x509);
-                }
-
                 // attempt to get certificates indexed 0-3 at the same time
                 var tasks = new List<Task<string>>();
-                foreach (string url in CasEnv.KeyvaultPublicCertificateUrls)
-                {
-                    var task = GetFromKeyVault(this.HttpClient, url, ignore404: true);
-                    tasks.Add(task);
-                }
+                tasks.Add(ValueOrKeyVault("PUBLIC_CERT_0", CasEnv.PublicCert0));
+                tasks.Add(ValueOrKeyVault("PUBLIC_CERT_1", CasEnv.PublicCert1));
+                tasks.Add(ValueOrKeyVault("PUBLIC_CERT_2", CasEnv.PublicCert2));
+                tasks.Add(ValueOrKeyVault("PUBLIC_CERT_3", CasEnv.PublicCert3));
 
                 // wait for all the tasks to complete
                 await Task.WhenAll(tasks.ToArray());
@@ -189,38 +102,6 @@ namespace CasAuth
 
             }
             return _validationCertificates;
-        }
-
-        private static async Task<string> GetFromKeyVault(HttpClient httpClient, string url, bool ignore404 = false)
-        {
-
-            // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://vault.azure.net", "AUTH_TYPE_VAULT");
-
-            // get from the keyvault
-            using (var request = new HttpRequestMessage()
-            {
-                RequestUri = new Uri($"{url}?api-version=7.0"),
-                Method = HttpMethod.Get
-            })
-            {
-                request.Headers.Add("Authorization", $"Bearer {accessToken}");
-                using (var response = await httpClient.SendAsync(request))
-                {
-                    var raw = await response.Content.ReadAsStringAsync();
-                    if (ignore404 && (int)response.StatusCode == 404) // Not Found
-                    {
-                        return string.Empty;
-                    }
-                    else if (!response.IsSuccessStatusCode)
-                    {
-                        throw new Exception($"CasTokenIssuer.GetFromKeyVault: HTTP {(int)response.StatusCode} - {raw}");
-                    }
-                    dynamic json = JObject.Parse(raw);
-                    return (string)json.value;
-                }
-            };
-
         }
 
         private static byte[] GetBytesFromPEM(string pemString, string section = "CERTIFICATE")

@@ -12,7 +12,7 @@ namespace CasAuth
 
     public class CasIntPropogateHeadersOptions
     {
-        public List<string> Headers = new List<string>() { "X-IDENTITY", "X-EMAIL", "X-ROLES", "X-CORRELATION" };
+        public List<string> Headers = new List<string>() { "X-IDENTITY", "X-EMAIL", "X-NAME", "X-ROLES", "X-CORRELATION" };
     }
 
     public class CasIntPropogateHeaders : DelegatingHandler
@@ -47,7 +47,7 @@ namespace CasAuth
                         var user = this.HttpContextAccessor?.HttpContext?.User;
                         if (user != null)
                         {
-                            var dict = user.Claims.ToDictionary();
+                            var dict = user.Claims.FilterToSignificant().ToDictionary(i => (i.ShortType(), i.Value));
                             request.Headers.Add(name, JsonConvert.SerializeObject(dict));
                         }
                     }
