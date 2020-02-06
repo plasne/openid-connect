@@ -115,7 +115,7 @@ namespace CasAuth
         {
 
             // get the client secret
-            var secret = await tokenIssuer.GetClientSecret();
+            var secret = await tokenIssuer.ValueOrKeyVault("CLIENT_SECRET", CasEnv.ClientSecret);
 
             // get the response
             using (var request = new HttpRequestMessage()
@@ -152,7 +152,7 @@ namespace CasAuth
         {
 
             // get the client secret
-            var secret = await tokenIssuer.GetClientSecret();
+            var secret = await tokenIssuer.ValueOrKeyVault("CLIENT_SECRET", CasEnv.ClientSecret);
 
             // get the response
             using (var request = new HttpRequestMessage()
@@ -302,6 +302,13 @@ namespace CasAuth
             builder.UseEndpoints(endpoints =>
             {
 
+                // define options preflight
+                endpoints.MapMethods("/cas/{**all}", new string[] { "OPTIONS" }, context =>
+                {
+                    context.Response.StatusCode = 204;
+                    return context.Response.CompleteAsync();
+                }).RequireCors("cas-server");
+
                 // define the authorize endpoint
                 endpoints.MapGet("/cas/authorize", context =>
                 {
@@ -357,7 +364,7 @@ namespace CasAuth
                         logger.LogError(e, "Exception in /cas/authorize");
                         return context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-server");
 
                 // define the token endpoint
                 endpoints.MapPost("/cas/token", async context =>
@@ -516,7 +523,7 @@ namespace CasAuth
                         logger.LogError(e, "Exception in /cas/token");
                         await context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-server");
 
                 // define the endpoint for services authenticating with a certificate
                 endpoints.MapPost("/cas/service", async context =>
@@ -585,7 +592,7 @@ namespace CasAuth
                         logger.LogError(e, "Exception in /cas/service");
                         await context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-server");
 
                 // define the endpoint for reissuing tokens
                 endpoints.MapPost("/cas/reissue", async context =>
@@ -617,7 +624,7 @@ namespace CasAuth
                         logger.LogError(e, "Exception in /cas/reissue");
                         await context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-server");
 
                 // define the wellknownconfig endpoint
                 endpoints.MapGet("/cas/.well-known/openid-configuration", context =>
@@ -652,7 +659,7 @@ namespace CasAuth
                         logger.LogError(e, "Exception in /cas/.well-known/openid-configuration");
                         return context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-server");
 
                 // define the keys endpoint
                 endpoints.MapGet("/cas/keys", async context =>
@@ -690,7 +697,7 @@ namespace CasAuth
                         logger.LogError(e, "Exception in /cas/keys");
                         await context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-server");
 
                 // define the verify endpoint which determines if an authentication request is valid
                 //  note: this can be used for gateways like APIM to validate the request
@@ -740,7 +747,7 @@ namespace CasAuth
                         logger.LogError(e, "Exception in /cas/verify");
                         await context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-server");
 
                 // define the type endpoint which shows the selection of authchooser
                 endpoints.MapGet("/cas/type", context =>
@@ -767,7 +774,7 @@ namespace CasAuth
                         logger.LogError(e, "Exception in /cas/type");
                         return context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-server");
 
                 // define the check-requirements endpoint which ensures that all accounts have appropriate access
                 endpoints.MapGet("/cas/check-requirements", async context =>
@@ -816,7 +823,7 @@ namespace CasAuth
                         logger.LogError(e, "/cas/check-requirements: exception...");
                         await context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-server");
 
                 // define the clear-server-cache endpoint
                 endpoints.MapPost("/cas/clear-server-cache", async context =>
@@ -826,7 +833,7 @@ namespace CasAuth
 
                         // ensure the user is authorized
                         var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
-                        var commandPassword = await tokenIssuer.GetCommandPassword();
+                        var commandPassword = await tokenIssuer.ValueOrKeyVault("COMMAND_PASSWORD", CasEnv.CommandPassword);
                         string password = context.Request.Form["password"];
                         if (password != commandPassword) throw new CasHttpException(401, "user did not provide the valid command password");
 
@@ -853,7 +860,7 @@ namespace CasAuth
                         logger.LogError(e, "Exception in /cas/clear-server-cache");
                         await context.Response.WriteAsync("internal server error");
                     }
-                });
+                }).RequireCors("cas-server");
 
             });
             return builder;

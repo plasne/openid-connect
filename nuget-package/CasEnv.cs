@@ -31,6 +31,37 @@ namespace CasAuth
         }
 
         /// <summary>
+        /// [OPTIONAL] The name of an AppConfig resource that contains the keys.
+        /// </summary>
+        public static string AppConfig
+        {
+            get
+            {
+                string s = System.Environment.GetEnvironmentVariable("APPCONFIG");
+                if (!string.IsNullOrEmpty(s))
+                {
+                    s = s.ToLower();
+                    if (!s.Contains(".azconfig.io")) s += ".azconfig.io";
+                }
+                return s;
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL] A comma-delimited list of keys to pull from APPCONFIG. Generally this includes a
+        /// wildcard, such as "app:auth:dev:*".
+        /// </summary>
+        public static string[] ConfigKeys
+        {
+            get
+            {
+                string keys = System.Environment.GetEnvironmentVariable("CONFIG_KEYS");
+                if (string.IsNullOrEmpty(keys)) return new string[] { };
+                return keys.Split(',').Select(id => id.Trim()).ToArray();
+            }
+        }
+
+        /// <summary>
         /// [OPTIONAL] This can be enabled for a local debug scenarios where you don't want to set:
         /// CLIENT_HOST_URL, SERVER_HOST_URL, PRIVATE_KEY, PRIVATE_KEY_PASSWORD, and PUBLIC_CERT_0.
         /// Never run this production!
@@ -671,29 +702,6 @@ namespace CasAuth
         }
 
         /// <summary>
-        /// [OPTIONAL] Rather than specify CLIENT_SECRET for the AuthCode flow requirement only, you may
-        /// store it in a Key Vault.
-        /// </summary>
-        public static string KeyvaultClientSecretUrl
-        {
-            get
-            {
-                return System.Environment.GetEnvironmentVariable("KEYVAULT_CLIENT_SECRET_URL");
-            }
-        }
-
-        /// <summary>
-        /// [OPTIONAL] Rather than specify CLIENT_SECRET_GRAPH, you may store it in a Key Vault.
-        /// </summary>
-        public static string KeyvaultClientSecretGraphUrl
-        {
-            get
-            {
-                return System.Environment.GetEnvironmentVariable("KEYVAULT_CLIENT_SECRET_GRAPH_URL");
-            }
-        }
-
-        /// <summary>
         /// [OPTIONAL, default: 4 hours] You may specify a number of minutes for the JWT expiry when generated
         /// for user authentication.
         /// </summary>
@@ -788,26 +796,15 @@ namespace CasAuth
         }
 
         /// <summary>
-        /// [OPTIONAL] Rather than specify COMMAND_PASSWORD, you may store it in a Key Vault.
-        /// </summary>
-        public static string KeyvaultCommandPasswordUrl
-        {
-            get
-            {
-                return System.Environment.GetEnvironmentVariable("KEYVAULT_COMMAND_PASSWORD_URL");
-            }
-        }
-
-        /// <summary>
         /// [OPTIONAL] The server requires a private key to sign the JWT. This can be obtained by setting
-        /// PRIVATE_KEY, KEYVAULT_PRIVATE_KEY_URL, or USE_INSECURE_DEFAULTS (localhost debugging only).
+        /// PRIVATE_KEY or USE_INSECURE_DEFAULTS (localhost debugging only).
         /// </summary>
         public static string PrivateKey
         {
             get
             {
                 string s = System.Environment.GetEnvironmentVariable("PRIVATE_KEY");
-                if (string.IsNullOrEmpty(s) && string.IsNullOrEmpty(KeyvaultPrivateKeyUrl) && UseInsecureDefaults)
+                if (string.IsNullOrEmpty(s) && UseInsecureDefaults)
                 {
                     // NOTE: this is intended to allow the application to work for localhost debug only
                     // NOTE: this is generated for 10 years from 01/31/2020
@@ -899,27 +896,15 @@ namespace CasAuth
         }
 
         /// <summary>
-        /// [OPTIONAL] The server requires a private key to sign the JWT. This can be obtained by setting
-        /// PRIVATE_KEY, KEYVAULT_PRIVATE_KEY_URL, or USE_INSECURE_DEFAULTS (localhost debugging only).
-        /// </summary>
-        public static string KeyvaultPrivateKeyUrl
-        {
-            get
-            {
-                return System.Environment.GetEnvironmentVariable("KEYVAULT_PRIVATE_KEY_URL");
-            }
-        }
-
-        /// <summary>
         /// [OPTIONAL] The server requires that the private key be secured by a password. This can be obtained by setting
-        /// PRIVATE_KEY_PASSWORD, KEYVAULT_PRIVATE_KEY_PASSWORD_URL, or USE_INSECURE_DEFAULTS (localhost debugging only).
+        /// PRIVATE_KEY_PASSWORD or USE_INSECURE_DEFAULTS (localhost debugging only).
         /// </summary>
         public static string PrivateKeyPassword
         {
             get
             {
                 string s = System.Environment.GetEnvironmentVariable("PRIVATE_KEY_PASSWORD");
-                if (string.IsNullOrEmpty(s) && string.IsNullOrEmpty(KeyvaultPrivateKeyPasswordUrl) && UseInsecureDefaults)
+                if (string.IsNullOrEmpty(s) && UseInsecureDefaults)
                 {
                     // this is intended to allow the application to work for localhost debug only
                     return "secret";
@@ -929,36 +914,18 @@ namespace CasAuth
         }
 
         /// <summary>
-        /// [OPTIONAL] The server requires that the private key be secured by a password. This can be obtained by setting
-        /// PRIVATE_KEY_PASSWORD, KEYVAULT_PRIVATE_KEY_PASSWORD_URL, or USE_INSECURE_DEFAULTS (localhost debugging only).
-        /// </summary>
-        public static string KeyvaultPrivateKeyPasswordUrl
-        {
-            get
-            {
-                return System.Environment.GetEnvironmentVariable("KEYVAULT_PRIVATE_KEY_PASSWORD_URL");
-            }
-        }
-
-        /// <summary>
         /// [OPTIONAL] The server requires public certificates that can be used to verify that this server issued
         /// the JWT. This can be obtained by setting PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, PUBLIC_CERT_3,
-        /// KEYVAULT_PUBLIC_CERT_PREFIX_URL, or USE_INSECURE_DEFAULTS (localhost debugging only).
+        /// or USE_INSECURE_DEFAULTS (localhost debugging only).
         /// </summary>
-        public static string[] PublicCertificates
+        public static string PublicCert0
         {
             get
             {
-                var list = new List<string>();
-                for (int i = 0; i < 4; i++)
+                string s = System.Environment.GetEnvironmentVariable("PUBLIC_CERT_0");
+                if (string.IsNullOrEmpty(s) && UseInsecureDefaults)
                 {
-                    string s = System.Environment.GetEnvironmentVariable($"PUBLIC_CERT_{i}");
-                    if (!string.IsNullOrEmpty(s)) list.Add(s);
-                }
-                if (list.Count < 1 && string.IsNullOrEmpty(KeyvaultPublicCertPrefixUrl) && UseInsecureDefaults)
-                {
-                    // this is intended to allow the application to work for localhost debug only
-                    list.Add(@"-----BEGIN CERTIFICATE-----
+                    return @"-----BEGIN CERTIFICATE-----
                         MIIEljCCAn4CCQD50gnTNYT+YTANBgkqhkiG9w0BAQsFADANMQswCQYDVQQGEwJV
                         UzAeFw0yMDAyMDEwMDQxMTFaFw0zMDAxMjkwMDQxMTFaMA0xCzAJBgNVBAYTAlVT
                         MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAtt3sn0kjsr6D+ZBOD/N4
@@ -984,44 +951,53 @@ namespace CasAuth
                         BWgJChVKYLzCrdkIdDq/HDjYqUn7kW6p/R61uJ2r0HhV3j3bUy4Z79+KWVOykmCg
                         azVj1MubtEdScZvrJrv8wwZ4JiE0QaKD5f6QmJtJQi/I2xzZ4KHVNzNUGxjlAQeG
                         rZvYuY1wwqr2AHQjRrLwwT4N3ms7dPVeSHg=
-                        -----END CERTIFICATE-----");
+                        -----END CERTIFICATE-----";
                 }
-                return list.ToArray();
+                return s;
             }
         }
 
         /// <summary>
         /// [OPTIONAL] The server requires public certificates that can be used to verify that this server issued
         /// the JWT. This can be obtained by setting PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, PUBLIC_CERT_3,
-        /// KEYVAULT_PUBLIC_CERT_PREFIX_URL, or USE_INSECURE_DEFAULTS (localhost debugging only).
+        /// or USE_INSECURE_DEFAULTS (localhost debugging only).
         /// </summary>
-        public static string KeyvaultPublicCertPrefixUrl
+        public static string PublicCert1
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("KEYVAULT_PUBLIC_CERT_PREFIX_URL");
+                return System.Environment.GetEnvironmentVariable("PUBLIC_CERT_1");
             }
         }
 
         /// <summary>
-        /// [READ-ONLY] This resolves the KEYVAULT_PUBLIC_CERT_PREFIX_URL to actual URLs.
+        /// [OPTIONAL] The server requires public certificates that can be used to verify that this server issued
+        /// the JWT. This can be obtained by setting PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, PUBLIC_CERT_3,
+        /// or USE_INSECURE_DEFAULTS (localhost debugging only).
         /// </summary>
-        public static string[] KeyvaultPublicCertificateUrls
+        public static string PublicCert2
         {
             get
             {
-                var list = new List<string>();
-                string url = KeyvaultPublicCertPrefixUrl;
-                if (!string.IsNullOrEmpty(url))
-                {
-                    for (int i = 0; i < 4; i++)
-                    {
-                        list.Add($"{url}{i}");
-                    }
-                }
-                return list.ToArray();
+                return System.Environment.GetEnvironmentVariable("PUBLIC_CERT_2");
             }
         }
+
+        /// <summary>
+        /// [OPTIONAL] The server requires public certificates that can be used to verify that this server issued
+        /// the JWT. This can be obtained by setting PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, PUBLIC_CERT_3,
+        /// or USE_INSECURE_DEFAULTS (localhost debugging only).
+        /// </summary>
+        public static string PublicCert3
+        {
+            get
+            {
+                return System.Environment.GetEnvironmentVariable("PUBLIC_CERT_3");
+            }
+        }
+
+
+
 
     }
 

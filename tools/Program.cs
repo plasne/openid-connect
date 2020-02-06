@@ -140,23 +140,17 @@ namespace tools
                         CasConfig.Optional("DEFAULT_REDIRECT_URL", CasEnv.DefaultRedirectUrl, logger);
                         CasConfig.Optional("APPLICATION_ID", CasEnv.ApplicationIds, logger);
                         CasConfig.Optional("DOMAIN_HINT", CasEnv.DomainHint, logger);
-                        CasConfig.Optional("KEYVAULT_CLIENT_SECRET_URL", CasEnv.KeyvaultClientSecretUrl, logger);
-                        CasConfig.Optional("KEYVAULT_CLIENT_SECRET_GRAPH_URL", CasEnv.KeyvaultClientSecretGraphUrl, logger);
                         CasConfig.Optional("JWT_DURATION", CasEnv.JwtDuration.ToString(), logger);
                         CasConfig.Optional("JWT_SERVICE_DURATION", CasEnv.JwtServiceDuration.ToString(), logger);
                         CasConfig.Optional("JWT_MAX_DURATION", CasEnv.JwtMaxDuration.ToString(), logger);
                         CasConfig.Optional("REQUIRE_USER_ENABLED_ON_REISSUE", CasEnv.RequireUserEnabledOnReissue, logger);
                         CasConfig.Optional("COMMAND_PASSWORD", CasEnv.CommandPassword, logger);
-                        CasConfig.Optional("KEYVAULT_COMMAND_PASSWORD_URL", CasEnv.KeyvaultCommandPasswordUrl, logger);
                         CasConfig.Optional("PRIVATE_KEY", CasEnv.PrivateKey, logger);
-                        CasConfig.Optional("KEYVAULT_PRIVATE_KEY_URL", CasEnv.KeyvaultPrivateKeyUrl, logger);
                         CasConfig.Optional("PRIVATE_KEY_PASSWORD", CasEnv.PrivateKeyPassword, logger);
-                        CasConfig.Optional("KEYVAULT_PRIVATE_KEY_PASSWORD_URL", CasEnv.KeyvaultPrivateKeyPasswordUrl, logger);
-                        CasConfig.Optional("PUBLIC_CERT_0", System.Environment.GetEnvironmentVariable("PUBLIC_CERT_0"), logger);
-                        CasConfig.Optional("PUBLIC_CERT_1", System.Environment.GetEnvironmentVariable("PUBLIC_CERT_1"), logger);
-                        CasConfig.Optional("PUBLIC_CERT_2", System.Environment.GetEnvironmentVariable("PUBLIC_CERT_2"), logger);
-                        CasConfig.Optional("PUBLIC_CERT_3", System.Environment.GetEnvironmentVariable("PUBLIC_CERT_3"), logger);
-                        CasConfig.Optional("KEYVAULT_PUBLIC_CERT_PREFIX_URL", CasEnv.KeyvaultPublicCertPrefixUrl, logger);
+                        CasConfig.Optional("PUBLIC_CERT_0", CasEnv.PublicCert0, logger);
+                        CasConfig.Optional("PUBLIC_CERT_1", CasEnv.PublicCert1, logger);
+                        CasConfig.Optional("PUBLIC_CERT_2", CasEnv.PublicCert2, logger);
+                        CasConfig.Optional("PUBLIC_CERT_3", CasEnv.PublicCert3, logger);
                     };
 
                     // execute the proper command
@@ -166,7 +160,8 @@ namespace tools
                         case "issue-token":
                             {
                                 applyConfig();
-                                Parser.Default.ParseArguments<IssueOptions>(args).WithParsed<IssueOptions>(async o =>
+                                // NOTE: async means main thread won't stay running
+                                Parser.Default.ParseArguments<IssueOptions>(args).WithParsed<IssueOptions>(o =>
                                 {
 
                                     // build the claims
@@ -188,7 +183,9 @@ namespace tools
                                     if (!string.IsNullOrEmpty(o.Xsrf)) claims.Add(new Claim("xsrf", o.Xsrf));
 
                                     // generate the token
-                                    var jwt_s = await tokenIssuer.IssueToken(claims);
+                                    var task = tokenIssuer.IssueToken(claims);
+                                    task.Wait();
+                                    var jwt_s = task.Result;
 
                                     // read the compiled token
                                     JwtSecurityTokenHandler handler = new JwtSecurityTokenHandler();
@@ -215,10 +212,12 @@ namespace tools
                         case "validate-token":
                             {
                                 applyConfig();
-                                Parser.Default.ParseArguments<ValidateOptions>(args).WithParsed<ValidateOptions>(async o =>
+                                Parser.Default.ParseArguments<ValidateOptions>(args).WithParsed<ValidateOptions>(o =>
                                 {
                                     var tokenIssuer = scope.ServiceProvider.GetService<CasTokenIssuer>();
-                                    var jwt = await tokenIssuer.ValidateToken(o.Token);
+                                    var task = tokenIssuer.ValidateToken(o.Token);
+                                    task.Wait();
+                                    var jwt = task.Result;
                                     Console.WriteLine("");
                                     Console.WriteLine(jwt.Payload.SerializeToJson());
                                     Console.WriteLine("");
@@ -229,10 +228,12 @@ namespace tools
                         case "get-certificates":
                             {
                                 applyConfig();
-                                Parser.Default.ParseArguments<CertificateOptions>(args).WithParsed<CertificateOptions>(async o =>
+                                Parser.Default.ParseArguments<CertificateOptions>(args).WithParsed<CertificateOptions>(o =>
                                 {
                                     var tokenIssuer = scope.ServiceProvider.GetService<CasTokenIssuer>();
-                                    var certificates = await tokenIssuer.GetValidationCertificates();
+                                    var task = tokenIssuer.GetValidationCertificates();
+                                    task.Wait();
+                                    var certificates = task.Result;
                                     foreach (var certificate in certificates)
                                     {
 
@@ -261,21 +262,23 @@ namespace tools
                         case "get-user":
                             {
                                 applyConfig();
-                                Parser.Default.ParseArguments<UserOptions>(args).WithParsed<UserOptions>(async o =>
+                                Parser.Default.ParseArguments<UserOptions>(args).WithParsed<UserOptions>(o =>
                                 {
                                     var tokenIssuer = scope.ServiceProvider.GetService<CasTokenIssuer>();
                                     if (!string.IsNullOrEmpty(o.Oid))
                                     {
-                                        var user = await tokenIssuer.GetUserFromGraph(o.Oid);
+                                        var task = tokenIssuer.GetUserFromGraph(o.Oid);
+                                        task.Wait();
                                         Console.WriteLine("");
-                                        Console.WriteLine(user);
+                                        Console.WriteLine(task.Result);
                                         Console.WriteLine("");
                                     }
                                     else if (!string.IsNullOrEmpty(o.Email))
                                     {
-                                        var user = await tokenIssuer.GetUserFromGraph("?$filter=mail eq '{email}'");
+                                        var task = tokenIssuer.GetUserFromGraph("?$filter=mail eq '{email}'");
+                                        task.Wait();
                                         Console.WriteLine("");
-                                        Console.WriteLine(user);
+                                        Console.WriteLine(task.Result);
                                         Console.WriteLine("");
                                     }
                                     else

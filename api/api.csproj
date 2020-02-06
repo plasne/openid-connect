@@ -3,6 +3,6 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CasAuth" Version="2.0.0" />
+    <PackageReference Include="CasAuth" Version="2.3.0" />
   </ItemGroup>
 </Project>

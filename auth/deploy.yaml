@@ -1,0 +1,87 @@
+apiVersion: "aadpodidentity.k8s.io/v1"
+kind: AzureIdentity
+metadata:
+  name: pelasne-auth-identity
+spec:
+  type: 0
+  ResourceID: /subscriptions/8e95e0bb-d7cc-4454-9443-75ca862d34c1/resourceGroups/pelasne-identities/providers/Microsoft.ManagedIdentity/userAssignedIdentities/pelasne-auth-identity
+  ClientID: 04dc0c06-87cf-42e6-bf49-e705d136d327
+---
+apiVersion: "aadpodidentity.k8s.io/v1"
+kind: AzureIdentityBinding
+metadata:
+  name: pelasne-auth-identity-binding
+spec:
+  AzureIdentity: pelasne-auth-identity
+  Selector: pelasne-auth-identity-binding
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth
+  labels:
+    app: auth
+    aadpodidbinding: pelasne-auth-identity-binding
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth
+  template:
+    metadata:
+      labels:
+        app: auth
+        aadpodidbinding: pelasne-auth-identity-binding
+    spec:
+      nodeSelector:
+        "beta.kubernetes.io/os": linux
+      containers:
+      - name: auth
+        image: pelasneregistry.azurecr.io/auth:1.1.4
+        env:
+        - name: LOG_LEVEL
+          value: "Debug"
+        - name: HOST_URL
+          value: "http://*:80"
+        - name: APPCONFIG
+          value: "pelasne-config"
+        - name: CONFIG_KEYS
+          value: "sample:auth:dev:*, sample:common:dev:*"
+        ports:
+        - containerPort: 80
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          periodSeconds: 3
+          timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth
+spec:
+  ports:
+  - port: 80
+  selector:
+    app: auth
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: auth
+  annotations:
+    kubernetes.io/ingress.class: azure/application-gateway
+    appgw.ingress.kubernetes.io/backend-path-prefix: "/"
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  tls:
+    - secretName: ssl-full
+  rules:
+  - host: auth.plasne.com
+    http:
+      paths:
+      - backend:
+          serviceName: auth
+          servicePort: 80

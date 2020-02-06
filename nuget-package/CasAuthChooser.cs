@@ -55,7 +55,8 @@ namespace CasAuth
                         case "AUTH_TYPE_CONFIG":
                             return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdConfig, CasEnv.ClientIdConfig, CasEnv.ClientSecretConfig);
                         case "AUTH_TYPE_GRAPH":
-                            var graphSecret = (issuer != null) ? await issuer.GetClientSecretGraph() : CasEnv.ClientSecretGraph;
+                            if (issuer == null) throw new Exception("issuer must be supplied for AUTH_TYPE_GRAPH");
+                            var graphSecret = await issuer.ValueOrKeyVault("CLIENT_SECRET_GRAPH", CasEnv.ClientSecretGraph);
                             return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdGraph, CasEnv.ClientIdGraph, graphSecret);
                         case "AUTH_TYPE_VAULT":
                             return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdVault, CasEnv.ClientIdVault, CasEnv.ClientSecretVault);

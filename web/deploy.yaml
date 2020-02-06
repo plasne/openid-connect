@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      nodeSelector:
+        "beta.kubernetes.io/os": linux
+      containers:
+      - name: web
+        image: pelasneregistry.azurecr.io/web:1.0.0
+        env:
+        - name: HOST_URL
+          value: "http://*:80"
+        - name: CONFIG_URL
+          value: "https://api.plasne.com/cas/config/web"
+        ports:
+        - containerPort: 80
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          periodSeconds: 3
+          timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  ports:
+  - port: 80
+  selector:
+    app: web
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: web
+  annotations:
+    kubernetes.io/ingress.class: azure/application-gateway
+    appgw.ingress.kubernetes.io/backend-path-prefix: "/"
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  tls:
+    - secretName: ssl-full
+  rules:
+  - host: web.plasne.com
+    http:
+      paths:
+      - backend:
+          serviceName: web
+          servicePort: 80

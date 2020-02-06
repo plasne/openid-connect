@@ -57,8 +57,8 @@ namespace CasAuth
                     CasConfig.Require("CLIENT_SECRET", CasEnv.ClientSecret, logger);
                 }
                 CasConfig.Optional("AUTH_TYPE_CONFIG", CasAuthChooser.AuthType("AUTH_TYPE_CONFIG"), logger);
-                CasConfig.Optional("APPCONFIG_RESOURCE_ID", CasConfig.AppConfigResourceId, logger);
-                CasConfig.Optional("CONFIG_KEYS", CasConfig.ConfigKeys, logger);
+                CasConfig.Optional("APPCONFIG", CasEnv.AppConfig, logger);
+                CasConfig.Optional("CONFIG_KEYS", CasEnv.ConfigKeys, logger);
                 CasConfig.Optional("REQUIRE_SECURE_FOR_COOKIES", CasEnv.RequireSecureForCookies, logger);
                 CasConfig.Optional("REQUIRE_HTTPONLY_ON_USER_COOKIE", CasEnv.RequireHttpOnlyOnUserCookie, logger);
                 CasConfig.Optional("REQUIRE_HTTPONLY_ON_XSRF_COOKIE", CasEnv.RequireHttpOnlyOnXsrfCookie, logger);
@@ -97,7 +97,7 @@ namespace CasAuth
             {
                 services.AddCors(options =>
                    {
-                       options.AddDefaultPolicy(builder =>
+                       options.AddPolicy("cas-client", builder =>
                        {
                            builder.WithOrigins(CasEnv.AllowedOrigins)
                            .AllowAnyHeader()
