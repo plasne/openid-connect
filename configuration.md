@@ -60,14 +60,14 @@ WEB_HOST_URL=http://web.plasne.com
 The following sample settings could be set by environment variable for the server...
 
 ```
-APPCONFIG_RESOURCE_ID=/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config
+APPCONFIG=pelasne-auth-config
 CONFIG_KEYS=sample:auth:dev:*, sample:common:dev:*
 ```
 
 And for the client...
 
 ```
-APPCONFIG_RESOURCE_ID=/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config
+APPCONFIG=pelasne-auth-config
 CONFIG_KEYS=sample:api:dev:*, sample:common:dev:*
 ```
 
