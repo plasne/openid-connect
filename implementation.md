@@ -1,10 +1,331 @@
 # Implementation
 
+The easiest way to deploy these services is to watch these videos.
+
+-   [Getting Started Video - Local Debugging](https://youtu.be/kMpGEP6CKJY)
+-   [Getting Started Video - Deploying to AKS](https://youtu.be/3dun4aDWv0U)
+
+The rest of this page will include quick-start guides for deployment followed by details if you need to dig further.
+
 If you already know how to implement this solution and are just looking for samples configs, look [here](./configuration.md).
 
-## Implementing the Authentication Service
-
 With regards to authentication, you can also think of this as the "server". It will generate tokens that will verified and used by the APIs or "clients".
+
+## Quick-Start for Local Host
+
+This guide assumes you are using:
+
+-   dotnetcore 3.1 or better
+-   Visual Studio Code
+
+This guide does not address developing a web front end, only the server and client for authentication.
+
+1. Perform the following to create the projects for the server and client...
+
+```bash
+# create the auth project (server)
+mkdir auth
+dotnet new webapi
+dotnet add package CasAuth
+
+# delete the project parts you won't need, we use Kestrel and env vars
+rm appsettings*.json
+rm -r Properties
+
+# create the api project (client)
+cd ..
+mkdir api
+dotnet new webapi
+dotnet add package CasAuth
+
+# delete the project parts you won't need, we use Kestrel and env vars
+rm appsettings*.json
+rm -r Properties
+```
+
+2. Create an application in Azure AD with the following specifications...
+
+    - Reply URL of "http://localhost:5100/cas/authorize".
+    - Enable implicit grant for "ID tokens" only (not Access tokens).
+
+3. Create an .env file in the root of the auth folder with the following (use the TENANT_ID and CLIENT_ID from step 2)...
+
+```bash
+LOG_LEVEL=Debug
+USE_INSECURE_DEFAULTS=true
+TENANT_ID=00000000-0000-0000-0000-000000000000
+CLIENT_ID=00000000-0000-0000-0000-000000000000
+```
+
+4. Modify the Program.cs to resemble the following...
+
+```c#
+using System;
+using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging;
+using dotenv.net;
+using CasAuth;
+
+namespace auth
+{
+    public class Program
+    {
+
+        private static string LogLevel
+        {
+            get
+            {
+                return System.Environment.GetEnvironmentVariable("LOG_LEVEL");
+            }
+        }
+
+        private static string HostUrl
+        {
+            get
+            {
+                // http://localhost:5100 by default when using USE_INSECURE_DEFAULTS
+                return System.Environment.GetEnvironmentVariable("HOST_URL") ?? CasEnv.ServerHostUrl;
+            }
+        }
+
+        public static void Main(string[] args)
+        {
+            DotEnv.Config(false, ".env");
+            CreateWebHostBuilder(args).Build().Run();
+        }
+
+        public static IWebHostBuilder CreateWebHostBuilder(string[] args)
+        {
+            var builder = WebHost.CreateDefaultBuilder(args)
+                .ConfigureLogging(logging =>
+                {
+                    logging.AddConsole();
+                    if (Enum.TryParse(LogLevel, out Microsoft.Extensions.Logging.LogLevel level))
+                    {
+                        logging.SetMinimumLevel(level);
+                    }
+                    else
+                    {
+                        logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Information);
+                    }
+                })
+                .UseStartup<Startup>();
+            if (!string.IsNullOrEmpty(HostUrl)) builder.UseUrls(HostUrl);
+            return builder;
+        }
+
+    }
+}
+```
+
+5. Modify the Startup.cs to resemble the following...
+
+```c#
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using CasAuth;
+
+namespace auth
+{
+    public class Startup
+    {
+        public Startup(IConfiguration configuration)
+        {
+            Configuration = configuration;
+        }
+
+        public IConfiguration Configuration { get; }
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddCasServerAuth();
+            services.AddControllers();
+        }
+
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        {
+            app.UseRouting();
+            app.UseCors();
+            app.UseCasServerAuth();
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+            });
+        }
+    }
+}
+```
+
+6. You can now run the application...
+
+```c#
+dotnet run
+```
+
+7. From another terminal prompt, you can test that the endpoint is working...
+
+```bash
+curl -i http://locahost:5100/cas/keys
+```
+
+...it should return something like...
+
+```bash
+HTTP/1.1 200 OK
+Date: Fri, 07 Feb 2020 15:54:38 GMT
+Content-Type: application/json; charset=utf-8
+Server: Kestrel
+Transfer-Encoding: chunked
+
+{"keys":...}
+```
+
+8. You can further test that a login can be succesful by opening a browser, opening the network developer tools, and going to...
+
+```
+http://localhost:5100/cas/authorize
+```
+
+...you should get a "user" cookie returned from the /cas/token endpoint containing the session_token and another cookie called "XSRF-TOKEN" that contains the xsrf_token. You will need both of those values for later testing.
+
+9. Create an .env file in the root of the api folder with the following...
+
+```bash
+LOG_LEVEL=Debug
+USE_INSECURE_DEFAULTS=true
+```
+
+10. Modify the Program.cs to resemble the following...
+
+```c#
+using System;
+using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging;
+using dotenv.net;
+using CasAuth;
+
+namespace api
+{
+    public class Program
+    {
+
+        private static string LogLevel
+        {
+            get
+            {
+                return System.Environment.GetEnvironmentVariable("LOG_LEVEL");
+            }
+        }
+
+        private static string HostUrl
+        {
+            get
+            {
+                // http://localhost:5200 by default when using USE_INSECURE_DEFAULTS
+                return System.Environment.GetEnvironmentVariable("HOST_URL") ?? CasEnv.ClientHostUrl;
+            }
+        }
+
+        public static void Main(string[] args)
+        {
+            DotEnv.Config(false, ".env");
+            CreateWebHostBuilder(args).Build().Run();
+        }
+
+        public static IWebHostBuilder CreateWebHostBuilder(string[] args)
+        {
+            var builder = WebHost.CreateDefaultBuilder(args)
+                .ConfigureLogging(logging =>
+                {
+                    logging.AddConsole();
+                    if (Enum.TryParse(LogLevel, out Microsoft.Extensions.Logging.LogLevel level))
+                    {
+                        logging.SetMinimumLevel(level);
+                    }
+                    else
+                    {
+                        logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Information);
+                    }
+                })
+                .UseStartup<Startup>();
+            if (!string.IsNullOrEmpty(HostUrl)) builder.UseUrls(HostUrl);
+            return builder;
+        }
+
+    }
+}
+```
+
+11. Modify the Startup.cs to resemble the following...
+
+```c#
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using CasAuth;
+
+namespace api
+{
+    public class Startup
+    {
+        public Startup(IConfiguration configuration)
+        {
+            Configuration = configuration;
+        }
+
+        public IConfiguration Configuration { get; }
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddCasClientAuth();
+            services.AddControllers();
+        }
+
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        {
+            app.UseRouting();
+            app.UseCors(); // <-- note this needs CORS, AuthN, and AuthZ
+            app.UseAuthentication();
+            app.UseAuthorization();
+            app.UseCasClientAuth();
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+            });
+        }
+    }
+}
+```
+
+12. You can now run the application...
+
+```c#
+dotnet run
+```
+
+13. From another terminal prompt, you can test that the endpoint is working using the session_token from step 8 above...
+
+```bash
+curl -i -H "Cookie: user=session_token_goes_here" -H "X-XSRF-TOKEN: xsrf_token_goes_here" http://locahost:5200/cas/me
+```
+
+...it should return something like...
+
+```bash
+HTTP/1.1 200 OK
+Date: Fri, 07 Feb 2020 16:10:29 GMT
+Content-Type: application/json; charset=utf-8
+Transfer-Encoding: chunked
+Connection: keep-alive
+Server: Kestrel
+
+{"email":...}
+```
 
 ## AUTH_TYPE
 
@@ -140,7 +461,7 @@ The settings below are commonly set as environment variables and their values de
 
 -   AUTH_TYPE (default: mi) - This can be either "mi" (default) or "app". If set to "mi", the AuthChooser will use a Managed Identity (or failback to use az CLI when running locally) every time it needs an access_token. If set to "app", the AuthChooser will use an application service principal (the application created in the above section).
 
--   APPCONFIG_RESOURCE_ID - This is the Resource ID of the App Configuration instance. You can get this from the Properties tab of the App Configuration resource in the Azure portal. (ex. /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/pelasne-auth-sample/providers/Microsoft.AppConfiguration/configurationStores/pelasne-auth-config)
+-   APPCONFIG - This is the name of the App Configuration instance (ex. plasne-config) that holds your configuration settings. This is optional, you can configure all settings via environment variables.
 
 -   CONFIG_KEYS - This is a comma-delimited list of configuration keys to pull for the specific service. All keys matching the pattern will be pulled. A setting that is already set is not replaced (so left-most patterns take precident). For example, the dev environment of the auth service might contain "app:auth:dev:\*, app:common:dev:\*". If you do not specify any CONFIG_KEYS, no variables will be set from App Configuration.
 
@@ -316,15 +637,13 @@ How to deploy services in Azure is beyond the scope of this article, however, th
 
 Follow these steps to configure the Auth service...
 
-1. Make sure you configure local environment variables for at least APPCONFIG_RESOURCE_ID and CONFIG_KEYS. CONFIG_KEYS for an application named "sample" and a "dev" environment might look like this: "sample:auth:dev:\*, sample:common:dev:\*".
+1. If you intend to use AUTH_TYPE=mi, enable Managed Identity for the platform.
 
-2. If you intend to use AUTH_TYPE=mi, enable Managed Identity for the platform.
+2. Add an access policy to Key Vault for the Managed Identity or Application Service Principal that allows GET of SECRETs. You can typically search for the identity by the resource name; it should show as APPLICATION.
 
-3. Add an access policy to Key Vault for the Managed Identity or Application Service Principal that allows GET of SECRETs. You can typically search for the identity by the resource name; it should show as APPLICATION.
+3. Add an Access Control Role Assignment (IAM) in the Azure portal on the App Configuration resource for the Managed Identity or Application Service Principal. It must have the "App Configuration Data Reader" role.
 
-4. Add an Access Control Role Assignment (IAM) in the Azure portal on the App Configuration resource for the Managed Identity or Application Service Principal. It must be an OWNER because it needs to read the security keys required to access App Configuration.
-
-5. If using APPLICATION_ID or REQUIRE_USER_ENABLED_ON_REISSUE (which is a default), then the Managed Identity or Application Service Principal must be given rights to query all objects in the Microsoft Graph:
+4. If using APPLICATION_ID or REQUIRE_USER_ENABLED_ON_REISSUE (which is a default), then the Managed Identity or Application Service Principal must be given rights to query all objects in the Microsoft Graph:
 
     - Managed Identity - Follow these steps to assign grant access:
 
@@ -336,33 +655,27 @@ Follow these steps to configure the Auth service...
 
     - Application Service Principal - You can give the Application (not Delegated) Microsoft Graph Directory.Read.All rights. This will require consent of an Azure AD Global Administrator.
 
-6. If you are deploying on a Windows-based App Service, you must add WEBSITE_LOAD_USER_PROFILE=1 as per https://github.com/projectkudu/kudu/wiki/Configurable-settings#the-system-cannot-find-the-file-specified-issue-with-x509certificate2.
+5. If you are deploying on a Windows-based App Service, you must add WEBSITE_LOAD_USER_PROFILE=1 as per https://github.com/projectkudu/kudu/wiki/Configurable-settings#the-system-cannot-find-the-file-specified-issue-with-x509certificate2.
 
-7. If you deployed prior to applying the above configuation, you might need to restart your service; the configuration is only read when the application starts.
+6. If you deployed prior to applying the above configuation, you might need to restart your service; the configuration is only read when the application starts.
 
 You can test the following (use your URL, this is a sample):
 
--   https://auth.plasne.com/api/auth/keys - This should show the public certificate for validating the session_token. If this is displayed, the AuthChooser is working and the account has access to the Key Vault.
+-   https://auth.plasne.com/cas/keys - This should show the public certificate for validating the session_token. If this is displayed, the AuthChooser is working and the account has access to the Key Vault.
 
--   https://auth.plasne.com/api/auth/check-requirements - This should return a 200 if the Microsoft Graph can be queried for all users (requires Directory.Read.All).
+-   https://auth.plasne.com/cas/check-requirements - This should return a 200 if the Microsoft Graph can be queried for all users (requires Directory.Read.All).
 
 ### API Service
 
 Follow these steps to configure the API service...
 
-1. Make sure you configure local environment variables for at least APPCONFIG_RESOURCE_ID and CONFIG_KEYS. CONFIG_KEYS for an application named "sample" and a "dev" environment might look like this: "sample:api:dev:\*, sample:common:dev:\*".
+1. If you intend to use AUTH_TYPE=mi, enable Managed Identity for the platform.
 
-2. If you intend to use AUTH_TYPE=mi, enable Managed Identity for the platform.
+2. Add an access policy to Key Vault for the Managed Identity or Application Service Principal that allows GET of SECRETs. You can typically search for the identity by the resource name; it should show as APPLICATION.
 
-3. Add an access policy to Key Vault for the Managed Identity or Application Service Principal that allows GET of SECRETs. You can typically search for the identity by the resource name; it should show as APPLICATION.
+3. Add an Access Control Role Assignment (IAM) in the Azure portal on the App Configuration resource for the Managed Identity or Application Service Principal. It must have the "App Configuration Data Reader" role.
 
-4. Add an Access Control Role Assignment (IAM) in the Azure portal on the App Configuration resource for the Managed Identity or Application Service Principal. It must be an OWNER because it needs to read the security keys required to access App Configuration.
-
-5. If you deployed prior to applying the above configuation, you might need to restart your service; the configuration is only read when the application starts.
-
-You can test the following (use your URL, this is a sample):
-
--   https://api.plasne.com/api/identity/version - If this is displayed, the AuthChooser is working and the account has access to the Key Vault.
+4. If you deployed prior to applying the above configuation, you might need to restart your service; the configuration is only read when the application starts.
 
 ### WFE
 

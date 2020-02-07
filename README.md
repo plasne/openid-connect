@@ -31,7 +31,8 @@ There are many ways to authenticate users. Some of the advantages of this approa
 Links:
 
 -   [Implementation Guide](./implementation.md)
--   [Implementation Video](https://youtu.be/Sen7H1Uix2k)
+-   [Getting Started Video - Local Debugging](https://youtu.be/kMpGEP6CKJY)
+-   [Getting Started Video - Deploying to AKS](https://youtu.be/3dun4aDWv0U)
 -   [Sample Configurations](./configuration.md)
 -   [Authentication Flow](./flow.md)
 -   [Reissue Process](./reissue.md)
