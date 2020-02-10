@@ -45,9 +45,9 @@ rm -r Properties
 
 2. Create an application in Azure AD with the following specifications...
 
-    - Reply URL of "http://localhost:5100/cas/authorize".
+    - Reply URL of "http://localhost:5100/cas/token".
     - Enable implicit grant for "ID tokens" only (not Access tokens).
-
+    
 3. Create an .env file in the root of the auth folder with the following (use the TENANT_ID and CLIENT_ID from step 2)...
 
 ```bash
