@@ -37,6 +37,7 @@ namespace CasAuth
             bool isTokenFromCookie = false;
             try
             {
+                Logger.LogDebug("CasAuthentication: started authentication check...");
 
                 // drop all internal identity headers so they aren't propogated
                 Request.Headers.Remove("X-IDENTITY");
@@ -49,6 +50,7 @@ namespace CasAuth
                 var header = Request.Headers["Authorization"];
                 if (header.Count() > 0)
                 {
+                    Logger.LogDebug($"CasAuthentication: checking header named \"Authorization\" for token...");
                     token = header.First().Replace("Bearer ", "");
                     isTokenFromHeader = true;
                 }
@@ -56,6 +58,7 @@ namespace CasAuth
                 // look next at the cookie
                 if (CasEnv.VerifyTokenInCookie && string.IsNullOrEmpty(token))
                 {
+                    Logger.LogDebug($"CasAuthentication: checking cookie named \"{CasEnv.UserCookieName}\" for token...");
                     token = Request.Cookies[CasEnv.UserCookieName];
                     isTokenFromCookie = true;
                 }
@@ -63,7 +66,7 @@ namespace CasAuth
                 // shortcut if there is no token
                 if (string.IsNullOrEmpty(token))
                 {
-                    Logger.LogDebug("authorization was called, but no token was found");
+                    Logger.LogDebug("CasAuthentication: no token was found.");
                     return AuthenticateResult.NoResult();
                 }
 
@@ -72,11 +75,11 @@ namespace CasAuth
                 {
 
                     // attempt to reissue
-                    Logger.LogDebug("attempted to reissue an expired token...");
+                    Logger.LogDebug("CasAuthentication: attempted to reissue an expired token...");
                     var httpClientFactory = Request.HttpContext.RequestServices.GetService(typeof(IHttpClientFactory)) as IHttpClientFactory;
                     var httpClient = httpClientFactory.CreateClient("cas");
                     token = await CasTokenValidator.ReissueToken(httpClient, token);
-                    Logger.LogDebug("reissued token successfully");
+                    Logger.LogDebug("CasAuthentication: reissued token successfully");
 
                     // rewrite the cookie
                     if (isTokenFromCookie)
@@ -86,6 +89,7 @@ namespace CasAuth
                             HttpOnly = CasEnv.RequireHttpOnlyOnUserCookie,
                             Secure = CasEnv.RequireSecureForCookies,
                             Domain = CasEnv.BaseDomain,
+                            SameSite = CasEnv.SameSite,
                             Path = "/"
                         });
                     }
@@ -120,7 +124,7 @@ namespace CasAuth
             }
             catch (Exception e)
             {
-                Logger.LogError(e, "JwtCookieAuthenticationHandler exception");
+                Logger.LogError(e, "CasAuthentication: exception...");
                 if (isTokenFromCookie) Response.Cookies.Delete("user"); // revoke the cookie
                 return AuthenticateResult.Fail(e);
             }

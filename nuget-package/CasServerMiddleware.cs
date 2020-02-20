@@ -111,11 +111,11 @@ namespace CasAuth
             public string refresh_token { get; set; }
         }
 
-        public static async Task<Tokens> GetAccessTokenFromAuthCode(HttpClient httpClient, CasTokenIssuer tokenIssuer, string code, string scope)
+        public static async Task<Tokens> GetAccessTokenFromAuthCode(HttpClient httpClient, CasConfig config, string code, string scope)
         {
 
             // get the client secret
-            var secret = await tokenIssuer.ValueOrKeyVault("CLIENT_SECRET", CasEnv.ClientSecret);
+            var secret = await config.GetString("CLIENT_SECRET", CasEnv.ClientSecret);
 
             // get the response
             using (var request = new HttpRequestMessage()
@@ -148,11 +148,11 @@ namespace CasAuth
 
         }
 
-        public static async Task<Tokens> GetAccessTokenFromRefreshToken(HttpClient httpClient, CasTokenIssuer tokenIssuer, string refreshToken, string scope)
+        public static async Task<Tokens> GetAccessTokenFromRefreshToken(HttpClient httpClient, CasConfig config, string refreshToken, string scope)
         {
 
             // get the client secret
-            var secret = await tokenIssuer.ValueOrKeyVault("CLIENT_SECRET", CasEnv.ClientSecret);
+            var secret = await config.GetString("CLIENT_SECRET", CasEnv.ClientSecret);
 
             // get the response
             using (var request = new HttpRequestMessage()
@@ -372,6 +372,7 @@ namespace CasAuth
                     try
                     {
                         var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
+                        var config = context.RequestServices.GetService<CasConfig>();
                         var httpClientFactory = context.RequestServices.GetService<IHttpClientFactory>();
                         var httpClient = httpClientFactory.CreateClient("cas");
 
@@ -399,11 +400,11 @@ namespace CasAuth
                             {
                                 if (last == null)
                                 {
-                                    last = await GetAccessTokenFromAuthCode(httpClient, tokenIssuer, code, scope);
+                                    last = await GetAccessTokenFromAuthCode(httpClient, config, code, scope);
                                 }
                                 else
                                 {
-                                    last = await GetAccessTokenFromRefreshToken(httpClient, tokenIssuer, last.refresh_token, scope);
+                                    last = await GetAccessTokenFromRefreshToken(httpClient, config, last.refresh_token, scope);
                                 }
                                 return last;
                             };
@@ -488,6 +489,7 @@ namespace CasAuth
                                 HttpOnly = CasEnv.RequireHttpOnlyOnXsrfCookie,
                                 Secure = CasEnv.RequireSecureForCookies,
                                 Domain = CasEnv.BaseDomain,
+                                SameSite = CasEnv.SameSite,
                                 Path = "/"
                             });
                             claims.Add(new Claim("xsrf", xsrf));
@@ -500,6 +502,7 @@ namespace CasAuth
                             HttpOnly = CasEnv.RequireHttpOnlyOnUserCookie,
                             Secure = CasEnv.RequireSecureForCookies,
                             Domain = CasEnv.BaseDomain,
+                            SameSite = CasEnv.SameSite,
                             Path = "/"
                         });
 
@@ -786,11 +789,11 @@ namespace CasAuth
                         var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
                         var httpClientFactory = context.RequestServices.GetService<IHttpClientFactory>();
                         var httpClient = httpClientFactory.CreateClient("cas");
-                        var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
+                        var config = context.RequestServices.GetService<CasConfig>();
 
                         // validate graph access
                         logger.LogInformation("/cas/check-requirements: checking graph access...");
-                        var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", tokenIssuer);
+                        var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", config);
                         using (var request = new HttpRequestMessage()
                         {
                             RequestUri = new Uri("https://graph.microsoft.com/beta/users?$top=1"),
@@ -832,8 +835,9 @@ namespace CasAuth
                     {
 
                         // ensure the user is authorized
+                        var config = context.RequestServices.GetService<CasConfig>();
                         var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
-                        var commandPassword = await tokenIssuer.ValueOrKeyVault("COMMAND_PASSWORD", CasEnv.CommandPassword);
+                        var commandPassword = await config.GetString("COMMAND_PASSWORD", CasEnv.CommandPassword);
                         string password = context.Request.Form["password"];
                         if (password != commandPassword) throw new CasHttpException(401, "user did not provide the valid command password");
 

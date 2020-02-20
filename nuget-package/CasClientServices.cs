@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace CasAuth
@@ -24,10 +25,14 @@ namespace CasAuth
             services.AddHttpClient("cas")
                 .ConfigurePrimaryHttpMessageHandler(() => new CasProxyHandler());
 
+            // add the configuration service
+            services.TryAddSingleton<CasConfig, CasConfig>();
+
             // load the configuration and log it
             using (var provider = services.BuildServiceProvider())
             {
                 var logger = provider.GetService<ILogger<CasClientAuthServicesConfiguration>>();
+                var config = provider.GetService<CasConfig>();
 
                 // determine the authentication type
                 string authType = CasAuthChooser.AuthType();
@@ -36,37 +41,35 @@ namespace CasAuth
 
                 // load the configuration
                 logger.LogInformation("Loading configuration...");
-                var httpClientFactory = provider.GetService<IHttpClientFactory>();
-                var httpClient = httpClientFactory.CreateClient("cas");
-                CasConfig.Apply(httpClient).Wait();
+                config.Apply().Wait();
 
                 // confirm and log the configuration
-                CasConfig.Optional("SERVER_HOST_URL", CasEnv.ServerHostUrl, logger);
-                CasConfig.Optional("CLIENT_HOST_URL", CasEnv.ClientHostUrl, logger);
-                CasConfig.Optional("WEB_HOST_URL", CasEnv.WebHostUrl, logger);
-                CasConfig.Require("ISSUER", CasEnv.Issuer, logger);
-                CasConfig.Require("AUDIENCE", CasEnv.Audience, logger);
-                CasConfig.Require("ALLOWED_ORIGINS", CasEnv.AllowedOrigins, logger);
-                CasConfig.Require("WELL_KNOWN_CONFIG_URL", CasEnv.WellKnownConfigUrl, logger);
-                CasConfig.Require("BASE_DOMAIN", CasEnv.BaseDomain, logger);
-                CasConfig.Optional("AUTH_TYPE", authType, logger);
+                config.Optional("SERVER_HOST_URL", CasEnv.ServerHostUrl);
+                config.Optional("CLIENT_HOST_URL", CasEnv.ClientHostUrl);
+                config.Optional("WEB_HOST_URL", CasEnv.WebHostUrl);
+                config.Require("ISSUER", CasEnv.Issuer);
+                config.Require("AUDIENCE", CasEnv.Audience);
+                config.Require("ALLOWED_ORIGINS", CasEnv.AllowedOrigins);
+                config.Require("WELL_KNOWN_CONFIG_URL", CasEnv.WellKnownConfigUrl);
+                config.Require("BASE_DOMAIN", CasEnv.BaseDomain);
+                config.Optional("AUTH_TYPE", authType);
                 if (authType == "app")
                 {
-                    CasConfig.Require("TENANT_ID", CasEnv.TenantId, logger);
-                    CasConfig.Require("CLIENT_ID", CasEnv.ClientId, logger);
-                    CasConfig.Require("CLIENT_SECRET", CasEnv.ClientSecret, logger);
+                    config.Require("TENANT_ID", CasEnv.TenantId);
+                    config.Require("CLIENT_ID", CasEnv.ClientId);
+                    config.Require("CLIENT_SECRET", CasEnv.ClientSecret);
                 }
-                CasConfig.Optional("AUTH_TYPE_CONFIG", CasAuthChooser.AuthType("AUTH_TYPE_CONFIG"), logger);
-                CasConfig.Optional("APPCONFIG", CasEnv.AppConfig, logger);
-                CasConfig.Optional("CONFIG_KEYS", CasEnv.ConfigKeys, logger);
-                CasConfig.Optional("REQUIRE_SECURE_FOR_COOKIES", CasEnv.RequireSecureForCookies, logger);
-                CasConfig.Optional("REQUIRE_HTTPONLY_ON_USER_COOKIE", CasEnv.RequireHttpOnlyOnUserCookie, logger);
-                CasConfig.Optional("REQUIRE_HTTPONLY_ON_XSRF_COOKIE", CasEnv.RequireHttpOnlyOnXsrfCookie, logger);
-                CasConfig.Optional("VERIFY_TOKEN_IN_HEADER", CasEnv.VerifyTokenInHeader, logger);
-                CasConfig.Optional("VERIFY_TOKEN_IN_COOKIE", CasEnv.VerifyTokenInCookie, logger);
-                CasConfig.Optional("VERIFY_XSRF_IN_HEADER", CasEnv.VerifyXsrfInHeader, logger);
-                CasConfig.Optional("VERIFY_XSRF_IN_COOKIE", CasEnv.VerifyXsrfInCookie, logger);
-                CasConfig.Optional("USER_COOKIE_NAME", CasEnv.UserCookieName, logger);
+                config.Optional("AUTH_TYPE_CONFIG", CasAuthChooser.AuthType("AUTH_TYPE_CONFIG"));
+                config.Optional("APPCONFIG", CasEnv.AppConfig);
+                config.Optional("CONFIG_KEYS", CasEnv.ConfigKeys);
+                config.Optional("REQUIRE_SECURE_FOR_COOKIES", CasEnv.RequireSecureForCookies, hideValue: false);
+                config.Optional("REQUIRE_HTTPONLY_ON_USER_COOKIE", CasEnv.RequireHttpOnlyOnUserCookie, hideValue: false);
+                config.Optional("REQUIRE_HTTPONLY_ON_XSRF_COOKIE", CasEnv.RequireHttpOnlyOnXsrfCookie, hideValue: false);
+                config.Optional("VERIFY_TOKEN_IN_HEADER", CasEnv.VerifyTokenInHeader, hideValue: false);
+                config.Optional("VERIFY_TOKEN_IN_COOKIE", CasEnv.VerifyTokenInCookie, hideValue: false);
+                config.Optional("VERIFY_XSRF_IN_HEADER", CasEnv.VerifyXsrfInHeader, hideValue: false);
+                config.Optional("VERIFY_XSRF_IN_COOKIE", CasEnv.VerifyXsrfInCookie, hideValue: false);
+                config.Optional("USER_COOKIE_NAME", CasEnv.UserCookieName);
 
             }
 
