@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Http;
 
 namespace CasAuth
 {
@@ -55,25 +56,20 @@ namespace CasAuth
         {
             get
             {
-                string keys = System.Environment.GetEnvironmentVariable("CONFIG_KEYS");
-                if (string.IsNullOrEmpty(keys)) return new string[] { };
-                return keys.Split(',').Select(id => id.Trim()).ToArray();
+                return CasConfig.GetArrayOnce("CONFIG_KEYS");
             }
         }
 
         /// <summary>
-        /// [OPTIONAL] This can be enabled for a local debug scenarios where you don't want to set:
+        /// [OPTIONAL, default: false] This can be enabled for a local debug scenarios where you don't want to set:
         /// CLIENT_HOST_URL, SERVER_HOST_URL, PRIVATE_KEY, PRIVATE_KEY_PASSWORD, and PUBLIC_CERT_0.
         /// Never run this production!
         /// </summary>
         public static bool UseInsecureDefaults
         {
             get
-            { // default is false
-                string v = System.Environment.GetEnvironmentVariable("USE_INSECURE_DEFAULTS");
-                if (string.IsNullOrEmpty(v)) return false;
-                string[] positive = new string[] { "yes", "true", "1" };
-                return (positive.Contains(v.ToLower()));
+            {
+                return CasConfig.GetBoolOnce("USE_INSECURE_DEFAULTS", dflt: false);
             }
         }
 
@@ -85,7 +81,7 @@ namespace CasAuth
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("DEFAULT_HOST_URL");
+                return CasConfig.GetStringOnce("DEFAULT_HOST_URL");
             }
         }
 
@@ -174,7 +170,7 @@ namespace CasAuth
         }
 
         /// <summary>
-        /// [OPTIONAL] Allows you to specify the domain of all cookies so they can be shared when the client and
+        /// [OPTIONAL, default: *derived] Allows you to specify the domain of all cookies so they can be shared when the client and
         /// server are on different URLs. Typically, just set CLIENT_HOST_URL and SERVER_HOST_URL and this can be
         /// calculated.
         /// </summary>
@@ -208,30 +204,26 @@ namespace CasAuth
         }
 
         /// <summary>
-        /// [OPTIONAL] Allows you to specify the "iss" in the JWT that is issued by the server component.
+        /// [OPTIONAL, default: SERVER_HOST_URL] Allows you to specify the "iss" in the JWT that is issued by the server component.
         /// Typically just set SERVER_HOST_URL and that URL will be used.
         /// </summary>
         public static string Issuer
         {
             get
             {
-                string s = System.Environment.GetEnvironmentVariable("ISSUER");
-                if (string.IsNullOrEmpty(s)) return ServerHostUrl;
-                return s;
+                return CasConfig.GetStringOnce("ISSUER", dflt: ServerHostUrl);
             }
         }
 
         /// <summary>
-        /// [OPTIONAL] Allows you to specify the "aud" in the JWT that is issued by the server component.
+        /// [OPTIONAL, default: CLIENT_HOST_URL] Allows you to specify the "aud" in the JWT that is issued by the server component.
         /// Typically just set CLIENT_HOST_URL and that URL will be used.
         /// </summary>
         public static string Audience
         {
             get
             {
-                string s = System.Environment.GetEnvironmentVariable("AUDIENCE");
-                if (string.IsNullOrEmpty(s)) return ClientHostUrl;
-                return s;
+                return CasConfig.GetStringOnce("ISSUER", dflt: ClientHostUrl);
             }
         }
 
@@ -242,7 +234,7 @@ namespace CasAuth
         public static string WellKnownConfigUrl
         {
             get
-            { // generally this should just go with default
+            {
                 string s = System.Environment.GetEnvironmentVariable("WELL_KNOWN_CONFIG_URL");
                 if (string.IsNullOrEmpty(s)) return new Uri(ServerHostUrl).Append("/cas/.well-known/openid-configuration").AbsoluteUri;
                 return s;
@@ -256,7 +248,7 @@ namespace CasAuth
         public static string PublicKeysUrl
         {
             get
-            { // typically this should left default
+            {
                 string s = System.Environment.GetEnvironmentVariable("PUBLIC_KEYS_URL");
                 if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(ServerHostUrl)) return new Uri(ServerHostUrl).Append("/cas/keys").AbsoluteUri;
                 return s;
@@ -270,7 +262,7 @@ namespace CasAuth
         public static string ReissueUrl
         {
             get
-            { // generally this should just go with default
+            {
                 string s = System.Environment.GetEnvironmentVariable("REISSUE_URL");
                 if (string.IsNullOrEmpty(s)) return new Uri(ServerHostUrl).Append("/cas/reissue").AbsoluteUri;
                 string[] negative = new string[] { "no", "false", "0" };
@@ -315,11 +307,8 @@ namespace CasAuth
         public static bool RequireSecureForCookies
         {
             get
-            { // if both client and server are https, then true
-                string v = System.Environment.GetEnvironmentVariable("REQUIRE_SECURE_FOR_COOKIES");
-                if (string.IsNullOrEmpty(v)) return IsHttps;
-                string[] negative = new string[] { "no", "false", "0" };
-                return (!negative.Contains(v));
+            {
+                return CasConfig.GetBoolOnce("REQUIRE_SECURE_FOR_COOKIES", dflt: IsHttps);
             }
         }
 
@@ -330,11 +319,8 @@ namespace CasAuth
         public static bool RequireHttpOnlyOnUserCookie
         {
             get
-            { // default is true
-                string v = System.Environment.GetEnvironmentVariable("REQUIRE_HTTPONLY_ON_USER_COOKIE");
-                if (string.IsNullOrEmpty(v)) return true;
-                string[] negative = new string[] { "no", "false", "0" };
-                return (!negative.Contains(v.ToLower()));
+            {
+                return CasConfig.GetBoolOnce("REQUIRE_HTTPONLY_ON_USER_COOKIE", dflt: true);
             }
         }
 
@@ -345,11 +331,20 @@ namespace CasAuth
         public static bool RequireHttpOnlyOnXsrfCookie
         {
             get
-            { // default is false
-                string v = System.Environment.GetEnvironmentVariable("REQUIRE_HTTPONLY_ON_XSRF_COOKIE");
-                if (string.IsNullOrEmpty(v)) return false;
-                string[] positive = new string[] { "yes", "true", "1" };
-                return (positive.Contains(v.ToLower()));
+            {
+                return CasConfig.GetBoolOnce("REQUIRE_HTTPONLY_ON_XSRF_COOKIE", dflt: false);
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL, default: strict] This determines the SameSite setting for the "user" and "XSRF-TOKEN" cookies.
+        /// This could also be set to "none" or "lax".
+        /// </summary>
+        public static SameSiteMode SameSite
+        {
+            get
+            {
+                return CasConfig.GetEnumOnce<SameSiteMode>("SAME_SITE", dflt: SameSiteMode.Strict);
             }
         }
 
@@ -360,11 +355,8 @@ namespace CasAuth
         public static bool VerifyTokenInHeader
         {
             get
-            { // default is false
-                string v = System.Environment.GetEnvironmentVariable("VERIFY_TOKEN_IN_HEADER");
-                if (string.IsNullOrEmpty(v)) return false;
-                string[] positive = new string[] { "yes", "true", "1" };
-                return (positive.Contains(v.ToLower()));
+            {
+                return CasConfig.GetBoolOnce("VERIFY_TOKEN_IN_HEADER", dflt: false);
             }
         }
 
@@ -375,11 +367,8 @@ namespace CasAuth
         public static bool VerifyTokenInCookie
         {
             get
-            { // default is true
-                string v = System.Environment.GetEnvironmentVariable("VERIFY_TOKEN_IN_COOKIE");
-                if (string.IsNullOrEmpty(v)) return true;
-                string[] negative = new string[] { "no", "false", "0" };
-                return (!negative.Contains(v.ToLower()));
+            {
+                return CasConfig.GetBoolOnce("VERIFY_TOKEN_IN_COOKIE", dflt: true);
             }
         }
 
@@ -390,11 +379,8 @@ namespace CasAuth
         public static bool VerifyXsrfInHeader
         {
             get
-            { // default is true
-                string v = System.Environment.GetEnvironmentVariable("VERIFY_XSRF_IN_HEADER");
-                if (string.IsNullOrEmpty(v)) return true;
-                string[] negative = new string[] { "no", "false", "0" };
-                return (!negative.Contains(v.ToLower()));
+            {
+                return CasConfig.GetBoolOnce("VERIFY_XSRF_IN_HEADER", dflt: true);
             }
         }
 
@@ -405,11 +391,8 @@ namespace CasAuth
         public static bool VerifyXsrfInCookie
         {
             get
-            { // default is false
-                string v = System.Environment.GetEnvironmentVariable("VERIFY_XSRF_IN_COOKIE");
-                if (string.IsNullOrEmpty(v)) return false;
-                string[] positive = new string[] { "yes", "true", "1" };
-                return (positive.Contains(v.ToLower()));
+            {
+                return CasConfig.GetBoolOnce("VERIFY_XSRF_IN_COOKIE", dflt: false);
             }
         }
 
@@ -420,10 +403,8 @@ namespace CasAuth
         public static string UserCookieName
         {
             get
-            { // generally this should just go with default
-                string v = System.Environment.GetEnvironmentVariable("USER_COOKIE_NAME");
-                if (string.IsNullOrEmpty(v)) return "user";
-                return v;
+            {
+                return CasConfig.GetStringOnce("USER_COOKIE_NAME", dflt: "user");
             }
         }
 
@@ -434,10 +415,8 @@ namespace CasAuth
         public static string RoleForAdmin
         {
             get
-            { // generally this should just go with default
-                string v = System.Environment.GetEnvironmentVariable("ROLE_FOR_ADMIN");
-                if (string.IsNullOrEmpty(v)) return "admin";
-                return v;
+            {
+                return CasConfig.GetStringOnce("USER_COOKIE_NAME", dflt: "admin");
             }
         }
 
@@ -448,10 +427,8 @@ namespace CasAuth
         public static string RoleForService
         {
             get
-            { // generally this should just go with default
-                string v = System.Environment.GetEnvironmentVariable("ROLE_FOR_SERVICE");
-                if (string.IsNullOrEmpty(v)) return "service";
-                return v;
+            {
+                return CasConfig.GetStringOnce("USER_COOKIE_NAME", dflt: "service");
             }
         }
 
@@ -464,7 +441,7 @@ namespace CasAuth
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("TENANT_ID");
+                return CasConfig.GetStringOnce("TENANT_ID");
             }
         }
 
@@ -478,7 +455,7 @@ namespace CasAuth
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("CLIENT_ID");
+                return CasConfig.GetStringOnce("CLIENT_ID");
             }
         }
 
@@ -491,7 +468,7 @@ namespace CasAuth
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("CLIENT_SECRET");
+                return CasConfig.GetStringOnce("CLIENT_SECRET");
             }
         }
 
@@ -504,9 +481,7 @@ namespace CasAuth
         {
             get
             {
-                string s = System.Environment.GetEnvironmentVariable("TENANT_ID_CONFIG");
-                if (string.IsNullOrEmpty(s)) return TenantId;
-                return s;
+                return CasConfig.GetStringOnce("TENANT_ID_CONFIG", dflt: TenantId);
             }
         }
 
@@ -519,9 +494,7 @@ namespace CasAuth
         {
             get
             {
-                string s = System.Environment.GetEnvironmentVariable("CLIENT_ID_CONFIG");
-                if (string.IsNullOrEmpty(s)) return ClientId;
-                return s;
+                return CasConfig.GetStringOnce("CLIENT_ID_CONFIG", dflt: ClientId);
             }
         }
 
@@ -534,9 +507,7 @@ namespace CasAuth
         {
             get
             {
-                string s = System.Environment.GetEnvironmentVariable("CLIENT_SECRET_CONFIG");
-                if (string.IsNullOrEmpty(s)) return ClientSecret;
-                return s;
+                return CasConfig.GetStringOnce("CLIENT_SECRET_CONFIG", dflt: ClientSecret);
             }
         }
 
@@ -549,9 +520,7 @@ namespace CasAuth
         {
             get
             {
-                string s = System.Environment.GetEnvironmentVariable("TENANT_ID_GRAPH");
-                if (string.IsNullOrEmpty(s)) return TenantId;
-                return s;
+                return CasConfig.GetStringOnce("TENANT_ID_GRAPH", dflt: TenantId);
             }
         }
 
@@ -564,9 +533,7 @@ namespace CasAuth
         {
             get
             {
-                string s = System.Environment.GetEnvironmentVariable("CLIENT_ID_GRAPH");
-                if (string.IsNullOrEmpty(s)) return ClientId;
-                return s;
+                return CasConfig.GetStringOnce("CLIENT_ID_GRAPH", dflt: ClientId);
             }
         }
 
@@ -579,9 +546,7 @@ namespace CasAuth
         {
             get
             {
-                string s = System.Environment.GetEnvironmentVariable("CLIENT_SECRET_GRAPH");
-                if (string.IsNullOrEmpty(s)) return ClientSecret;
-                return s;
+                return CasConfig.GetStringOnce("CLIENT_SECRET_GRAPH", dflt: ClientSecret);
             }
         }
 
@@ -595,9 +560,7 @@ namespace CasAuth
         {
             get
             {
-                string s = System.Environment.GetEnvironmentVariable("TENANT_ID_VAULT");
-                if (string.IsNullOrEmpty(s)) return TenantId;
-                return s;
+                return CasConfig.GetStringOnce("TENANT_ID_VAULT", dflt: TenantId);
             }
         }
 
@@ -610,9 +573,7 @@ namespace CasAuth
         {
             get
             {
-                string s = System.Environment.GetEnvironmentVariable("CLIENT_ID_VAULT");
-                if (string.IsNullOrEmpty(s)) return ClientId;
-                return s;
+                return CasConfig.GetStringOnce("CLIENT_ID_VAULT", dflt: ClientId);
             }
         }
 
@@ -625,9 +586,7 @@ namespace CasAuth
         {
             get
             {
-                string s = System.Environment.GetEnvironmentVariable("CLIENT_SECRET_VAULT");
-                if (string.IsNullOrEmpty(s)) return ClientSecret;
-                return s;
+                return CasConfig.GetStringOnce("CLIENT_SECRET_VAULT", dflt: ClientSecret);
             }
         }
 
@@ -639,7 +598,7 @@ namespace CasAuth
         public static string Authority
         {
             get
-            { // generally this should just go with default
+            {
                 string s = System.Environment.GetEnvironmentVariable("AUTHORITY");
                 if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(TenantId)) return $"https://login.microsoftonline.com/{TenantId}";
                 return s;
@@ -653,7 +612,7 @@ namespace CasAuth
         public static string RedirectUri
         {
             get
-            { // generally this should just go with default
+            {
                 string s = System.Environment.GetEnvironmentVariable("REDIRECT_URI");
                 if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(ServerHostUrl)) return new Uri(ServerHostUrl).Append("/cas/token").AbsoluteUri;
                 return s;
@@ -667,8 +626,8 @@ namespace CasAuth
         public static string DefaultRedirectUrl
         {
             get
-            { // generally this should be set because the default is unlikely to be right
-                // note: it is not required because they /authorize request can specify a callback
+            {
+                // note: it is not required because the /authorize request can specify a callback
                 string s = System.Environment.GetEnvironmentVariable("DEFAULT_REDIRECT_URL");
                 if (string.IsNullOrEmpty(s)) return WebHostUrl ?? ClientHostUrl;
                 return s;
@@ -682,10 +641,8 @@ namespace CasAuth
         public static string[] ApplicationIds
         {
             get
-            { // used for determining roles
-                string appId = System.Environment.GetEnvironmentVariable("APPLICATION_ID");
-                if (string.IsNullOrEmpty(appId)) return new string[] { };
-                return appId.Split(',').Select(id => id.Trim()).ToArray();
+            {
+                return CasConfig.GetArrayOnce("APPLICATION_ID");
             }
         }
 
@@ -696,8 +653,8 @@ namespace CasAuth
         public static string DomainHint
         {
             get
-            { // very optional
-                return System.Environment.GetEnvironmentVariable("DOMAIN_HINT");
+            {
+                return CasConfig.GetStringOnce("DOMAIN_HINT");
             }
         }
 
@@ -709,16 +666,7 @@ namespace CasAuth
         {
             get
             {
-                // value is provided in minutes
-                string duration = System.Environment.GetEnvironmentVariable("JWT_DURATION");
-                if (int.TryParse(duration, out int result))
-                {
-                    return result;
-                }
-                else
-                {
-                    return 60 * 4; // 4 hours
-                }
+                return CasConfig.GetIntOnce("JWT_DURATION", 60 * 4); // 4 hours
             }
         }
 
@@ -730,38 +678,20 @@ namespace CasAuth
         {
             get
             {
-                // value is provided in minutes
-                string duration = System.Environment.GetEnvironmentVariable("JWT_SERVICE_DURATION");
-                if (int.TryParse(duration, out int result))
-                {
-                    return result;
-                }
-                else
-                {
-                    return JwtDuration;
-                }
+                return CasConfig.GetIntOnce("JWT_SERVICE_DURATION", JwtDuration);
             }
         }
 
         /// <summary>
         /// [OPTIONAL, default: 7 days] This setting determines the maximum duration from the initial
         /// issuing of the JWT. If this duration is exceeded the reissue process will not issue a replacement
-        /// token.
+        /// token. If you set this to "0" there will not be a maximum duration.
         /// </summary>
         public static int JwtMaxDuration
         {
             get
             {
-                // value is provided in minutes
-                string duration = System.Environment.GetEnvironmentVariable("JWT_MAX_DURATION");
-                if (int.TryParse(duration, out int result))
-                {
-                    return result;
-                }
-                else
-                {
-                    return 60 * 24 * 7; // 7 days, 0 = forever
-                }
+                return CasConfig.GetIntOnce("JWT_MAX_DURATION", 60 * 24 * 7); // 7 days
             }
         }
 
@@ -772,11 +702,8 @@ namespace CasAuth
         public static bool RequireUserEnabledOnReissue
         {
             get
-            { // default is true
-                string v = System.Environment.GetEnvironmentVariable("REQUIRE_USER_ENABLED_ON_REISSUE");
-                if (string.IsNullOrEmpty(v)) return true;
-                string[] negative = new string[] { "no", "false", "0" };
-                return (!negative.Contains(v.ToLower()));
+            {
+                return CasConfig.GetBoolOnce("REQUIRE_USER_ENABLED_ON_REISSUE", dflt: true);
             }
         }
 
@@ -789,9 +716,7 @@ namespace CasAuth
         {
             get
             {
-                var s = System.Environment.GetEnvironmentVariable("COMMAND_PASSWORD");
-                if (string.IsNullOrEmpty(s)) return "secret";
-                return s;
+                return CasConfig.GetStringOnce("COMMAND_PASSWORD", dflt: "secret");
             }
         }
 
@@ -966,7 +891,7 @@ namespace CasAuth
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("PUBLIC_CERT_1");
+                return CasConfig.GetStringOnce("PUBLIC_CERT_1");
             }
         }
 
@@ -979,7 +904,7 @@ namespace CasAuth
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("PUBLIC_CERT_2");
+                return CasConfig.GetStringOnce("PUBLIC_CERT_2");
             }
         }
 
@@ -992,7 +917,7 @@ namespace CasAuth
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("PUBLIC_CERT_3");
+                return CasConfig.GetStringOnce("PUBLIC_CERT_3");
             }
         }
 

@@ -45,7 +45,7 @@ namespace CasAuth
             return await tokenProvider.GetAccessTokenAsync(resourceId);
         }
 
-        public static async Task<string> GetAccessToken(string resourceId, string authTypeKey, CasTokenIssuer issuer = null)
+        public static async Task<string> GetAccessToken(string resourceId, string authTypeKey, CasConfig config = null)
         {
             switch (AuthType(authTypeKey))
             {
@@ -55,8 +55,8 @@ namespace CasAuth
                         case "AUTH_TYPE_CONFIG":
                             return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdConfig, CasEnv.ClientIdConfig, CasEnv.ClientSecretConfig);
                         case "AUTH_TYPE_GRAPH":
-                            if (issuer == null) throw new Exception("issuer must be supplied for AUTH_TYPE_GRAPH");
-                            var graphSecret = await issuer.ValueOrKeyVault("CLIENT_SECRET_GRAPH", CasEnv.ClientSecretGraph);
+                            if (config == null) throw new Exception("config must be supplied for AUTH_TYPE_GRAPH");
+                            var graphSecret = await config.GetString("CLIENT_SECRET_GRAPH", CasEnv.ClientSecretGraph);
                             return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdGraph, CasEnv.ClientIdGraph, graphSecret);
                         case "AUTH_TYPE_VAULT":
                             return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdVault, CasEnv.ClientIdVault, CasEnv.ClientSecretVault);

@@ -18,50 +18,28 @@ namespace CasAuth
     public class CasTokenIssuer
     {
 
-        public CasTokenIssuer(ILogger<CasTokenIssuer> logger, IHttpClientFactory httpClientFactory)
+        public CasTokenIssuer(ILogger<CasTokenIssuer> logger, IHttpClientFactory httpClientFactory, CasConfig config)
         {
             this.Logger = logger;
             this.HttpClient = httpClientFactory.CreateClient("cas");
+            this.Config = config;
             this.ConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>($"{CasEnv.Authority}/.well-known/openid-configuration", new OpenIdConnectConfigurationRetriever());
         }
 
         private ILogger Logger { get; }
         private HttpClient HttpClient { get; }
+        private CasConfig Config { get; }
         public ConfigurationManager<OpenIdConnectConfiguration> ConfigManager { get; }
-
-        private Dictionary<string, string> ValueOrKeyVaultCache { get; } = new Dictionary<string, string>();
-
-        public async Task<string> ValueOrKeyVault(string key, string value)
-        {
-
-            // look first to the cache
-            if (ValueOrKeyVaultCache.ContainsKey(key)) return ValueOrKeyVaultCache[key];
-
-            // pull from key-vault if a URL
-            if (
-                !string.IsNullOrEmpty(value) &&
-                value.StartsWith("https://", StringComparison.InvariantCultureIgnoreCase) &&
-                value.Contains(".vault.azure.net/", StringComparison.InvariantCultureIgnoreCase)
-            )
-            {
-                value = await CasConfig.GetFromKeyVault(this.HttpClient, value);
-            }
-
-            // cache
-            ValueOrKeyVaultCache.Add(key, value);
-
-            return value;
-        }
 
         private X509SigningCredentials _signingCredentials;
 
-        private async Task<X509SigningCredentials> GetSigningCredentials()
+        public async Task<X509SigningCredentials> GetSigningCredentials()
         {
             if (_signingCredentials == null)
             {
-                var privateKey = await ValueOrKeyVault("PRIVATE_KEY", CasEnv.PrivateKey);
+                var privateKey = await Config.GetString("PRIVATE_KEY", CasEnv.PrivateKey);
                 var bytes = Convert.FromBase64String(privateKey);
-                var privateKeyPassword = await ValueOrKeyVault("PRIVATE_KEY_PASSWORD", CasEnv.PrivateKeyPassword);
+                var privateKeyPassword = await Config.GetString("PRIVATE_KEY_PASSWORD", CasEnv.PrivateKeyPassword);
                 var certificate = new X509Certificate2(bytes, privateKeyPassword);
                 _signingCredentials = new X509SigningCredentials(certificate, SecurityAlgorithms.RsaSha256);
             }
@@ -78,10 +56,10 @@ namespace CasAuth
 
                 // attempt to get certificates indexed 0-3 at the same time
                 var tasks = new List<Task<string>>();
-                tasks.Add(ValueOrKeyVault("PUBLIC_CERT_0", CasEnv.PublicCert0));
-                tasks.Add(ValueOrKeyVault("PUBLIC_CERT_1", CasEnv.PublicCert1));
-                tasks.Add(ValueOrKeyVault("PUBLIC_CERT_2", CasEnv.PublicCert2));
-                tasks.Add(ValueOrKeyVault("PUBLIC_CERT_3", CasEnv.PublicCert3));
+                tasks.Add(Config.GetString("PUBLIC_CERT_0", CasEnv.PublicCert0));
+                tasks.Add(Config.GetString("PUBLIC_CERT_1", CasEnv.PublicCert1));
+                tasks.Add(Config.GetString("PUBLIC_CERT_2", CasEnv.PublicCert2));
+                tasks.Add(Config.GetString("PUBLIC_CERT_3", CasEnv.PublicCert3));
 
                 // wait for all the tasks to complete
                 await Task.WhenAll(tasks.ToArray());
@@ -131,7 +109,7 @@ namespace CasAuth
         {
 
             // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this);
+            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this.Config);
 
             // check for enabled
             using (var request = new HttpRequestMessage()
@@ -163,7 +141,7 @@ namespace CasAuth
         {
 
             // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this);
+            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this.Config);
 
             // get the user info
             using (var request = new HttpRequestMessage()
@@ -216,7 +194,7 @@ namespace CasAuth
             if (appIds.Count() < 1) return assignments;
 
             // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this);
+            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this.Config);
 
             // lookup all specified applications
             //   NOTE: catch the possible 403 Forbidden because access rights have not been granted

@@ -39,7 +39,7 @@ namespace auth
                 .ConfigureLogging(logging =>
                 {
                     logging.AddConsole();
-                    if (Enum.TryParse(LogLevel, out Microsoft.Extensions.Logging.LogLevel level))
+                    if (Enum.TryParse(LogLevel, true, out Microsoft.Extensions.Logging.LogLevel level))
                     {
                         logging.SetMinimumLevel(level);
                     }
