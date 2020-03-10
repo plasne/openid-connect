@@ -32,6 +32,7 @@ Links:
 
 -   [Implementation Guide](./implementation.md)
 -   [Getting Started Video - Local Debugging](https://youtu.be/kMpGEP6CKJY)
+    -   NOTE: the video does not show app.UseCors() for the auth service, but this is required
 -   [Getting Started Video - Deploying to AKS](https://youtu.be/3dun4aDWv0U)
 -   [Getting Started Video - Deploying to App Service](https://youtu.be/TJt56Y9K0f4)
 -   [Sample Configurations](./configuration.md)
