@@ -47,7 +47,7 @@ rm -r Properties
 
     - Reply URL of "http://localhost:5100/cas/token".
     - Enable implicit grant for "ID tokens" only (not Access tokens).
-    
+
 3. Create an .env file in the root of the auth folder with the following (use the TENANT_ID and CLIENT_ID from step 2)...
 
 ```bash
@@ -429,7 +429,7 @@ https://pelasne-keyvault.vault.azure.net/secrets/PUBLIC-CERT-0
 
 It is possible to configure settings using environment variables and/or a .env file and not use Azure App Configuration at all. If you don't specify CONFIG_KEYS, nothing will be pulled from Azure App Configuration. However, it is recommended given the number of settings that have to be coordinated and correct, that you use Azure App Configuration.
 
-You should never store a secret in this implementation of the Azure App Configuration, the values of the keys are written to the logs, displayed on the console, and potentially even made available by PRESENT_CONFIG_name. Instead the configuration should contains URLs that point to secrets in Azure Key Vault.
+You should never store a secret in this implementation of the Azure App Configuration, the values of the keys are written to the logs, displayed on the console, and potentially even made available by PRESENT_CONFIG_X. Instead the configuration should contains URLs that point to secrets in Azure Key Vault.
 
 Settings are set in the following order:
 
@@ -543,7 +543,7 @@ Generally these settings do not need to be modified, but there are many configur
 
 -   app:auth:env:COMMAND_PASSWORD (default: secret) - Administrative functions for the authentication service require a command password as proof of authority (this is because the authentication might not be working for the actual authentication service). This commonly will be a URL to a secret in the Key Vault.
 
--   app:api:env:PRESENT_CONFIG_name - You may create one or more PRESENT_CONFIG_name keys that allow you to specify configurations that can be presented by your API at api/config/name. For example, you could create the following variable "PRESENT_CONFIG_wfedev=app:wfe:dev:\*". All keys under that filter would be returned when someone hit the /api/config/webdev endpoint. Primarily this is provided so your WFE can be configured by Azure App Configuration in the same way as the other services.
+-   app:api:env:PRESENT_CONFIG_X - You may create one or more PRESENT_CONFIG_X keys that allow you to specify configurations that can be presented by your API at api/config/x. For example, you could create the following variable "PRESENT_CONFIG_WFEDEV=app:wfe:dev:\*". All keys under that filter would be returned when someone hit the /api/config/webdev endpoint. Primarily this is provided so your WFE can be configured by Azure App Configuration in the same way as the other services. It is required that the entire PRESENT_CONFIG_X key be uppercase, though calling the api/config/x endpoint is not case-sensitive.
 
 -   app:auth:env:USER_COOKIE_NAME (default: user) - The name of the cookie that is used for the session_token.
 

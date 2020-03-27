@@ -56,8 +56,9 @@ namespace CasAuth
                         // validate the name is alpha numeric only
                         if (!name.All(char.IsLetterOrDigit)) throw new HttpException(400, $"config name of '{name}' is not alphanumeric.");
 
-                        // look for env that would allow this config
+                        // look for env that would allow this config (try all upper, then try same casing)
                         string compact = System.Environment.GetEnvironmentVariable($"PRESENT_CONFIG_{name.ToUpper()}");
+                        if (string.IsNullOrEmpty(compact)) compact = System.Environment.GetEnvironmentVariable($"PRESENT_CONFIG_{name}");
                         if (string.IsNullOrEmpty(compact)) throw new HttpException(404, $"config name of '{name}' is not found (1).");
                         var filters = compact.Split(',').Select(id => id.Trim()).ToArray();
                         if (filters.Count() < 1) throw new HttpException(404, $"config name of '{name}' is not found (2).");

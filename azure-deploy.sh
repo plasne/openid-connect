@@ -164,11 +164,11 @@ echo "HOST_URL=http://localhost:5000" >> wfe/.env
 echo "CONFIG_URL=http://localhost:5200/api/config/wfe" >> wfe/.env
 
 echo '{
-  "sample:api:dev:PRESENT_CONFIG_wfe": "sample:wfe:dev:*",
+  "sample:api:dev:PRESENT_CONFIG_WFE": "sample:wfe:dev:*",
   "sample:api:dev:REISSUE_URL": "",
   "sample:api:dev:WELL_KNOWN_CONFIG_URL": "",
   "sample:api:local:ALLOW_TOKEN_IN_HEADER": "true",
-  "sample:api:local:PRESENT_CONFIG_wfe": "sample:wfe:local:*, sample:wfe:dev:*",
+  "sample:api:local:PRESENT_CONFIG_WFE": "sample:wfe:local:*, sample:wfe:dev:*",
   "sample:api:local:REISSUE_URL": "http://localhost:5100/api/auth/reissue",
   "sample:api:local:VERIFY_XSRF_HEADER": "false",
   "sample:api:local:WELL_KNOWN_CONFIG_URL": "http://localhost:5100/api/auth/.well-known/openid-configuration",
