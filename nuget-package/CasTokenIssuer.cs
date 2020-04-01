@@ -18,7 +18,7 @@ namespace CasAuth
     public class CasTokenIssuer
     {
 
-        public CasTokenIssuer(ILogger<CasTokenIssuer> logger, IHttpClientFactory httpClientFactory, CasConfig config)
+        public CasTokenIssuer(ILogger<CasTokenIssuer> logger, IHttpClientFactory httpClientFactory, ICasConfig config)
         {
             this.Logger = logger;
             this.HttpClient = httpClientFactory.CreateClient("cas");
@@ -28,7 +28,7 @@ namespace CasAuth
 
         private ILogger Logger { get; }
         private HttpClient HttpClient { get; }
-        private CasConfig Config { get; }
+        private ICasConfig Config { get; }
         public ConfigurationManager<OpenIdConnectConfiguration> ConfigManager { get; }
 
         private X509SigningCredentials _signingCredentials;

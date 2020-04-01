@@ -45,7 +45,7 @@ namespace CasAuth
             return await tokenProvider.GetAccessTokenAsync(resourceId);
         }
 
-        public static async Task<string> GetAccessToken(string resourceId, string authTypeKey, CasConfig config = null)
+        public static async Task<string> GetAccessToken(string resourceId, string authTypeKey, ICasConfig config = null)
         {
             switch (AuthType(authTypeKey))
             {

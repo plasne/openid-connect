@@ -111,7 +111,7 @@ namespace CasAuth
             public string refresh_token { get; set; }
         }
 
-        public static async Task<Tokens> GetAccessTokenFromAuthCode(HttpClient httpClient, CasConfig config, string code, string scope)
+        public static async Task<Tokens> GetAccessTokenFromAuthCode(HttpClient httpClient, ICasConfig config, string code, string scope)
         {
 
             // get the client secret
@@ -148,7 +148,7 @@ namespace CasAuth
 
         }
 
-        public static async Task<Tokens> GetAccessTokenFromRefreshToken(HttpClient httpClient, CasConfig config, string refreshToken, string scope)
+        public static async Task<Tokens> GetAccessTokenFromRefreshToken(HttpClient httpClient, ICasConfig config, string refreshToken, string scope)
         {
 
             // get the client secret
@@ -372,7 +372,7 @@ namespace CasAuth
                     try
                     {
                         var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
-                        var config = context.RequestServices.GetService<CasConfig>();
+                        var config = context.RequestServices.GetService<ICasConfig>();
                         var httpClientFactory = context.RequestServices.GetService<IHttpClientFactory>();
                         var httpClient = httpClientFactory.CreateClient("cas");
 
@@ -789,7 +789,7 @@ namespace CasAuth
                         var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
                         var httpClientFactory = context.RequestServices.GetService<IHttpClientFactory>();
                         var httpClient = httpClientFactory.CreateClient("cas");
-                        var config = context.RequestServices.GetService<CasConfig>();
+                        var config = context.RequestServices.GetService<ICasConfig>();
 
                         // validate graph access
                         logger.LogInformation("/cas/check-requirements: checking graph access...");
@@ -835,7 +835,7 @@ namespace CasAuth
                     {
 
                         // ensure the user is authorized
-                        var config = context.RequestServices.GetService<CasConfig>();
+                        var config = context.RequestServices.GetService<ICasConfig>();
                         var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
                         var commandPassword = await config.GetString("COMMAND_PASSWORD", CasEnv.CommandPassword);
                         string password = context.Request.Form["password"];

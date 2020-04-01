@@ -26,13 +26,13 @@ namespace CasAuth
                 .ConfigurePrimaryHttpMessageHandler(() => new CasProxyHandler());
 
             // add the configuration service
-            services.TryAddSingleton<CasConfig, CasConfig>();
+            services.TryAddSingleton<ICasConfig, CasConfig>();
 
             // load the configuration and log it
             using (var provider = services.BuildServiceProvider())
             {
                 var logger = provider.GetService<ILogger<CasClientAuthServicesConfiguration>>();
-                var config = provider.GetService<CasConfig>();
+                var config = provider.GetService<ICasConfig>();
 
                 // determine the authentication type
                 string authType = CasAuthChooser.AuthType();

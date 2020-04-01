@@ -64,7 +64,7 @@ namespace CasAuth
                         if (filters.Count() < 1) throw new HttpException(404, $"config name of '{name}' is not found (2).");
 
                         // return the config
-                        var config = context.RequestServices.GetService<CasConfig>();
+                        var config = context.RequestServices.GetService<ICasConfig>();
                         var values = await config.Load(filters);
                         string json = JsonSerializer.Serialize(values);
                         context.Response.Headers.Add("Content-Type", "application/json; charset=utf-8");

@@ -9,7 +9,7 @@ using Newtonsoft.Json; // System.Text.Json was not deserializing properly
 namespace CasAuth
 {
 
-    public class CasConfig
+    public class CasConfig : ICasConfig
     {
 
         public CasConfig(ILogger<CasConfig> logger = null, HttpClient httpClient = null, IHttpClientFactory httpClientFactory = null)
@@ -22,7 +22,7 @@ namespace CasAuth
         private HttpClient HttpClient { get; }
         private string[] Positive { get; } = new string[] { "true", "1", "yes" };
         private string[] Negative { get; } = new string[] { "false", "0", "no" };
-        public Dictionary<string, object> Cache = new Dictionary<string, object>();
+        public Dictionary<string, object> Cache { get; } = new Dictionary<string, object>();
 
         private class AppConfigItems
         {
@@ -172,7 +172,7 @@ namespace CasAuth
             return val;
         }
 
-        public async Task<string> GetString(string key, string val, string dflt = null)
+        public async Task<string> GetString(string key, string val = null, string dflt = null)
         {
             if (Cache.ContainsKey(key))
             {
@@ -197,7 +197,7 @@ namespace CasAuth
             return ival;
         }
 
-        public async Task<int> GetInt(string key, string val, int dflt = 0)
+        public async Task<int> GetInt(string key, string val = null, int dflt = 0)
         {
             if (Cache.ContainsKey(key))
             {
@@ -224,7 +224,7 @@ namespace CasAuth
             return bval;
         }
 
-        public async Task<bool> GetBool(string key, string val, bool dflt = false)
+        public async Task<bool> GetBool(string key, string val = null, bool dflt = false)
         {
             if (Cache.ContainsKey(key))
             {
@@ -250,7 +250,7 @@ namespace CasAuth
             return aval;
         }
 
-        public async Task<string[]> GetArray(string key, string val, string delimiter = ",", string[] dflt = null)
+        public async Task<string[]> GetArray(string key, string val = null, string delimiter = ",", string[] dflt = null)
         {
             if (Cache.ContainsKey(key))
             {
@@ -276,7 +276,7 @@ namespace CasAuth
             return tval;
         }
 
-        public async Task<T> GetEnum<T>(string key, string val, T dflt = default(T)) where T : struct
+        public async Task<T> GetEnum<T>(string key, string val = null, T dflt = default(T)) where T : struct
         {
             if (Cache.ContainsKey(key))
             {
