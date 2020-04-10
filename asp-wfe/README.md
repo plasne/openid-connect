@@ -114,7 +114,7 @@ namespace asp_wfe.Controllers
 }
 ```
 
-Notice that the AuthN endpoint (the page that needs authentication) is suppressing the XSRF check. The reason for that is aspnetcore doesn't send a XSRF header when you browse to a page, nor does it probably need to. Best practice is that GET requests should never alter the state of anything so XSRF isn't needed. While I generally do check for XSRF on every request using CasAuth, there is no good way to address that for aspnetcore, so you can leave it off.
+Notice that the AuthN endpoint (the page that needs authentication) is suppressing the XSRF check (this uses a new feature in 2.5.0+). The reason for that is aspnetcore doesn't send a XSRF header when you browse to a page, nor does it probably need to. Best practice is that GET requests should never alter the state of anything so XSRF isn't needed. While I generally do check for XSRF on every request using CasAuth, there is no good way to address that for aspnetcore, so you can leave it off.
 
 Beyond that, aspnetcore does offer XSRF protection for POST and similar endpoints natively. So you could always suppress CasAuth XSRF protection and simply use this: https://docs.microsoft.com/en-us/aspnet/core/security/anti-request-forgery?view=aspnetcore-3.1.
 
