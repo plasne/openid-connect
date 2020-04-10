@@ -1,0 +1,11 @@
+@{
+    ViewData["Title"] = "Authentication";
+}
+<h1>@ViewData["Title"]</h1>
+
+<p>This section is protected by authentication only (no special authentication required).</p>
+<p>This page is protected by Middleware.</p>
+
+<script>
+    window.location.href="http://localhost:5000/Home/Login";
+</script>

@@ -9,7 +9,8 @@ using Microsoft.Extensions.Logging;
 namespace CasAuth
 {
 
-    public class CasXsrfRequirement : IAuthorizationRequirement { }
+    public class CasXsrfRequirement : IAuthorizationRequirement
+    { }
 
     public class CasXsrfHandler : AuthorizationHandler<CasXsrfRequirement>
     {

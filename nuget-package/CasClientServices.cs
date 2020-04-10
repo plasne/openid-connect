@@ -74,7 +74,7 @@ namespace CasAuth
             }
 
             // add the validator service
-            services.AddSingleton<CasTokenValidator, CasTokenValidator>();
+            services.AddSingleton<CasTokenValidator>();
 
             // setup authentication
             services
@@ -91,6 +91,11 @@ namespace CasAuth
                     policy.RequireAuthenticatedUser();
                     policy.Requirements.Add(new CasXsrfRequirement());
 
+                });
+                options.AddPolicy("cas-no-xsrf", policy =>
+                {
+                    policy.AddAuthenticationSchemes("cas");
+                    policy.RequireAuthenticatedUser();
                 });
                 options.DefaultPolicy = options.GetPolicy("cas");
             });

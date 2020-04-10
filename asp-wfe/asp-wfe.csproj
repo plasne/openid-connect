@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <RootNamespace>asp_wfe</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+    <PackageReference Include="CasAuth" Version="2.4.0" />
+  -->
+    <ProjectReference Include="../../openid-connect/nuget-package/CasAuth.csproj" />
+  </ItemGroup>
+
+
+
+</Project>
