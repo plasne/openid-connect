@@ -103,7 +103,7 @@ The auth/verify method should never be called directly from a client (not to men
     <inbound>
         <base />
         <send-request mode="new" response-variable-name="VerifyResponse" timeout="10" ignore-error="true">
-            <set-url>https://auth2.plasne.com/api/auth/verify</set-url>
+            <set-url>https://auth2.plasne.com/cas/verify</set-url>
             <set-method>POST</set-method>
             <set-header name="X-XSRF-TOKEN" exists-action="override">
                 <value>@{
