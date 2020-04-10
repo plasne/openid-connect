@@ -140,3 +140,41 @@ dbug: CasAuth.CasConfig[0]
 dbug: CasAuth.CasConfig[0]
       REDIRECT_URL = "http://localhost:5000/Home/Redirector"
 ```
+
+## Authenticate Everything
+
+I had a customer that needed to authenticate everything, even static assets. To do that, you can move the authentication above UseStaticFiles() and then add middleware to redirect if not going to the Redirector or already authenticated.
+
+```c#
+// route and authenticate
+app.UseRouting();
+app.UseAuthentication();
+app.UseAuthorization();
+
+// redirect if not authenticated
+app.UseWhen(context =>
+{
+    if (context.User.Identity.IsAuthenticated) return false;
+    if (context.Request.Path.Value.EndsWith("/Home/Redirector")) return false;
+    return true;
+}, app =>
+{
+    app.Run(async context =>
+    {
+        var loginUrl = await config.GetString("LOGIN_URL") ?? "http://localhost:5100/cas/authorize";
+        var redirectUrl = await config.GetString("REDIRECT_URL") ?? "http://localhost:5000/Home/Redirector";
+        var uri = System.Web.HttpUtility.UrlEncode(redirectUrl);
+        context.Response.Redirect($"{loginUrl}?redirecturi={uri}");
+    });
+});
+
+// present static files and so on...
+app.UseStaticFiles();
+app.UseCasClientAuth();
+app.UseEndpoints(endpoints =>
+{
+    endpoints.MapControllerRoute(
+        name: "default",
+        pattern: "{controller=Home}/{action=Index}/{id?}");
+});
+```

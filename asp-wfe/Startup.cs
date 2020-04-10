@@ -34,9 +34,9 @@ namespace asp_wfe
 
             if (env.IsDevelopment()) app.UseDeveloperExceptionPage();
 
-            // establish the pipeline
-            app.UseStaticFiles();
+            // route and authenticate
             app.UseRouting();
+            app.UseStaticFiles();
             app.UseAuthentication();
             app.UseAuthorization();
             app.UseCasClientAuth();
