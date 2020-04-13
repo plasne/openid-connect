@@ -1,8 +1,13 @@
-# ASPNET.CORE MVP Sample
+# ASPNET.CORE MVP Sample (LEGACY)
 
-I do believe there is any case by which you should design a new website using this method. You should develop all of your business logic in one or more APIs and you should develop your WFE using client-side web technologies like HTML/CSS/Javascript, Angular, React, etc.
+I do NOT believe there is any case by which you should design a new website using this method. You should develop all of your business logic in one or more APIs and you should develop your WFE using client-side web technologies like HTML/CSS/Javascript, Angular, React, etc.
 
 However, it was mentioned to me recently that people might already have code written in ASPNET.CORE with Razor pages and the like and might need some assistance in getting this sample to work.
+
+For greenfield development you should typically:
+* Deploy the Auth Server service
+* Deploy one or more API Client services
+* Deploy one or more WFE services - typically just HTML, CSS, and JS hosted via NGINX or similar
 
 ## Deployment
 
