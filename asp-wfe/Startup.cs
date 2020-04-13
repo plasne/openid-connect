@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using CasAuth;
+using asp_wfe.Controllers;
 
 namespace asp_wfe
 {
@@ -19,8 +20,10 @@ namespace asp_wfe
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddHttpClient("wfe");
             services.AddCasClientAuth();
             services.AddControllersWithViews();
+            //services.AddHttpClient<HomeController>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -31,6 +34,7 @@ namespace asp_wfe
             var config = app.ApplicationServices.GetService<ICasConfig>();
             config.Optional("LOGIN_URL");
             config.Optional("REDIRECT_URL");
+            config.Optional("ME_URL");
 
             if (env.IsDevelopment()) app.UseDeveloperExceptionPage();
 

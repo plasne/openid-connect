@@ -5,9 +5,10 @@ I do NOT believe there is any case by which you should design a new website usin
 However, it was mentioned to me recently that people might already have code written in ASPNET.CORE with Razor pages and the like and might need some assistance in getting this sample to work.
 
 For greenfield development you should typically:
-* Deploy the Auth Server service
-* Deploy one or more API Client services
-* Deploy one or more WFE services - typically just HTML, CSS, and JS hosted via NGINX or similar
+
+-   Deploy the Auth Server service
+-   Deploy one or more API Client services
+-   Deploy one or more WFE services - typically just HTML, CSS, and JS hosted via NGINX or similar
 
 ## Deployment
 
@@ -182,4 +183,59 @@ app.UseEndpoints(endpoints =>
         name: "default",
         pattern: "{controller=Home}/{action=Index}/{id?}");
 });
+```
+
+## Calling External Services from ASPNETCORE Backend
+
+To further enhance the sample, I added a call to an external API service. In this case, I am running a CasAuth API service, which has a /cas/me endpoint that requires authentication. I just need to collect the session token ("user" cookie by default) and the XSRF-TOKEN cookie so that I can properly pass those as headers. Then it is just a normal HTTP call.
+
+```c#
+public async Task<IActionResult> Login()
+{
+    if (User.Identity.IsAuthenticated)
+    {
+
+        // get the full list of cookies to pass on
+        //  NOTE: we actually only need the "user" cookie, but maybe your API has need of other cookies
+        string cookie = Request.Headers["Cookie"];
+
+        // get the XSRF-TOKEN cookie so we can make it into a header
+        string xsrf = Request.Cookies["XSRF-TOKEN"];
+
+        // if authenticated, make a call to another API
+        UserInfo userinfo = null;
+        var meUrl = await _config.GetString("ME_URL") ?? "http://localhost:5200/cas/me";
+        using (var req = new HttpRequestMessage()
+        {
+            RequestUri = new Uri(meUrl),
+            Method = HttpMethod.Get
+        })
+        {
+            req.Headers.Add("Cookie", cookie);
+            req.Headers.Add("X-XSRF-TOKEN", xsrf);
+            using (var response = await _httpClient.SendAsync(req))
+            {
+                var raw = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Login: HTTP {(int)response.StatusCode} - {raw}");
+                }
+                userinfo = System.Text.Json.JsonSerializer.Deserialize<UserInfo>(raw);
+                Console.WriteLine(raw);
+                Console.WriteLine($"email: {userinfo.email}");
+            }
+        };
+
+        // return the view with our UserInfo as the Model
+        return View(userinfo);
+
+    }
+    else
+    {
+        var loginUrl = await _config.GetString("LOGIN_URL") ?? "http://localhost:5100/cas/authorize";
+        var redirectUrl = await _config.GetString("REDIRECT_URL") ?? "http://localhost:5000/Home/Redirector";
+        var uri = System.Web.HttpUtility.UrlEncode(redirectUrl);
+        return Redirect($"{loginUrl}?redirecturi={uri}");
+    }
+}
 ```

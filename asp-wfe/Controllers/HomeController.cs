@@ -5,6 +5,8 @@ using asp_wfe.Models;
 using Microsoft.AspNetCore.Authorization;
 using CasAuth;
 using System.Threading.Tasks;
+using System.Net.Http;
+using System;
 
 namespace asp_wfe.Controllers
 {
@@ -12,11 +14,13 @@ namespace asp_wfe.Controllers
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
+        private readonly HttpClient _httpClient;
         private readonly ICasConfig _config;
 
-        public HomeController(ILogger<HomeController> logger, ICasConfig config)
+        public HomeController(ILogger<HomeController> logger, IHttpClientFactory httpClientFactory, ICasConfig config)
         {
             _logger = logger;
+            _httpClient = httpClientFactory.CreateClient("wfe");
             _config = config;
         }
 
@@ -30,11 +34,52 @@ namespace asp_wfe.Controllers
             return View();
         }
 
+        public class UserInfo
+        {
+            public string email { get; set; }
+            public string name { get; set; }
+            public string oid { get; set; }
+        }
+
         public async Task<IActionResult> Login()
         {
             if (User.Identity.IsAuthenticated)
             {
-                return View();
+
+                // get the full list of cookies to pass on
+                //  NOTE: we actually only need the "user" cookie, but maybe your API has need of other cookies
+                string cookie = Request.Headers["Cookie"];
+
+                // get the XSRF-TOKEN cookie so we can make it into a header
+                string xsrf = Request.Cookies["XSRF-TOKEN"];
+
+                // if authenticated, make a call to another API
+                UserInfo userinfo = null;
+                var meUrl = await _config.GetString("ME_URL") ?? "http://localhost:5200/cas/me";
+                using (var req = new HttpRequestMessage()
+                {
+                    RequestUri = new Uri(meUrl),
+                    Method = HttpMethod.Get
+                })
+                {
+                    req.Headers.Add("Cookie", cookie);
+                    req.Headers.Add("X-XSRF-TOKEN", xsrf);
+                    using (var response = await _httpClient.SendAsync(req))
+                    {
+                        var raw = await response.Content.ReadAsStringAsync();
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            Console.WriteLine($"Login: HTTP {(int)response.StatusCode} - {raw}");
+                        }
+                        userinfo = System.Text.Json.JsonSerializer.Deserialize<UserInfo>(raw);
+                        Console.WriteLine(raw);
+                        Console.WriteLine($"email: {userinfo.email}");
+                    }
+                };
+
+                // return the view with our UserInfo as the Model
+                return View(userinfo);
+
             }
             else
             {
