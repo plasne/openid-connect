@@ -403,6 +403,10 @@ To use AuthCode, check out the documentation [here](./authcode.md).
 
 See the instructions [here](./custom-claims.md).
 
+### Now that PKCE is available for MSAL does this library need to incorporate it?
+
+PKCE (pixy) addresses a bad actor getting an auth-code and using it to generate an access-code. However, since CasAuth uses the AuthCode flow as a registered Web App, both the auth-code and a client secret is required to generate an access-code. Since the client secret is never exposed outside of the auth service, no access-code can be generated even if the auth-code was compromised. This is one reason the auth-code flow is still the preferred method over PKCE when it can be used.
+
 ### Sending the session_token to microservices in an overlay network is a larger header than needed, is there an alternative?
 
 Yes, this solution supports the safe authentication at the edge using everything described in this project. Then for internal services that are not exposed outside of the application's overlay network, we can simply send identity headers that don't require signature verification.
@@ -424,6 +428,26 @@ These are the current lifetimes for tokens, but of course that could change.
 -   refresh_token - 90 days
 
 -   session_token - user-determined; 4 hours by default
+
+### What are the considerations for keeping this method secure?
+
+- An Azure AD application registration for a Web App ensures the redirect URLs to be HTTPS. Since the redirection returns an auth-code in the response, it is important that this be encrypted.
+
+- An Azure AD application registration for a Web App ensures that an access-code cannot be generated without a client secret. Even though the public client will see an auth-code, it will never be given the client secret (it is kept by the auth service).
+
+- It is important when an Azure AD application registration is created to turn off (unflag) the implicit grant flow for access-codes - this is not a secure workflow.
+
+- Azure AD returns an auth-code to the REDIRECT_URI which is a setting for the auth service only and is immutable while the service is running. Having this as a configuration option that cannot be changed at runtime helps ensure that the auth-code could not be sent to a bad actor.
+
+- The user cookie is written 
+
+- The authflow cookie is marked HTTPONLY to ensure a compromised client cannot tamper with the flow.
+
+- The default configuration includes a user cookie marked HTTPONLY and a xsrf cookie that is available via Javascript. This combination protects you from both XSRF and XSS.
+
+- You should always host your services via HTTPS so that the cookie contents cannot be stolen or compromised.
+
+- You should always run with REQUIRE_SECURE_FOR_COOKIES=true so that cookies are only sent to secure endpoints.
 
 ## Limitations
 
