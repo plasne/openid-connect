@@ -439,7 +439,7 @@ These are the current lifetimes for tokens, but of course that could change.
 
 - Azure AD returns an auth-code to the REDIRECT_URI which is a setting for the auth service only and is immutable while the service is running. Having this as a configuration option that cannot be changed at runtime helps ensure that the auth-code could not be sent to a bad actor.
 
-- The user cookie is written 
+- The user cookie is written with a domain. Even if someone supplied an invalid redirecturi to /authorize endpoint, the cookie is only available on the same base domain as the authentication service.
 
 - The authflow cookie is marked HTTPONLY to ensure a compromised client cannot tamper with the flow.
 
