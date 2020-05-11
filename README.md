@@ -8,6 +8,8 @@ There are many ways to authenticate users. Some of the advantages of this approa
 
 -   It does not require any session state
 
+- It allows for single-page applications (including renewal) safely
+
 -   It allows for claims to be asserted from multiple sources (id_token, Microsoft Graph, databases, etc.)
 
 -   Multiple applications can use this authentication solution as a centralized service
