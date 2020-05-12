@@ -4,6 +4,6 @@
     <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CasAuth" Version="2.3.0" />
+    <ProjectReference Include="../nuget-package/CasAuth.csproj" />
   </ItemGroup>
 </Project>

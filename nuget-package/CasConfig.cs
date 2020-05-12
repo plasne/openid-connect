@@ -165,6 +165,8 @@ namespace CasAuth
             }
         }
 
+        // TODO: add Func() options
+
         public static string GetStringOnce(string key, string dflt = null)
         {
             string val = System.Environment.GetEnvironmentVariable(key);
@@ -215,16 +217,20 @@ namespace CasAuth
             }
         }
 
-        public static bool GetBoolOnce(string key, bool dflt = false)
+        public static bool GetBoolOnce(string key, Func<bool> dflt)
         {
             string val = System.Environment.GetEnvironmentVariable(key);
-            bool bval = (dflt) ?
-                !new string[] { "false", "0", "no" }.Contains(val?.ToLower()) :
-                new string[] { "true", "1", "yes" }.Contains(val?.ToLower());
-            return bval;
+            if (new string[] { "true", "1", "yes" }.Contains(val?.ToLower())) return true;
+            if (new string[] { "false", "0", "no" }.Contains(val?.ToLower())) return false;
+            return dflt();
         }
 
-        public async Task<bool> GetBool(string key, string val = null, bool dflt = false)
+        public static bool GetBoolOnce(string key, bool dflt = false)
+        {
+            return GetBoolOnce(key, () => dflt);
+        }
+
+        public async Task<bool> GetBool(string key, string val, Func<bool> dflt)
         {
             if (Cache.ContainsKey(key))
             {
@@ -234,12 +240,17 @@ namespace CasAuth
             {
                 val = string.IsNullOrEmpty(val) ? System.Environment.GetEnvironmentVariable(key) : val;
                 val = await GetFromKeyVault(val);
-                bool bval = (dflt) ?
-                    !Negative.Contains(val?.ToLower()) :
-                    Positive.Contains(val?.ToLower());
+                if (Positive.Contains(val?.ToLower())) return true;
+                if (Negative.Contains(val?.ToLower())) return false;
+                bool bval = dflt();
                 Cache.Add(key, bval);
                 return bval;
             }
+        }
+
+        public async Task<bool> GetBool(string key, string val = null, bool dflt = false)
+        {
+            return await GetBool(key, val, () => dflt);
         }
 
         public static string[] GetArrayOnce(string key, string delimiter = ",", string[] dflt = null)

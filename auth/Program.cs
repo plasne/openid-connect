@@ -4,7 +4,6 @@ using dotnetauth;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
-using CasAuth;
 
 namespace auth
 {
@@ -19,11 +18,19 @@ namespace auth
             }
         }
 
-        private static string HostUrl
+        private static int Port
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("HOST_URL") ?? CasEnv.ServerHostUrl;
+                string sport = System.Environment.GetEnvironmentVariable("PORT");
+                if (int.TryParse(sport, out int port))
+                {
+                    return port;
+                }
+                else
+                {
+                    return 5100;
+                }
             }
         }
 
@@ -49,7 +56,7 @@ namespace auth
                     }
                 })
                 .UseStartup<Startup>();
-            if (!string.IsNullOrEmpty(HostUrl)) builder.UseUrls(HostUrl);
+            builder.UseUrls($"http://*:{Port}");
             return builder;
         }
 

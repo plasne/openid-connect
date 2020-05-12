@@ -6,10 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!--
-    <PackageReference Include="CasAuth" Version="2.4.0" />
-  -->
-    <ProjectReference Include="../../openid-connect/nuget-package/CasAuth.csproj" />
+    <ProjectReference Include="../nuget-package/CasAuth.csproj" />
   </ItemGroup>
 
 

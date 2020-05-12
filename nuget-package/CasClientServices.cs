@@ -51,7 +51,7 @@ namespace CasAuth
                 config.Require("AUDIENCE", CasEnv.Audience);
                 config.Require("ALLOWED_ORIGINS", CasEnv.AllowedOrigins);
                 config.Require("WELL_KNOWN_CONFIG_URL", CasEnv.WellKnownConfigUrl);
-                config.Require("BASE_DOMAIN", CasEnv.BaseDomain);
+                config.Require("BASE_DOMAIN", CasEnv.BaseDomain());
                 config.Optional("AUTH_TYPE", authType);
                 if (authType == "app")
                 {

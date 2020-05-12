@@ -88,7 +88,7 @@ namespace CasAuth
                         {
                             HttpOnly = CasEnv.RequireHttpOnlyOnUserCookie,
                             Secure = CasEnv.RequireSecureForCookies,
-                            Domain = CasEnv.BaseDomain,
+                            Domain = CasEnv.BaseDomain(Request),
                             SameSite = CasEnv.SameSite,
                             Path = "/"
                         });

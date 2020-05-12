@@ -18,11 +18,19 @@ namespace dotnetauth
             }
         }
 
-        private static string HostUrl
+        private static int Port
         {
             get
             {
-                return System.Environment.GetEnvironmentVariable("HOST_URL") ?? CasEnv.ClientHostUrl;
+                string sport = System.Environment.GetEnvironmentVariable("PORT");
+                if (int.TryParse(sport, out int port))
+                {
+                    return port;
+                }
+                else
+                {
+                    return 5200;
+                }
             }
         }
 
@@ -48,7 +56,7 @@ namespace dotnetauth
                     }
                 })
                 .UseStartup<Startup>();
-            if (!string.IsNullOrEmpty(HostUrl)) builder.UseUrls(HostUrl);
+            builder.UseUrls($"http://*:{Port}");
             return builder;
         }
 

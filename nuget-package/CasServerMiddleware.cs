@@ -111,7 +111,7 @@ namespace CasAuth
             public string refresh_token { get; set; }
         }
 
-        public static async Task<Tokens> GetAccessTokenFromAuthCode(HttpClient httpClient, ICasConfig config, string code, string scope)
+        public static async Task<Tokens> GetAccessTokenFromAuthCode(HttpClient httpClient, HttpContext context, ICasConfig config, string code, string scope)
         {
 
             // get the client secret
@@ -129,7 +129,7 @@ namespace CasAuth
                     new KeyValuePair<string, string>("client_secret", secret),
                     new KeyValuePair<string, string>("scope", scope),
                     new KeyValuePair<string, string>("code", code),
-                    new KeyValuePair<string, string>("redirect_uri", CasEnv.RedirectUri),
+                    new KeyValuePair<string, string>("redirect_uri", CasEnv.RedirectUri(context.Request)),
                     new KeyValuePair<string, string>("grant_type", "authorization_code")
                 }))
                 {
@@ -316,10 +316,10 @@ namespace CasAuth
                     {
 
                         // get the necessary variables
-                        string redirecturi = context.Request.Query["redirecturi"];
+                        string redirectForUser = context.Request.Query["redirecturi"];
                         string authority = CasEnv.Authority;
                         string clientId = WebUtility.UrlEncode(CasEnv.ClientId);
-                        string redirectUri = WebUtility.UrlEncode(CasEnv.RedirectUri);
+                        string redirectForAAD = WebUtility.UrlEncode(CasEnv.RedirectUri(context.Request));
                         // REF: https://docs.microsoft.com/en-us/azure/active-directory/develop/id-tokens
                         string scope = WebUtility.UrlEncode(string.Join(" ", opt.Scopes));
                         string response_type = (opt.AuthCodeFunc != null) ?
@@ -330,7 +330,7 @@ namespace CasAuth
                         // generate state and nonce
                         AuthFlow flow = new AuthFlow()
                         {
-                            redirecturi = (string.IsNullOrEmpty(redirecturi)) ? CasEnv.DefaultRedirectUrl : redirecturi,
+                            redirecturi = (string.IsNullOrEmpty(redirectForUser)) ? CasEnv.DefaultRedirectUrl : redirectForUser,
                             state = GenerateSafeRandomString(16),
                             nonce = GenerateSafeRandomString(16)
                         };
@@ -346,7 +346,7 @@ namespace CasAuth
                         });
 
                         // redirect to url
-                        string url = $"{authority}/oauth2/v2.0/authorize?response_type={response_type}&client_id={clientId}&redirect_uri={redirectUri}&scope={scope}&response_mode=form_post&state={flow.state}&nonce={flow.nonce}";
+                        string url = $"{authority}/oauth2/v2.0/authorize?response_type={response_type}&client_id={clientId}&redirect_uri={redirectForAAD}&scope={scope}&response_mode=form_post&state={flow.state}&nonce={flow.nonce}";
                         if (!string.IsNullOrEmpty(domainHint)) url += $"&domain_hint={domainHint}";
                         context.Response.Redirect(url);
                         return context.Response.CompleteAsync();
@@ -400,7 +400,7 @@ namespace CasAuth
                             {
                                 if (last == null)
                                 {
-                                    last = await GetAccessTokenFromAuthCode(httpClient, config, code, scope);
+                                    last = await GetAccessTokenFromAuthCode(httpClient, context, config, code, scope);
                                 }
                                 else
                                 {
@@ -488,7 +488,7 @@ namespace CasAuth
                             {
                                 HttpOnly = CasEnv.RequireHttpOnlyOnXsrfCookie,
                                 Secure = CasEnv.RequireSecureForCookies,
-                                Domain = CasEnv.BaseDomain,
+                                Domain = CasEnv.BaseDomain(context.Request),
                                 SameSite = CasEnv.SameSite,
                                 Path = "/"
                             });
@@ -501,7 +501,7 @@ namespace CasAuth
                         {
                             HttpOnly = CasEnv.RequireHttpOnlyOnUserCookie,
                             Secure = CasEnv.RequireSecureForCookies,
-                            Domain = CasEnv.BaseDomain,
+                            Domain = CasEnv.BaseDomain(context.Request),
                             SameSite = CasEnv.SameSite,
                             Path = "/"
                         });
@@ -528,7 +528,7 @@ namespace CasAuth
                     }
                 }).RequireCors("cas-server");
 
-                // define the endpoint for services authenticating with a certificate
+                // define the endpoint for services authenticating with a certificate or secret
                 endpoints.MapPost("/cas/service", async context =>
                 {
                     try

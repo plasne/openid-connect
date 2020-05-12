@@ -4,7 +4,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using CasAuth;
 using ext = CasAuth.UseCasServerAuthMiddlewareExtensions;
-using System.Net.Http;
 
 namespace dotnetauth
 {
