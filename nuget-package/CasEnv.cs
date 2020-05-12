@@ -237,6 +237,7 @@ namespace CasAuth
                         }
                         break;
                 }
+                if (!string.IsNullOrEmpty(s) && s.Substring(0, 1) != ".") s = "." + s;
             }
             return s;
         }
@@ -668,7 +669,9 @@ namespace CasAuth
             if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(ServerHostUrl)) return new Uri(ServerHostUrl).Append("/cas/token").AbsoluteUri;
             if (string.Compare(s, "RequestDomain", StringComparison.InvariantCultureIgnoreCase) == 0 && request != null)
             {
-                return $"{(IsHttps ? "https" : "http")}://{request.Host.Host}:{request.Host.Port}/cas/token";
+                string protocol = IsHttps ? "https" : "http";
+                string port = request.Host.Port != null ? ":" + request.Host.Port : "";
+                return $"{protocol}://{request.Host.Host}{port}/cas/token";
             }
             return s;
         }
