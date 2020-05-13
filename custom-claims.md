@@ -3,6 +3,8 @@
 If you want to inject custom claims that may come from another service, database, or some computed logic, you can easily do that by providing a ClaimBuilderFunc when UseCasServerAuth is called in Startup.cs...
 
 ```c#
+using ext = CasAuth.UseCasServerAuthMiddlewareExtensions;
+
 public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
 {
     app.UseRouting();
