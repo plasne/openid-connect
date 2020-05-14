@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CasAuth" Version="3.2.0" />
+    <PackageReference Include="CasAuth" Version="3.2.1" />
   </ItemGroup>
 
 </Project>
