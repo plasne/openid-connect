@@ -25,15 +25,6 @@ namespace CasAuth
 
         public Uri Redirect { get; set; }
 
-        public Task Apply(HttpContext context)
-        {
-            var logger = context.RequestServices.GetService<ILogger<CasClientAuthMiddleware>>();
-            logger.LogError(this, $"CasHttpException in {context.Request.Path}...");
-            if (Redirect != null) context.Response.Redirect(this.Redirect.ToString());
-            context.Response.StatusCode = this.StatusCode;
-            return context.Response.WriteAsync(this.Message);
-        }
-
     }
 
     public static class ExceptionExtensions
@@ -42,9 +33,20 @@ namespace CasAuth
         public static Task Apply(this Exception exception, HttpContext context)
         {
             var logger = context.RequestServices.GetService<ILogger<CasClientAuthMiddleware>>();
-            logger.LogError(exception, $"Exception in {context.Request.Path}...");
-            context.Response.StatusCode = 500;
-            return context.Response.WriteAsync("internal server error");
+            var cas = exception as CasHttpException;
+            if (cas != null)
+            {
+                logger.LogError(cas, $"CasHttpException in {context.Request.Path}...");
+                if (cas.Redirect != null) context.Response.Redirect(cas.Redirect.ToString());
+                context.Response.StatusCode = cas.StatusCode;
+                return context.Response.WriteAsync(cas.Message);
+            }
+            else
+            {
+                logger.LogError(exception, $"Exception in {context.Request.Path}...");
+                context.Response.StatusCode = 500;
+                return context.Response.WriteAsync("internal server error");
+            }
         }
 
     }

@@ -4,10 +4,7 @@
     <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
   </PropertyGroup>
   <ItemGroup>
-    <!--
-    <ProjectReference Include="../../openid-connect/nuget-package/CasAuth.csproj" />
-    -->
-    <PackageReference Include="CasAuth" Version="3.2.0" />
+    <ProjectReference Include="../../nuget-package/CasAuth.csproj" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="1.1.2" />
     <PackageReference Include="Microsoft.Extensions.Logging.AzureAppServices" Version="3.1.4" />
   </ItemGroup>
