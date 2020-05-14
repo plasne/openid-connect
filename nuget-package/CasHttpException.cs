@@ -2,6 +2,8 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CasAuth
 {
@@ -23,11 +25,26 @@ namespace CasAuth
 
         public Uri Redirect { get; set; }
 
-        public Task Apply(HttpResponse response)
+        public Task Apply(HttpContext context)
         {
-            response.Redirect(this.Redirect.ToString());
-            response.StatusCode = this.StatusCode;
-            return response.WriteAsync(this.Message);
+            var logger = context.RequestServices.GetService<ILogger<CasClientAuthMiddleware>>();
+            logger.LogError(this, $"CasHttpException in {context.Request.Path}...");
+            if (Redirect != null) context.Response.Redirect(this.Redirect.ToString());
+            context.Response.StatusCode = this.StatusCode;
+            return context.Response.WriteAsync(this.Message);
+        }
+
+    }
+
+    public static class ExceptionExtensions
+    {
+
+        public static Task Apply(this Exception exception, HttpContext context)
+        {
+            var logger = context.RequestServices.GetService<ILogger<CasClientAuthMiddleware>>();
+            logger.LogError(exception, $"Exception in {context.Request.Path}...");
+            context.Response.StatusCode = 500;
+            return context.Response.WriteAsync("internal server error");
         }
 
     }

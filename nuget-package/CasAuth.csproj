@@ -4,7 +4,7 @@
     <Title>CasAuth</Title>
     <RootNamespace>CasAuth</RootNamespace>
     <PackageId>CasAuth</PackageId>
-    <Version>3.2.0</Version>
+    <Version>3.2.1</Version>
     <Authors>Peter Lasne</Authors>
     <Company>Microsoft</Company>
     <PackageDescription>The Comprehensive Authentication Solution (or CasAuth) was developed to provide an opinionated way to handle user and service authentication for APIs.</PackageDescription>

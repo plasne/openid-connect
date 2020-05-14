@@ -365,22 +365,16 @@ namespace CasAuth
                         await context.Response.CompleteAsync();
 
                     }
-                    catch (CasHttpException e)
-                    {
-                        await e.Apply(context.Response);
-                    }
                     catch (Exception e)
                     {
-                        context.Response.StatusCode = 500;
-                        var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
-                        logger.LogError(e, "Exception in /cas/authorize");
-                        await context.Response.WriteAsync("internal server error");
+                        await e.Apply(context);
                     }
                 }).RequireCors("cas-server");
 
                 // define the token endpoint
                 endpoints.MapPost("/cas/token", async context =>
                 {
+                    var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
                     try
                     {
                         var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
@@ -532,16 +526,9 @@ namespace CasAuth
                         await context.Response.CompleteAsync();
 
                     }
-                    catch (CasHttpException e)
-                    {
-                        await e.Apply(context.Response);
-                    }
                     catch (Exception e)
                     {
-                        context.Response.StatusCode = 500;
-                        var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
-                        logger.LogError(e, "Exception in /cas/token");
-                        await context.Response.WriteAsync("internal server error");
+                        await e.Apply(context);
                     }
                 }).RequireCors("cas-server");
 
@@ -600,16 +587,9 @@ namespace CasAuth
                         await context.Response.WriteAsync(jwt);
 
                     }
-                    catch (CasHttpException e)
-                    {
-                        await e.Apply(context.Response);
-                    }
                     catch (Exception e)
                     {
-                        context.Response.StatusCode = 500;
-                        var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
-                        logger.LogError(e, "Exception in /cas/service");
-                        await context.Response.WriteAsync("internal server error");
+                        await e.Apply(context);
                     }
                 }).RequireCors("cas-server");
 
@@ -631,16 +611,9 @@ namespace CasAuth
                         await context.Response.WriteAsync(reissued);
 
                     }
-                    catch (CasHttpException e)
-                    {
-                        await e.Apply(context.Response);
-                    }
                     catch (Exception e)
                     {
-                        context.Response.StatusCode = 500;
-                        var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
-                        logger.LogError(e, "Exception in /cas/reissue");
-                        await context.Response.WriteAsync("internal server error");
+                        await e.Apply(context);
                     }
                 }).RequireCors("cas-server");
 
@@ -667,14 +640,11 @@ namespace CasAuth
                     }
                     catch (CasHttpException e)
                     {
-                        return e.Apply(context.Response);
+                        return e.Apply(context);
                     }
                     catch (Exception e)
                     {
-                        context.Response.StatusCode = 500;
-                        var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
-                        logger.LogError(e, "Exception in /cas/.well-known/openid-configuration");
-                        return context.Response.WriteAsync("internal server error");
+                        return e.Apply(context);
                     }
                 }).RequireCors("cas-server");
 
@@ -702,16 +672,9 @@ namespace CasAuth
                         await context.Response.WriteAsync(json);
 
                     }
-                    catch (CasHttpException e)
-                    {
-                        await e.Apply(context.Response);
-                    }
                     catch (Exception e)
                     {
-                        context.Response.StatusCode = 500;
-                        var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
-                        logger.LogError(e, "Exception in /cas/keys");
-                        await context.Response.WriteAsync("internal server error");
+                        await e.Apply(context);
                     }
                 }).RequireCors("cas-server");
 
@@ -751,16 +714,9 @@ namespace CasAuth
                         await context.Response.CompleteAsync();
 
                     }
-                    catch (CasHttpException e)
-                    {
-                        await e.Apply(context.Response);
-                    }
                     catch (Exception e)
                     {
-                        context.Response.StatusCode = 500;
-                        var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
-                        logger.LogError(e, "Exception in /cas/verify");
-                        await context.Response.WriteAsync("internal server error");
+                        await e.Apply(context);
                     }
                 }).RequireCors("cas-server");
 
@@ -777,16 +733,9 @@ namespace CasAuth
                                 return context.Response.WriteAsync("Managed Identity / az CLI");
                         }
                     }
-                    catch (CasHttpException e)
-                    {
-                        return e.Apply(context.Response);
-                    }
                     catch (Exception e)
                     {
-                        context.Response.StatusCode = 500;
-                        var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
-                        logger.LogError(e, "Exception in /cas/type");
-                        return context.Response.WriteAsync("internal server error");
+                        return e.Apply(context);
                     }
                 }).RequireCors("cas-server");
 
@@ -825,16 +774,9 @@ namespace CasAuth
                         await context.Response.CompleteAsync();
 
                     }
-                    catch (CasHttpException e)
-                    {
-                        await e.Apply(context.Response);
-                    }
                     catch (Exception e)
                     {
-                        context.Response.StatusCode = 500;
-                        var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
-                        logger.LogError(e, "/cas/check-requirements: exception...");
-                        await context.Response.WriteAsync("internal server error");
+                        await e.Apply(context);
                     }
                 }).RequireCors("cas-server");
 
@@ -862,16 +804,9 @@ namespace CasAuth
                         await context.Response.CompleteAsync();
 
                     }
-                    catch (CasHttpException e)
-                    {
-                        await e.Apply(context.Response);
-                    }
                     catch (Exception e)
                     {
-                        context.Response.StatusCode = 500;
-                        var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
-                        logger.LogError(e, "Exception in /cas/clear-server-cache");
-                        await context.Response.WriteAsync("internal server error");
+                        await e.Apply(context);
                     }
                 }).RequireCors("cas-server");
 
