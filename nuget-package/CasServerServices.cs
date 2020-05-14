@@ -48,7 +48,6 @@ namespace CasAuth
                 config.Require("REDIRECT_URI", CasEnv.RedirectUri());
                 config.Require("ISSUER", CasEnv.Issuer);
                 config.Require("AUDIENCE", CasEnv.Audience);
-                config.Require("DEFAULT_REDIRECT_URL", CasEnv.DefaultRedirectUrl);
                 config.Require("ALLOWED_ORIGINS", CasEnv.AllowedOrigins);
                 config.Require("BASE_DOMAIN", CasEnv.BaseDomain());
                 config.Require("PUBLIC_KEYS_URL", CasEnv.PublicKeysUrl);
@@ -57,6 +56,7 @@ namespace CasAuth
                 config.Require("PUBLIC_CERT_0", CasEnv.PublicCert0);
                 config.Optional("APPCONFIG", CasEnv.AppConfig);
                 config.Optional("CONFIG_KEYS", CasEnv.ConfigKeys);
+                config.Optional("DEFAULT_REDIRECT_URL", CasEnv.DefaultRedirectUrl);
                 config.Optional("PUBLIC_CERT_1", CasEnv.PublicCert1);
                 config.Optional("PUBLIC_CERT_2", CasEnv.PublicCert2);
                 config.Optional("PUBLIC_CERT_3", CasEnv.PublicCert3);
@@ -74,7 +74,6 @@ namespace CasAuth
                 config.Optional("AUTH_TYPE_VAULT", CasAuthChooser.AuthType("AUTH_TYPE_VAULT"));
                 config.Optional("AUTH_TYPE_GRAPH", CasAuthChooser.AuthType("AUTH_TYPE_GRAPH"));
                 config.Optional("APPLICATION_ID", CasEnv.ApplicationIds);
-                config.Optional("BASE_DOMAIN_DEFAULT", CasEnv.BaseDomainDefault.ToString());
                 config.Optional("REQUIRE_SECURE_FOR_COOKIES", CasEnv.RequireSecureForCookies, hideValue: false);
                 config.Optional("REQUIRE_USER_ENABLED_ON_REISSUE", CasEnv.RequireUserEnabledOnReissue, hideValue: false);
                 config.Optional("REQUIRE_HTTPONLY_ON_USER_COOKIE", CasEnv.RequireHttpOnlyOnUserCookie, hideValue: false);

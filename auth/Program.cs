@@ -1,9 +1,8 @@
 ﻿using System;
-using dotenv.net;
-using dotnetauth;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
+using dotenv.net;
 
 namespace auth
 {

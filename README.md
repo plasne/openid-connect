@@ -1,5 +1,7 @@
 # OpenID Connect Authentication Sample
 
+THERE IS ONE BREAKING CHANGE FOR VERSION 3. Please see this [guide](./version-3.md) for information on changes in version 3.
+
 While this repository is named "openid-connect", this sample will actually encompass OpenID Connect (OIDC), AuthCode, and Service-to-Service (S2S) authentication and authorization techniques.
 
 There are many ways to authenticate users. Some of the advantages of this approach include:

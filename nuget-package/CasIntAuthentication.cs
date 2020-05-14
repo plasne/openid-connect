@@ -40,7 +40,7 @@ namespace CasAuth
         {
             try
             {
-                // NOTE: claims.Add(key, value) is an extension method that normalizes the names to their URIs
+                // NOTE: claims.AddLong(key, value) is an extension method that normalizes the names to their URIs
 
                 // start collecting laims
                 var claims = new List<Claim>();
@@ -54,7 +54,7 @@ namespace CasAuth
                     var jwt = handler.ReadJwtToken(token);
                     foreach (var claim in jwt.Payload.Claims)
                     {
-                        claims.Add(claim.Type, claim.Value);
+                        claims.AddLong(claim.Type, claim.Value);
                     }
                 }
 
@@ -67,7 +67,7 @@ namespace CasAuth
                     {
                         foreach (var claim in xidc)
                         {
-                            claims.Add(claim.Key, claim.Value);
+                            claims.AddLong(claim.Key, claim.Value);
                         }
                     }
                 }
@@ -76,14 +76,14 @@ namespace CasAuth
                 string xemail = GetHeaderValue("X-EMAIL");
                 if (!string.IsNullOrEmpty(xemail))
                 {
-                    claims.Add("email", xemail);
+                    claims.AddLong("email", xemail);
                 }
 
                 // extract from x-name
                 string xname = GetHeaderValue("X-NAME");
                 if (!string.IsNullOrEmpty(xname))
                 {
-                    claims.Add("name", xname);
+                    claims.AddLong("name", xname);
                 }
 
                 // extract from x-roles
@@ -93,7 +93,7 @@ namespace CasAuth
                     var roles = lroles.Split(",").Select(s => s.Trim());
                     foreach (var role in roles)
                     {
-                        claims.Add("role", role);
+                        claims.AddLong("role", role);
                     }
                 }
 

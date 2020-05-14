@@ -165,16 +165,26 @@ namespace CasAuth
             }
         }
 
-        // TODO: add Func() options
-
-        public static string GetStringOnce(string key, string dflt = null)
+        public static async Task<string> GetStringOnce(string key, Func<Task<string>> dflt)
         {
             string val = System.Environment.GetEnvironmentVariable(key);
-            if (string.IsNullOrEmpty(val)) val = dflt;
+            if (string.IsNullOrEmpty(val)) val = await dflt();
             return val;
         }
 
-        public async Task<string> GetString(string key, string val = null, string dflt = null)
+        public static string GetStringOnce(string key, Func<string> dflt)
+        {
+            string val = System.Environment.GetEnvironmentVariable(key);
+            if (string.IsNullOrEmpty(val)) val = dflt();
+            return val;
+        }
+
+        public static string GetStringOnce(string key, string dflt = null)
+        {
+            return GetStringOnce(key, () => dflt);
+        }
+
+        public async Task<string> GetString(string key, string val, string dflt = null)
         {
             if (Cache.ContainsKey(key))
             {
@@ -190,13 +200,27 @@ namespace CasAuth
             }
         }
 
-        public static int GetIntOnce(string key, int dflt = 0)
+        public static async Task<int> GetIntOnce(string key, Func<Task<int>> dflt)
         {
             string val = System.Environment.GetEnvironmentVariable(key);
-            int ival = dflt;
+            int ival;
             // bugfix: oddly TryParse sets ival to default(T) not keeping dflt
-            if (!int.TryParse(val, out ival)) ival = dflt;
+            if (!int.TryParse(val, out ival)) ival = await dflt();
             return ival;
+        }
+
+        public static int GetIntOnce(string key, Func<int> dflt)
+        {
+            string val = System.Environment.GetEnvironmentVariable(key);
+            int ival;
+            // bugfix: oddly TryParse sets ival to default(T) not keeping dflt
+            if (!int.TryParse(val, out ival)) ival = dflt();
+            return ival;
+        }
+
+        public static int GetIntOnce(string key, int dflt = 0)
+        {
+            return GetIntOnce(key, () => dflt);
         }
 
         public async Task<int> GetInt(string key, string val = null, int dflt = 0)
@@ -230,7 +254,7 @@ namespace CasAuth
             return GetBoolOnce(key, () => dflt);
         }
 
-        public async Task<bool> GetBool(string key, string val, Func<bool> dflt)
+        public async Task<bool> GetBool(string key, string val = null, bool dflt = false)
         {
             if (Cache.ContainsKey(key))
             {
@@ -242,23 +266,29 @@ namespace CasAuth
                 val = await GetFromKeyVault(val);
                 if (Positive.Contains(val?.ToLower())) return true;
                 if (Negative.Contains(val?.ToLower())) return false;
-                bool bval = dflt();
+                bool bval = dflt;
                 Cache.Add(key, bval);
                 return bval;
             }
         }
 
-        public async Task<bool> GetBool(string key, string val = null, bool dflt = false)
+        public static async Task<string[]> GetArrayOnce(string key, string delimiter, Func<Task<string[]>> dflt)
         {
-            return await GetBool(key, val, () => dflt);
+            string val = System.Environment.GetEnvironmentVariable(key);
+            if (!string.IsNullOrEmpty(val)) return val.Split(delimiter).Select(id => id.Trim()).ToArray();
+            return await dflt();
+        }
+
+        public static string[] GetArrayOnce(string key, string delimiter, Func<string[]> dflt)
+        {
+            string val = System.Environment.GetEnvironmentVariable(key);
+            if (!string.IsNullOrEmpty(val)) return val.Split(delimiter).Select(id => id.Trim()).ToArray();
+            return dflt();
         }
 
         public static string[] GetArrayOnce(string key, string delimiter = ",", string[] dflt = null)
         {
-            string val = System.Environment.GetEnvironmentVariable(key);
-            var aval = dflt ?? new string[] { };
-            if (!string.IsNullOrEmpty(val)) aval = val.Split(delimiter).Select(id => id.Trim()).ToArray();
-            return aval;
+            return GetArrayOnce(key, delimiter, () => dflt ?? new string[] { });
         }
 
         public async Task<string[]> GetArray(string key, string val = null, string delimiter = ",", string[] dflt = null)
@@ -278,13 +308,27 @@ namespace CasAuth
             }
         }
 
-        public static T GetEnumOnce<T>(string key, T dflt = default(T)) where T : struct
+        public static async Task<T> GetEnumOnce<T>(string key, Func<Task<T>> dflt) where T : struct
         {
             string val = System.Environment.GetEnvironmentVariable(key);
-            T tval = dflt;
+            T tval;
             // bugfix: oddly TryParse sets tval to default(T) not keeping dflt
-            if (!Enum.TryParse(val, true, out tval)) tval = dflt;
+            if (!Enum.TryParse(val, true, out tval)) tval = await dflt();
             return tval;
+        }
+
+        public static T GetEnumOnce<T>(string key, Func<T> dflt) where T : struct
+        {
+            string val = System.Environment.GetEnvironmentVariable(key);
+            T tval;
+            // bugfix: oddly TryParse sets tval to default(T) not keeping dflt
+            if (!Enum.TryParse(val, true, out tval)) tval = dflt();
+            return tval;
+        }
+
+        public static T GetEnumOnce<T>(string key, T dflt = default(T)) where T : struct
+        {
+            return GetEnumOnce<T>(key, () => dflt);
         }
 
         public async Task<T> GetEnum<T>(string key, string val = null, T dflt = default(T)) where T : struct

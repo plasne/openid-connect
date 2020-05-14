@@ -7,13 +7,6 @@ using Microsoft.AspNetCore.Http;
 namespace CasAuth
 {
 
-    public enum BaseDomainOptions
-    {
-        HostUrls,
-        RequestDomain,
-        RequestSubdomain
-    }
-
     public static class UriExtensions
     {
         public static Uri Append(this Uri uri, params string[] paths)
@@ -152,6 +145,7 @@ namespace CasAuth
             }
         }
 
+        /*  THIS IS DISABLED BECAUSE IT IS NO LONGER BEING USED
         /// <summary>
         /// [READ-ONLY] "true" if both CLIENT_HOST_URL and SERVER_HOST_URL use a hostname of "localhost".
         /// </summary>
@@ -168,6 +162,7 @@ namespace CasAuth
                 });
             }
         }
+        */
 
         /// <summary>
         /// [READ-ONLY] "true" if both CLIENT_HOST_URL and SERVER_HOST_URL use a protocol of "https".
@@ -195,66 +190,52 @@ namespace CasAuth
         public static string BaseDomain(HttpRequest request = null)
         {
             string s = System.Environment.GetEnvironmentVariable("BASE_DOMAIN");
-            if (string.IsNullOrEmpty(s))
-            {
-                switch (BaseDomainDefault)
-                {
-                    case BaseDomainOptions.HostUrls:
-                        if (!string.IsNullOrEmpty(ClientHostUrl) && !string.IsNullOrEmpty(ServerHostUrl))
-                        {
-                            var list = new Stack<char>();
-                            string u1 = new Uri(ClientHostUrl).Host;
-                            string u2 = new Uri(ServerHostUrl).Host;
-                            int max = Math.Min(u1.Length, u2.Length);
-                            for (int j = 0; j < max; j++)
-                            {
-                                string c = u1.Substring(u1.Length - j - 1);
-                                if (c == u2.Substring(u2.Length - j - 1))
-                                {
-                                    list.Push(c[0]);
-                                }
-                                else
-                                {
-                                    break;
-                                }
-                            }
-                            s = string.Join("", list.ToArray());
-                        }
-                        break;
-                    case BaseDomainOptions.RequestDomain:
-                        s = (request != null) ? request.Host.Host : "RequestDomain";
-                        break;
-                    case BaseDomainOptions.RequestSubdomain:
-                        if (request != null)
-                        {
-                            var parts = request.Host.Host.Split(".").ToList();
-                            parts.RemoveAt(0);
-                            s = string.Join(".", parts);
-                        }
-                        else
-                        {
-                            s = "RequestSubdomain";
-                        }
-                        break;
-                }
-                if (!string.IsNullOrEmpty(s) && s.Substring(0, 1) != ".") s = "." + s;
-            }
-            return s;
-        }
 
-        /// <summary>
-        /// [OPTIONAL, default:HostUrls] Determines the method used for defaulting the domain for cookies. If 
-        /// BASE_DOMAIN is explicitly set, this has no effect. The options include:
-        /// - HostUrls: The common domain part between CLIENT_HOST_URL and SERVER_HOST_URL.
-        /// - RequestDomain: The domain used in the request is the domain for the cookie.
-        /// - RequestSubdomain: One domain less than the full domain for the request is used for the cookie.
-        /// </summary>
-        public static BaseDomainOptions BaseDomainDefault
-        {
-            get
+            // look for variables
+            if (string.Compare(s, "$RequestDomain", StringComparison.InvariantCultureIgnoreCase) == 0)
             {
-                return CasConfig.GetEnumOnce<BaseDomainOptions>("BASE_DOMAIN_DEFAULT", BaseDomainOptions.HostUrls);
+                s = (request != null) ? request.Host.Host : "$RequestDomain";
             }
+            else if (string.Compare(s, "$RequestSubdomain", StringComparison.InvariantCultureIgnoreCase) == 0)
+            {
+                if (request != null)
+                {
+                    var parts = request.Host.Host.Split(".").ToList();
+                    parts.RemoveAt(0);
+                    s = string.Join(".", parts);
+                }
+                else
+                {
+                    s = "$RequestSubdomain";
+                }
+            }
+
+            // use commonality between CLIENT_HOST_URL and SERVER_HOST_URL
+            if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(ClientHostUrl) && !string.IsNullOrEmpty(ServerHostUrl))
+            {
+                var list = new Stack<char>();
+                string u1 = new Uri(ClientHostUrl).Host;
+                string u2 = new Uri(ServerHostUrl).Host;
+                int max = Math.Min(u1.Length, u2.Length);
+                for (int j = 0; j < max; j++)
+                {
+                    string c = u1.Substring(u1.Length - j - 1);
+                    if (c == u2.Substring(u2.Length - j - 1))
+                    {
+                        list.Push(c[0]);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                s = string.Join("", list.ToArray());
+            }
+
+            // add the prefixed . just in case the browser is old enough to require it
+            if (!string.IsNullOrEmpty(s) && s.Substring(0, 1) != ".") s = "." + s;
+
+            return s;
         }
 
         /// <summary>
@@ -391,14 +372,15 @@ namespace CasAuth
         }
 
         /// <summary>
-        /// [OPTIONAL, default: strict] This determines the SameSite setting for the "user" and "XSRF-TOKEN" cookies.
-        /// This could also be set to "none" or "lax".
+        /// [OPTIONAL, default: lax] This determines the SameSite setting for the "user" and "XSRF-TOKEN" cookies.
+        /// This could also be set to "none" or "strict".
         /// </summary>
         public static SameSiteMode SameSite
         {
             get
             {
-                return CasConfig.GetEnumOnce<SameSiteMode>("SAME_SITE", dflt: SameSiteMode.Strict);
+                // NOTE: lax is required for some browsers to read the XSRF-TOKEN cookie from a subdomain
+                return CasConfig.GetEnumOnce<SameSiteMode>("SAME_SITE", dflt: SameSiteMode.Lax);
             }
         }
 
@@ -666,13 +648,21 @@ namespace CasAuth
         public static string RedirectUri(HttpRequest request = null)
         {
             string s = System.Environment.GetEnvironmentVariable("REDIRECT_URI");
-            if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(ServerHostUrl)) return new Uri(ServerHostUrl).Append("/cas/token").AbsoluteUri;
-            if (string.Compare(s, "RequestDomain", StringComparison.InvariantCultureIgnoreCase) == 0 && request != null)
+
+            // apply variables
+            if (string.Compare(s, "$RequestDomain", StringComparison.InvariantCultureIgnoreCase) == 0 && request != null)
             {
                 string protocol = IsHttps ? "https" : "http";
                 string port = request.Host.Port != null ? ":" + request.Host.Port : "";
-                return $"{protocol}://{request.Host.Host}{port}/cas/token";
+                s = $"{protocol}://{request.Host.Host}{port}/cas/token";
             }
+
+            // derive from SERVER_HOST_URL
+            if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(ServerHostUrl))
+            {
+                s = new Uri(ServerHostUrl).Append("/cas/token").AbsoluteUri;
+            }
+
             return s;
         }
 
@@ -684,7 +674,7 @@ namespace CasAuth
         {
             get
             {
-                // note: it is not required because the /authorize request can specify a callback
+                // NOTE: it is not required because the /authorize request can specify a callback
                 string s = System.Environment.GetEnvironmentVariable("DEFAULT_REDIRECT_URL");
                 if (string.IsNullOrEmpty(s)) return WebHostUrl ?? ClientHostUrl;
                 return s;

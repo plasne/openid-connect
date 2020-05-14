@@ -21,17 +21,6 @@ namespace CasAuth
     public static class UseCasClientAuthMiddlewareExtensions
     {
 
-        private class HttpException : Exception
-        {
-
-            public HttpException(int code, string msg) : base(msg)
-            {
-                this.StatusCode = code;
-            }
-
-            public int StatusCode { get; set; }
-        }
-
         public static IApplicationBuilder UseCasClientAuth(this IApplicationBuilder builder)
         {
 
@@ -54,14 +43,14 @@ namespace CasAuth
                         string name = (string)context.Request.RouteValues["name"];
 
                         // validate the name is alpha numeric only
-                        if (!name.All(char.IsLetterOrDigit)) throw new HttpException(400, $"config name of '{name}' is not alphanumeric.");
+                        if (!name.All(char.IsLetterOrDigit)) throw new CasHttpException(400, $"config name of '{name}' is not alphanumeric.");
 
                         // look for env that would allow this config (try all upper, then try same casing)
                         string compact = System.Environment.GetEnvironmentVariable($"PRESENT_CONFIG_{name.ToUpper()}");
                         if (string.IsNullOrEmpty(compact)) compact = System.Environment.GetEnvironmentVariable($"PRESENT_CONFIG_{name}");
-                        if (string.IsNullOrEmpty(compact)) throw new HttpException(404, $"config name of '{name}' is not found (1).");
+                        if (string.IsNullOrEmpty(compact)) throw new CasHttpException(404, $"config name of '{name}' is not found (1).");
                         var filters = compact.Split(',').Select(id => id.Trim()).ToArray();
-                        if (filters.Count() < 1) throw new HttpException(404, $"config name of '{name}' is not found (2).");
+                        if (filters.Count() < 1) throw new CasHttpException(404, $"config name of '{name}' is not found (2).");
 
                         // return the config
                         var config = context.RequestServices.GetService<ICasConfig>();
@@ -71,10 +60,9 @@ namespace CasAuth
                         await context.Response.WriteAsync(json);
 
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        await context.Response.WriteAsync(e.Message);
+                        await e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {
@@ -123,10 +111,9 @@ namespace CasAuth
                         return context.Response.WriteAsync(json);
 
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        return context.Response.WriteAsync(e.Message);
+                        return e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {
@@ -151,10 +138,9 @@ namespace CasAuth
                         return context.Response.CompleteAsync();
 
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        return context.Response.WriteAsync(e.Message);
+                        return e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {
@@ -186,10 +172,9 @@ namespace CasAuth
                         await context.Response.WriteAsync(json);
 
                     }
-                    catch (HttpException e)
+                    catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        await context.Response.WriteAsync(e.Message);
+                        await e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {

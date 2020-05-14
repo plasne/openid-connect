@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Security.Claims;
+using System.Security.Principal;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -26,7 +27,7 @@ namespace CasAuth
         private CasTokenValidator Validator { get; }
         private IHttpContextAccessor ContextAccessor;
 
-        protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, CasXsrfRequirement requirement)
+        public async Task<bool> IsAuthorized(IIdentity iidentity)
         {
             try
             {
@@ -36,12 +37,11 @@ namespace CasAuth
                 if (!CasEnv.VerifyXsrfInHeader && !CasEnv.VerifyXsrfInCookie)
                 {
                     Logger.LogDebug("CasXsrfHandler: neither VERIFY_XSRF_IN_HEADER or VERIFY_XSRF_IN_COOKIE are \"true\" so the authorization check is a success.");
-                    context.Succeed(requirement);
-                    return Task.CompletedTask;
+                    return true;
                 }
 
                 // get the identity of the authenticated user
-                var identity = context.User?.Identity as ClaimsIdentity;
+                var identity = iidentity as ClaimsIdentity;
                 if (identity == null || !identity.IsAuthenticated)
                 {
                     Logger.LogDebug("CasXsrfHandler: authentication failed, so the authorization check is a failure.");
@@ -52,8 +52,7 @@ namespace CasAuth
                 if (identity.Claims.IsService())
                 {
                     Logger.LogDebug("CasXsrfHandler: the identity is a service account, XSRF is not required, so the authorization check is a success.");
-                    context.Succeed(requirement);
-                    return Task.CompletedTask;
+                    return true;
                 }
 
                 // get the XSRF-TOKEN (header, cookie)
@@ -79,9 +78,7 @@ namespace CasAuth
                 if (!CasEnv.RequireHttpOnlyOnUserCookie)
                 {
                     Logger.LogDebug($"CasXsrfHandler: the XSRF token is signed, it will be verified...");
-                    var validate = this.Validator.ValidateToken(code);
-                    validate.Wait();
-                    var validated = validate.Result;
+                    var validated = await this.Validator.ValidateToken(code);
                     var codeclaim = validated.Payload.Claims.FirstOrDefault(c => c.Type == "code");
                     if (codeclaim == null)
                     {
@@ -105,16 +102,35 @@ namespace CasAuth
                     throw new Exception("xsrf claim does not match code");
                 }
 
+                // success
                 Logger.LogDebug("CasXsrfHandler: the codes matched, so the authorization check is a success.");
-                context.Succeed(requirement);
+                return true;
+
             }
             catch (Exception e)
             {
-                Logger.LogError(e, "authorization failure");
+                Logger.LogWarning(e, "authorization failure");
+                return false;
+            }
+        }
+
+        protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, CasXsrfRequirement requirement)
+        {
+            var auth = await IsAuthorized(context.User?.Identity);
+            if (auth)
+            {
+                context.Succeed(requirement);
+            }
+            else
+            {
                 context.Fail();
             }
-            return Task.CompletedTask;
         }
+
+
+
+
+
     }
 
 }

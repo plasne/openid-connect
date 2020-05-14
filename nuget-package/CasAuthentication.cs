@@ -112,7 +112,7 @@ namespace CasAuth
                 var claims = new List<Claim>();
                 foreach (var claim in jwt.Payload.Claims)
                 {
-                    claims.Add(claim.Type, claim.Value);
+                    claims.AddLong(claim.Type, claim.Value);
                 }
 
                 // build the identity, principal, and ticket

@@ -90,7 +90,6 @@ namespace CasAuth
                     policy.AddAuthenticationSchemes("cas");
                     policy.RequireAuthenticatedUser();
                     policy.Requirements.Add(new CasXsrfRequirement());
-
                 });
                 options.AddPolicy("cas-no-xsrf", policy =>
                 {

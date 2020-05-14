@@ -48,7 +48,7 @@ namespace CasAuth
         {
             var filter = new string[] { "xsrf", "old", "exp", "iss", "aud" };
             var filtered = claims.ToList();
-            filtered.RemoveAll(c => filter.Contains(c.Type) || c.Type.StartsWith("http://schemas.microsoft.com/"));
+            filtered.RemoveAll(c => filter.Contains(c.Type));
             return filtered;
         }
 
@@ -83,7 +83,7 @@ namespace CasAuth
             }
         }
 
-        public static void Add(this List<Claim> claims, string key, string value)
+        public static void AddLong(this List<Claim> claims, string key, string value)
         {
             if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(value)) return;
 
@@ -112,6 +112,19 @@ namespace CasAuth
 
         }
 
+        public static void AddShort(this List<Claim> claims, string key, string value)
+        {
+            if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(value)) return;
+
+            // trim the value
+            value = value.Trim();
+
+            // add if not a duplicate
+            var existing = claims.Find(c => string.Compare(c.Type, key, StringComparison.InvariantCultureIgnoreCase) == 0 &&
+                string.Compare(c.Value, value, StringComparison.InvariantCultureIgnoreCase) == 0);
+            if (existing == null) claims.Add(new Claim(key, value));
+
+        }
 
 
 

@@ -287,16 +287,8 @@ namespace CasAuth
             public List<Key> keys { get; set; } = new List<Key>();
         }
 
-        public class CasServerAuthOptions
+        public static IApplicationBuilder UseCasServerAuth(this IApplicationBuilder builder)
         {
-            public List<string> Scopes { get; set; } = new List<string> { "openid", "profile", "email" };
-            public Action<Func<string, Task<Tokens>>> AuthCodeFunc { get; set; }
-            public Action<IEnumerable<Claim>, List<Claim>> ClaimBuilderFunc { get; set; }
-        }
-
-        public static IApplicationBuilder UseCasServerAuth(this IApplicationBuilder builder, Func<CasServerAuthOptions> optionsBuilder = null)
-        {
-            var opt = (optionsBuilder != null) ? optionsBuilder() : new CasServerAuthOptions();
 
             // define additional endpoints
             builder.UseEndpoints(endpoints =>
@@ -310,7 +302,7 @@ namespace CasAuth
                 }).RequireCors("cas-server");
 
                 // define the authorize endpoint
-                endpoints.MapGet("/cas/authorize", context =>
+                endpoints.MapGet("/cas/authorize", async context =>
                 {
                     try
                     {
@@ -320,20 +312,41 @@ namespace CasAuth
                         string authority = CasEnv.Authority;
                         string clientId = WebUtility.UrlEncode(CasEnv.ClientId);
                         string redirectForAAD = WebUtility.UrlEncode(CasEnv.RedirectUri(context.Request));
+                        string domainHint = WebUtility.UrlEncode(CasEnv.DomainHint);
+
+                        // get the scopes
                         // REF: https://docs.microsoft.com/en-us/azure/active-directory/develop/id-tokens
-                        string scope = WebUtility.UrlEncode(string.Join(" ", opt.Scopes));
-                        string response_type = (opt.AuthCodeFunc != null) ?
+                        var scope = "openid profile email";
+                        var authCodeReceiver = context.RequestServices.GetService<ICasAuthCodeReceiver>();
+                        if (authCodeReceiver != null)
+                        {
+                            var scopes = await authCodeReceiver.GetAllScopes();
+                            foreach (var s in scopes)
+                            {
+                                scope += $" {s}";
+                            }
+                        }
+                        scope = WebUtility.UrlEncode(scope);
+
+                        // define the response type
+                        string response_type = (authCodeReceiver != null) ?
                             WebUtility.UrlEncode("id_token code") :
                             WebUtility.UrlEncode("id_token");
-                        string domainHint = WebUtility.UrlEncode(CasEnv.DomainHint);
 
                         // generate state and nonce
                         AuthFlow flow = new AuthFlow()
                         {
-                            redirecturi = (string.IsNullOrEmpty(redirectForUser)) ? CasEnv.DefaultRedirectUrl : redirectForUser,
                             state = GenerateSafeRandomString(16),
                             nonce = GenerateSafeRandomString(16)
                         };
+                        if (!string.IsNullOrEmpty(redirectForUser))
+                        {
+                            flow.redirecturi = redirectForUser;
+                        }
+                        else if (!string.IsNullOrEmpty(CasEnv.DefaultRedirectUrl))
+                        {
+                            flow.redirecturi = CasEnv.DefaultRedirectUrl;
+                        }
 
                         // store the authflow for validating state and nonce later
                         //  note: this has to be SameSite=none because it is being POSTed from login.microsoftonline.com
@@ -349,20 +362,19 @@ namespace CasAuth
                         string url = $"{authority}/oauth2/v2.0/authorize?response_type={response_type}&client_id={clientId}&redirect_uri={redirectForAAD}&scope={scope}&response_mode=form_post&state={flow.state}&nonce={flow.nonce}";
                         if (!string.IsNullOrEmpty(domainHint)) url += $"&domain_hint={domainHint}";
                         context.Response.Redirect(url);
-                        return context.Response.CompleteAsync();
+                        await context.Response.CompleteAsync();
 
                     }
                     catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        return context.Response.WriteAsync(e.Message);
+                        await e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {
                         context.Response.StatusCode = 500;
                         var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
                         logger.LogError(e, "Exception in /cas/authorize");
-                        return context.Response.WriteAsync("internal server error");
+                        await context.Response.WriteAsync("internal server error");
                     }
                 }).RequireCors("cas-server");
 
@@ -384,31 +396,33 @@ namespace CasAuth
                         // throw error if one was returned
                         if (context.Request.Form.ContainsKey("error_description"))
                         {
-                            throw new Exception(context.Request.Form["error_description"]);
+                            throw new CasHttpException(401, context.Request.Form["error_description"]);
                         }
 
                         // verify the id token
                         string idRaw = context.Request.Form["id_token"];
                         var idToken = await VerifyTokenFromAAD(tokenIssuer, idRaw, CasEnv.ClientId, flow.nonce);
 
-                        // AuthCode: use the code to get an access token
-                        if (opt.AuthCodeFunc != null)
+                        // ICasAuthCodeReceiver: use the code to get an access token
+                        var authCodeReceiver = context.RequestServices.GetService<ICasAuthCodeReceiver>();
+                        if (authCodeReceiver != null)
                         {
                             string code = context.Request.Form["code"];
                             Tokens last = null;
-                            Func<string, Task<Tokens>> getAccessToken = async (scope) =>
+                            var scopes = await authCodeReceiver.GetAllScopes();
+                            foreach (var scope in scopes)
                             {
                                 if (last == null)
                                 {
-                                    last = await GetAccessTokenFromAuthCode(httpClient, context, config, code, scope);
+                                    last = await GetAccessTokenFromAuthCode(httpClient, context, config, code, "offline_access " + scope);
                                 }
                                 else
                                 {
-                                    last = await GetAccessTokenFromRefreshToken(httpClient, config, last.refresh_token, scope);
+                                    last = await GetAccessTokenFromRefreshToken(httpClient, config, last.refresh_token, "offline_access " + scope);
                                 }
-                                return last;
-                            };
-                            opt.AuthCodeFunc(getAccessToken);
+                                await authCodeReceiver.ReceiveAll(scope, last.access_token, last.refresh_token);
+                                break;
+                            }
                         }
 
                         // populate the claims from the id_token
@@ -468,10 +482,11 @@ namespace CasAuth
                             claims.Add(new Claim("role", role.Value));
                         }
 
-                        // ClaimBuilder: add custom claims, potentially from other databases
-                        if (opt.ClaimBuilderFunc != null)
+                        // ICasClaimsBuilder: add custom claims, potentially from other databases
+                        var claimsBuilder = context.RequestServices.GetService<ICasClaimsBuilder>();
+                        if (claimsBuilder != null)
                         {
-                            opt.ClaimBuilderFunc(idToken.Payload.Claims, claims);
+                            await claimsBuilder.AddAllClaims(idToken.Payload.Claims, claims);
                         }
 
                         // write the XSRF-TOKEN cookie (if it will be verified)
@@ -510,14 +525,16 @@ namespace CasAuth
                         context.Response.Cookies.Delete("authflow");
 
                         // redirect to the appropriate place
-                        context.Response.Redirect(flow.redirecturi);
+                        if (!string.IsNullOrEmpty(flow.redirecturi))
+                        {
+                            context.Response.Redirect(flow.redirecturi);
+                        }
                         await context.Response.CompleteAsync();
 
                     }
                     catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        await context.Response.WriteAsync(e.Message);
+                        await e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {
@@ -585,8 +602,7 @@ namespace CasAuth
                     }
                     catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        await context.Response.WriteAsync(e.Message);
+                        await e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {
@@ -617,8 +633,7 @@ namespace CasAuth
                     }
                     catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        await context.Response.WriteAsync(e.Message);
+                        await e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {
@@ -652,8 +667,7 @@ namespace CasAuth
                     }
                     catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        return context.Response.WriteAsync(e.Message);
+                        return e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {
@@ -690,8 +704,7 @@ namespace CasAuth
                     }
                     catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        await context.Response.WriteAsync(e.Message);
+                        await e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {
@@ -740,8 +753,7 @@ namespace CasAuth
                     }
                     catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        await context.Response.WriteAsync(e.Message);
+                        await e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {
@@ -767,8 +779,7 @@ namespace CasAuth
                     }
                     catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        return context.Response.WriteAsync(e.Message);
+                        return e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {
@@ -816,8 +827,7 @@ namespace CasAuth
                     }
                     catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        await context.Response.WriteAsync(e.Message);
+                        await e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {
@@ -854,8 +864,7 @@ namespace CasAuth
                     }
                     catch (CasHttpException e)
                     {
-                        context.Response.StatusCode = e.StatusCode;
-                        await context.Response.WriteAsync(e.Message);
+                        await e.Apply(context.Response);
                     }
                     catch (Exception e)
                     {
@@ -870,6 +879,10 @@ namespace CasAuth
             return builder;
 
         }
+
+
+
+
 
     }
 
