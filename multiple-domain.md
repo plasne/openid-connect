@@ -8,6 +8,8 @@ Version 3.1.0 and up includes improved support for multiple root domains. The sc
 
 For reference, prior implementations of CasAuth allowed for multiple applications but they all had to share a common base domain or implement a very complex set of configurations.
 
+In the "multiple-domain" folder of this project, there is a complete sample.
+
 ## Authentication Service (server)
 
 When you deploy a single auth service to support multiple domains, you cannot use SERVER_HOST_URL, CLIENT_HOST_URL, or WEB_HOST_URL as those settings would be different for each implementation. Since we cannot use those, the configuration is a little more complex, but this should do it...

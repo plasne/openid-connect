@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <RootNamespace>web_portal</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+    <ProjectReference Include="../../openid-connect/nuget-package/CasAuth.csproj" />
+    -->
+    <PackageReference Include="CasAuth" Version="3.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.AzureAppServices" Version="3.1.4" />
+  </ItemGroup>
+
+</Project>

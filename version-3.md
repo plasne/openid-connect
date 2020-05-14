@@ -56,9 +56,10 @@ public class ApiController : ControllerBase
     private CasXsrfHandler CasXsrfHandler { get; }
 
     [HttpGet("/test")]
-    public ActionResult<string> Test()
+    public async Task<ActionResult<string>> Test()
     {
-        if (CasXsrfHandler.IsAuthorized(User?.Identity))
+        bool isAuth = await CasXsrfHandler.IsAuthorized(User?.Identity)
+        if (isAuth)
         {
             return Ok("authorized");
         }

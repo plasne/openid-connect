@@ -169,7 +169,7 @@ public void ConfigureServices(IServiceCollection services)
 public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
 {
     app.UseRouting();
-    app.UseCors();
+    app.UseCors(); // <-- this
     app.UseCasServerAuth(); // <-- and this
 }
 ```
@@ -276,7 +276,7 @@ public void ConfigureServices(IServiceCollection services)
 public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
 {
     app.UseRouting();
-    app.UseCors();
+    app.UseCors(); // <-- this
     app.UseAuthentication(); // <-- this
     app.UseAuthorization(); // <-- this
     app.UseCasClientAuth(); // <-- and this
