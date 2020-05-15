@@ -42,9 +42,9 @@ namespace CasAuth
                 config.Optional("SERVER_HOST_URL", CasEnv.ServerHostUrl);
                 config.Optional("CLIENT_HOST_URL", CasEnv.ClientHostUrl);
                 config.Optional("WEB_HOST_URL", CasEnv.WebHostUrl);
-                config.Require("TENANT_ID", CasEnv.TenantId);
-                config.Require("CLIENT_ID", CasEnv.ClientId);
-                config.Require("AUTHORITY", CasEnv.Authority);
+                config.Require("TENANT_ID", CasEnv.AzureTenantId);
+                config.Require("CLIENT_ID", CasEnv.AzureClientId);
+                config.Require("AUTHORITY", CasEnv.AzureAuthority);
                 config.Require("REDIRECT_URI", CasEnv.RedirectUri());
                 config.Require("ISSUER", CasEnv.Issuer);
                 config.Require("AUDIENCE", CasEnv.Audience);
@@ -63,17 +63,17 @@ namespace CasAuth
                 config.Optional("AUTH_TYPE", authType);
                 if (authType == "app")
                 {
-                    config.Require("CLIENT_SECRET", CasEnv.ClientSecret);
+                    config.Require("CLIENT_SECRET", CasEnv.AzureClientSecret);
                 }
                 else
                 {
                     // required for authcode
-                    config.Optional("CLIENT_SECRET", CasEnv.ClientSecret);
+                    config.Optional("CLIENT_SECRET", CasEnv.AzureClientSecret);
                 }
                 config.Optional("AUTH_TYPE_CONFIG", CasAuthChooser.AuthType("AUTH_TYPE_CONFIG"));
                 config.Optional("AUTH_TYPE_VAULT", CasAuthChooser.AuthType("AUTH_TYPE_VAULT"));
                 config.Optional("AUTH_TYPE_GRAPH", CasAuthChooser.AuthType("AUTH_TYPE_GRAPH"));
-                config.Optional("APPLICATION_ID", CasEnv.ApplicationIds);
+                config.Optional("APPLICATION_ID", CasEnv.AzureApplicationIds);
                 config.Optional("REQUIRE_SECURE_FOR_COOKIES", CasEnv.RequireSecureForCookies, hideValue: false);
                 config.Optional("REQUIRE_USER_ENABLED_ON_REISSUE", CasEnv.RequireUserEnabledOnReissue, hideValue: false);
                 config.Optional("REQUIRE_HTTPONLY_ON_USER_COOKIE", CasEnv.RequireHttpOnlyOnUserCookie, hideValue: false);
@@ -85,6 +85,10 @@ namespace CasAuth
 
             // add the issuer service
             services.AddSingleton<CasTokenIssuer, CasTokenIssuer>();
+
+            // add the IDPs
+            services.AddSingleton<ICasIdp, CasAzureAd>();
+            services.AddSingleton<ICasIdp, CasGoogleId>();
 
             // setup CORS policy
             if (CasEnv.AllowedOrigins.Length > 0)

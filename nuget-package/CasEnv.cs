@@ -201,8 +201,15 @@ namespace CasAuth
                 if (request != null)
                 {
                     var parts = request.Host.Host.Split(".").ToList();
-                    parts.RemoveAt(0);
-                    s = string.Join(".", parts);
+                    if (parts.Count > 1)
+                    {
+                        parts.RemoveAt(0);
+                        s = string.Join(".", parts);
+                    }
+                    else
+                    {
+                        s = request.Host.Host; // do domain, if there is no subdomain
+                    }
                 }
                 else
                 {
@@ -233,7 +240,7 @@ namespace CasAuth
             }
 
             // add the prefixed . just in case the browser is old enough to require it
-            if (!string.IsNullOrEmpty(s) && s.Substring(0, 1) != ".") s = "." + s;
+            //if (!string.IsNullOrEmpty(s) && s.Substring(0, 1) != "$" && s.Substring(0, 1) != ".") s = "." + s;
 
             return s;
         }
@@ -473,11 +480,12 @@ namespace CasAuth
         /// If you do not specify this, you need to specify AUTHORITY. You also require this on the server and/or
         /// client if you are using AUTH_TYPE=app.
         /// </summary>
-        public static string TenantId
+        public static string AzureTenantId
         {
             get
             {
-                return CasConfig.GetStringOnce("TENANT_ID");
+                return CasConfig.GetStringOnce("AZURE_TENANT_ID")
+                    ?? CasConfig.GetStringOnce("TENANT_ID"); // for compat
             }
         }
 
@@ -487,11 +495,12 @@ namespace CasAuth
         /// CLIENT_ID_CONFIG, CLIENT_ID_GRAPH, and CLIENT_ID_VAULT for AUTH_TYPE=app only (you still need).
         /// CLIENT_ID for /authorize and AuthCode.
         /// </summary>
-        public static string ClientId
+        public static string AzureClientId
         {
             get
             {
-                return CasConfig.GetStringOnce("CLIENT_ID");
+                return CasConfig.GetStringOnce("AZURE_CLIENT_ID")
+                    ?? CasConfig.GetStringOnce("CLIENT_ID"); // for compat
             }
         }
 
@@ -500,24 +509,28 @@ namespace CasAuth
         /// If you do not need those features, this is not required. You might also specify specific options for
         /// CLIENT_SECRET_CONFIG, CLIENT_SECRET_GRAPH, and CLIENT_SECRET_VAULT.
         /// </summary>
-        public static string ClientSecret
+        public static string AzureClientSecret
         {
             get
             {
-                return CasConfig.GetStringOnce("CLIENT_SECRET");
+                return CasConfig.GetStringOnce("AZURE_CLIENT_SECRET")
+                    ?? CasConfig.GetStringOnce("CLIENT_SECRET"); // for compat
             }
         }
 
         /// <summary>
         /// [OPTIONAL] When using AUTH_TYPE=app, you may specify an Azure Active Directory Tenant ID that is
         /// specifically used only for communicating with Azure App Config. If you do not specify this variable,
-        /// then TENANT_ID is used.
+        /// then AZURE_TENANT_ID is used.
         /// </summary>
-        public static string TenantIdConfig
+        public static string AzureTenantIdConfig
         {
             get
             {
-                return CasConfig.GetStringOnce("TENANT_ID_CONFIG", dflt: TenantId);
+                return CasConfig.GetStringOnce("AZURE_TENANT_ID_CONFIG", () =>
+                {
+                    return CasConfig.GetStringOnce("TENANT_ID_CONFIG", () => AzureTenantId); // for compat
+                });
             }
         }
 
@@ -526,11 +539,14 @@ namespace CasAuth
         /// specifically used only for communicating with Azure App Config. If you do not specify this variable,
         /// then CLIENT_ID is used.
         /// </summary>
-        public static string ClientIdConfig
+        public static string AzureClientIdConfig
         {
             get
             {
-                return CasConfig.GetStringOnce("CLIENT_ID_CONFIG", dflt: ClientId);
+                return CasConfig.GetStringOnce("AZURE_CLIENT_ID_CONFIG", () =>
+                {
+                    return CasConfig.GetStringOnce("CLIENT_ID_CONFIG", () => AzureClientId); // for compat
+                });
             }
         }
 
@@ -539,11 +555,14 @@ namespace CasAuth
         /// specifically used only for communicating with Azure App Config. If you do not specify this variable,
         /// then CLIENT_SECRET is used.
         /// </summary>
-        public static string ClientSecretConfig
+        public static string AzureClientSecretConfig
         {
             get
             {
-                return CasConfig.GetStringOnce("CLIENT_SECRET_CONFIG", dflt: ClientSecret);
+                return CasConfig.GetStringOnce("AZURE_CLIENT_SECRET_CONFIG", () =>
+                {
+                    return CasConfig.GetStringOnce("CLIENT_SECRET_CONFIG", () => AzureClientSecret); // for compat
+                });
             }
         }
 
@@ -552,11 +571,14 @@ namespace CasAuth
         /// specifically used only for communicating with the Microsoft Graph. If you do not specify this variable,
         /// then TENANT_ID is used.
         /// </summary>
-        public static string TenantIdGraph
+        public static string AzureTenantIdGraph
         {
             get
             {
-                return CasConfig.GetStringOnce("TENANT_ID_GRAPH", dflt: TenantId);
+                return CasConfig.GetStringOnce("AZURE_TENANT_ID_GRAPH", () =>
+                {
+                    return CasConfig.GetStringOnce("TENANT_ID_GRAPH", () => AzureTenantId); // for compat
+                });
             }
         }
 
@@ -565,11 +587,14 @@ namespace CasAuth
         /// specifically used only for communicating with the Microsoft Graph. If you do not specify this variable,
         /// then CLIENT_ID is used.
         /// </summary>
-        public static string ClientIdGraph
+        public static string AzureClientIdGraph
         {
             get
             {
-                return CasConfig.GetStringOnce("CLIENT_ID_GRAPH", dflt: ClientId);
+                return CasConfig.GetStringOnce("AZURE_CLIENT_ID_GRAPH", () =>
+                {
+                    return CasConfig.GetStringOnce("CLIENT_ID_GRAPH", () => AzureClientId); // for compat
+                });
             }
         }
 
@@ -578,11 +603,14 @@ namespace CasAuth
         /// specifically used only for communicating with the Microsoft Graph. If you do not specify this variable,
         /// then CLIENT_SECRET is used.
         /// </summary>
-        public static string ClientSecretGraph
+        public static string AzureClientSecretGraph
         {
             get
             {
-                return CasConfig.GetStringOnce("CLIENT_SECRET_GRAPH", dflt: ClientSecret);
+                return CasConfig.GetStringOnce("AZURE_CLIENT_SECRET_GRAPH", () =>
+                {
+                    return CasConfig.GetStringOnce("CLIENT_SECRET_GRAPH", () => AzureClientSecret); // for compat
+                });
             }
         }
 
@@ -592,11 +620,14 @@ namespace CasAuth
         /// specifically used only for communicating with Azure Key Vault. If you do not specify this variable,
         /// then TENANT_ID is used.
         /// </summary>
-        public static string TenantIdVault
+        public static string AzureTenantIdVault
         {
             get
             {
-                return CasConfig.GetStringOnce("TENANT_ID_VAULT", dflt: TenantId);
+                return CasConfig.GetStringOnce("AZURE_TENANT_ID_VAULT", () =>
+                {
+                    return CasConfig.GetStringOnce("TENANT_ID_VAULT", () => AzureTenantId); // for compat
+                });
             }
         }
 
@@ -605,11 +636,14 @@ namespace CasAuth
         /// specifically used only for communicating with Azure Key Vault. If you do not specify this variable,
         /// then CLIENT_ID is used.
         /// </summary>
-        public static string ClientIdVault
+        public static string AzureClientIdVault
         {
             get
             {
-                return CasConfig.GetStringOnce("CLIENT_ID_VAULT", dflt: ClientId);
+                return CasConfig.GetStringOnce("AZURE_CLIENT_ID_VAULT", () =>
+                {
+                    return CasConfig.GetStringOnce("CLIENT_ID_VAULT", () => AzureClientId); // for compat
+                });
             }
         }
 
@@ -618,11 +652,14 @@ namespace CasAuth
         /// specifically used only for communicating with Azure Key Vault. If you do not specify this variable,
         /// then CLIENT_SECRET is used.
         /// </summary>
-        public static string ClientSecretVault
+        public static string AzureClientSecretVault
         {
             get
             {
-                return CasConfig.GetStringOnce("CLIENT_SECRET_VAULT", dflt: ClientSecret);
+                return CasConfig.GetStringOnce("AZURE_CLIENT_SECRET_VAULT", () =>
+                {
+                    return CasConfig.GetStringOnce("CLIENT_SECRET_VAULT", () => AzureClientSecret); // for compat
+                });
             }
         }
 
@@ -631,15 +668,39 @@ namespace CasAuth
         /// specify TENANT_ID and this URL will be built for you. If you are going to use this for multi-tenant
         /// authentication, then you must set AUTHORITY to "https://login.microsoftonline.com/common".
         /// </summary>
-        public static string Authority
+        public static string AzureAuthority
         {
             get
             {
-                string s = System.Environment.GetEnvironmentVariable("AUTHORITY");
-                if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(TenantId)) return $"https://login.microsoftonline.com/{TenantId}";
+                string s = CasConfig.GetStringOnce("AZURE_AUTHORITY")
+                    ?? CasConfig.GetStringOnce("AUTHORITY", () => // for compat
+                    {
+                        if (!string.IsNullOrEmpty(AzureTenantId)) return $"https://login.microsoftonline.com/{AzureTenantId}";
+                        return null;
+                    });
                 return s;
             }
         }
+
+        // TODO: a lot of the REQUIRED vs OPTIONAL tags are no longer correct - update code
+        // TODO: a lot of the REQUIRED vs OPTIONAL tags are no longer correct - update docs
+        // TODO: a lot of the REQUIRED vs OPTIONAL tags are no longer correct - update summary
+        // TODO: add a setting for which IDPs to support
+
+        /// <summary>
+        /// [REQUIRED (server)] This allows you to specify the Client ID that will be used for the /authorize endpoint,
+        /// AuthCode, and AUTH_TYPE=app. You might also specify specific options for
+        /// CLIENT_ID_CONFIG, CLIENT_ID_GRAPH, and CLIENT_ID_VAULT for AUTH_TYPE=app only (you still need).
+        /// CLIENT_ID for /authorize and AuthCode.
+        /// </summary>
+        public static string GoogleClientId
+        {
+            get
+            {
+                return CasConfig.GetStringOnce("GOOGLE_CLIENT_ID");
+            }
+        }
+
 
         /// <summary>
         /// [OPTIONAL] You may specify the URL that is used for the /cas/token endpoint that will built the JWT.
@@ -685,11 +746,13 @@ namespace CasAuth
         /// [OPTIONAL] If you want to query the Microsoft Graph when a JWT is issued that will show roles for
         /// multiple applications, you should set this to a comma-delimited list of application GUIDs.
         /// </summary>
-        public static string[] ApplicationIds
+        public static string[] AzureApplicationIds
         {
             get
             {
-                return CasConfig.GetArrayOnce("APPLICATION_ID");
+                return CasConfig.GetArrayOnce("AZURE_APPLICATION_ID", ",", () =>
+                    CasConfig.GetArrayOnce("APPLICATION_ID", ",")
+                );
             }
         }
 
@@ -697,11 +760,24 @@ namespace CasAuth
         /// [OPTIONAL] If you want to provide a hint for the domain so that users can authenticate easier,
         /// you can specify that. Generally it is best to leave it unset.
         /// </summary>
-        public static string DomainHint
+        public static string AzureDomainHint
         {
             get
             {
-                return CasConfig.GetStringOnce("DOMAIN_HINT");
+                return CasConfig.GetStringOnce("AZURE_DOMAIN_HINT")
+                    ?? CasConfig.GetStringOnce("DOMAIN_HINT");
+            }
+        }
+
+        /// <summary>
+        /// [OPTIONAL] If you want to provide a hint for the domain so that users can authenticate easier,
+        /// you can specify that. Generally it is best to leave it unset.
+        /// </summary>
+        public static string GoogleDomainHint
+        {
+            get
+            {
+                return CasConfig.GetStringOnce("GOOGLE_DOMAIN_HINT");
             }
         }
 
@@ -751,6 +827,14 @@ namespace CasAuth
             get
             {
                 return CasConfig.GetBoolOnce("REQUIRE_USER_ENABLED_ON_REISSUE", dflt: true);
+            }
+        }
+
+        public static bool GoogleEmailMustBeVerified
+        {
+            get
+            {
+                return CasConfig.GetBoolOnce("GOOGLE_EMAIL_MUST_BE_VERIFIED", dflt: true);
             }
         }
 

@@ -53,13 +53,13 @@ namespace CasAuth
                     switch (authTypeKey)
                     {
                         case "AUTH_TYPE_CONFIG":
-                            return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdConfig, CasEnv.ClientIdConfig, CasEnv.ClientSecretConfig);
+                            return await GetAccessTokenByApplication(resourceId, CasEnv.AzureTenantIdConfig, CasEnv.AzureClientIdConfig, CasEnv.AzureClientSecretConfig);
                         case "AUTH_TYPE_GRAPH":
                             if (config == null) throw new Exception("config must be supplied for AUTH_TYPE_GRAPH");
-                            var graphSecret = await config.GetString("CLIENT_SECRET_GRAPH", CasEnv.ClientSecretGraph);
-                            return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdGraph, CasEnv.ClientIdGraph, graphSecret);
+                            var graphSecret = await config.GetString("CLIENT_SECRET_GRAPH", CasEnv.AzureClientSecretGraph);
+                            return await GetAccessTokenByApplication(resourceId, CasEnv.AzureTenantIdGraph, CasEnv.AzureClientIdGraph, graphSecret);
                         case "AUTH_TYPE_VAULT":
-                            return await GetAccessTokenByApplication(resourceId, CasEnv.TenantIdVault, CasEnv.ClientIdVault, CasEnv.ClientSecretVault);
+                            return await GetAccessTokenByApplication(resourceId, CasEnv.AzureTenantIdVault, CasEnv.AzureClientIdVault, CasEnv.AzureClientSecretVault);
                         default:
                             throw new Exception("GetAccessToken requires an authTypeKey when using AUTH_TYPE=app");
                     }

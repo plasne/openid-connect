@@ -1,15 +1,12 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.Protocols;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using System.Net.Http;
 
 namespace CasAuth
@@ -18,18 +15,20 @@ namespace CasAuth
     public class CasTokenIssuer
     {
 
-        public CasTokenIssuer(ILogger<CasTokenIssuer> logger, IHttpClientFactory httpClientFactory, ICasConfig config)
+        public CasTokenIssuer(
+            ILogger<CasTokenIssuer> logger,
+            IHttpClientFactory httpClientFactory,
+            ICasConfig config
+        )
         {
             this.Logger = logger;
             this.HttpClient = httpClientFactory.CreateClient("cas");
             this.Config = config;
-            this.ConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>($"{CasEnv.Authority}/.well-known/openid-configuration", new OpenIdConnectConfigurationRetriever());
         }
 
         private ILogger Logger { get; }
         private HttpClient HttpClient { get; }
         private ICasConfig Config { get; }
-        public ConfigurationManager<OpenIdConnectConfiguration> ConfigManager { get; }
 
         private X509SigningCredentials _signingCredentials;
 
@@ -105,182 +104,6 @@ namespace CasAuth
             _validationCertificates = null;
         }
 
-        public async Task<bool> IsUserEnabled(string userId)
-        {
-
-            // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this.Config);
-
-            // check for enabled
-            using (var request = new HttpRequestMessage()
-            {
-                RequestUri = new Uri($"https://graph.microsoft.com/beta/users/{userId}?$select=accountEnabled"),
-                Method = HttpMethod.Get
-            })
-            {
-                request.Headers.Add("Authorization", $"Bearer {accessToken}");
-                using (var response = await this.HttpClient.SendAsync(request))
-                {
-                    var raw = await response.Content.ReadAsStringAsync();
-                    if ((int)response.StatusCode == 403) // Forbidden
-                    {
-                        throw new Exception("CasTokenIssuer.IsUserEnabled: the auth identity does not have the Directory.Read.All right");
-                    }
-                    else if (!response.IsSuccessStatusCode)
-                    {
-                        throw new Exception($"CasTokenIssuer.IsUserEnabled: HTTP {(int)response.StatusCode} - {raw}");
-                    }
-                    dynamic json = JObject.Parse(raw);
-                    return (bool)json.accountEnabled;
-                }
-            };
-
-        }
-
-        public async Task<dynamic> GetUserFromGraph(string query)
-        {
-
-            // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this.Config);
-
-            // get the user info
-            using (var request = new HttpRequestMessage()
-            {
-                RequestUri = new Uri($"https://graph.microsoft.com/beta/users/{query}"),
-                Method = HttpMethod.Get
-            })
-            {
-                request.Headers.Add("Authorization", $"Bearer {accessToken}");
-                using (var response = await this.HttpClient.SendAsync(request))
-                {
-                    var raw = await response.Content.ReadAsStringAsync();
-                    if ((int)response.StatusCode == 404) // Not Found
-                    {
-                        return null;
-                    }
-                    else if ((int)response.StatusCode == 403) // Forbidden
-                    {
-                        throw new Exception("CasTokenIssuer.GetUserById: the auth identity does not have the Directory.Read.All right");
-                    }
-                    else if (!response.IsSuccessStatusCode)
-                    {
-                        throw new Exception($"CasTokenIssuer.GetUserById: HTTP {(int)response.StatusCode} - {raw}");
-                    }
-                    dynamic json = JObject.Parse(raw);
-                    return json;
-                }
-            };
-
-        }
-
-        public class RoleAssignments
-        {
-            public string AppId;
-            public List<string> Roles = new List<string>();
-        }
-
-        private class AppRoles
-        {
-            public string AppId;
-            public Dictionary<string, string> Roles = new Dictionary<string, string>();
-        }
-
-        public async Task<List<RoleAssignments>> GetRoleAssignments(string userId)
-        {
-            List<RoleAssignments> assignments = new List<RoleAssignments>();
-
-            // get the list of applications to consider for roles
-            var appIds = CasEnv.ApplicationIds;
-            if (appIds.Count() < 1) return assignments;
-
-            // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this.Config);
-
-            // lookup all specified applications
-            //   NOTE: catch the possible 403 Forbidden because access rights have not been granted
-            List<AppRoles> apps = new List<AppRoles>();
-            string filter = "$filter=" + string.Join(" or ", appIds.Select(appId => $"appId eq '{appId}'"));
-            string select = "$select=appId,appRoles";
-            using (var request = new HttpRequestMessage()
-            {
-                RequestUri = new Uri($"https://graph.microsoft.com/beta/applications/?{filter}&{select}"),
-                Method = HttpMethod.Get
-            })
-            {
-                request.Headers.Add("Authorization", $"Bearer {accessToken}");
-                using (var response = await this.HttpClient.SendAsync(request))
-                {
-                    var raw = await response.Content.ReadAsStringAsync();
-                    if ((int)response.StatusCode == 403) // Forbidden
-                    {
-                        throw new Exception("CasTokenIssuer.GetRoleAssignments: the auth identity does not have the Directory.Read.All right");
-                    }
-                    else if (!response.IsSuccessStatusCode)
-                    {
-                        throw new Exception($"CasTokenIssuer.GetRoleAssignments: HTTP {(int)response.StatusCode} - {raw}");
-                    }
-                    dynamic json = JObject.Parse(raw);
-                    var values = (JArray)json.value;
-                    foreach (dynamic value in values)
-                    {
-                        var app = new AppRoles() { AppId = (string)value.appId };
-                        apps.Add(app);
-                        foreach (dynamic appRole in value.appRoles)
-                        {
-                            app.Roles.Add((string)appRole.id, (string)appRole.value);
-                        }
-                    }
-                }
-            };
-
-            // get the roles that the user is in
-            using (var request = new HttpRequestMessage()
-            {
-                RequestUri = new Uri($"https://graph.microsoft.com/beta/users/{userId}/appRoleAssignments"),
-                Method = HttpMethod.Get
-            })
-            {
-                request.Headers.Add("Authorization", $"Bearer {accessToken}");
-                using (var response = await this.HttpClient.SendAsync(request))
-                {
-                    var raw = await response.Content.ReadAsStringAsync();
-                    if ((int)response.StatusCode == 404) // Not Found
-                    {
-                        // ignore, the user might not be in the directory
-                        return assignments;
-                    }
-                    else if (!response.IsSuccessStatusCode)
-                    {
-                        throw new Exception($"CasTokenIssuer.GetRoleAssignments: HTTP {(int)response.StatusCode} - {raw}");
-                    }
-                    dynamic json = JObject.Parse(raw);
-                    var values = (JArray)json.value;
-                    foreach (dynamic value in values)
-                    {
-                        var appRoleId = (string)value.appRoleId;
-                        var app = apps.FirstOrDefault(a => a.Roles.ContainsKey(appRoleId));
-                        if (app != null)
-                        {
-                            var roleName = app.Roles[appRoleId];
-                            var existingAssignment = assignments.FirstOrDefault(ra => ra.AppId == app.AppId);
-                            if (existingAssignment != null)
-                            {
-                                existingAssignment.Roles.Add(roleName);
-                            }
-                            else
-                            {
-                                var assignment = new RoleAssignments() { AppId = (string)app.AppId };
-                                assignment.Roles.Add(roleName);
-                                assignments.Add(assignment);
-                            }
-                        }
-                    }
-                }
-            };
-
-            return assignments;
-        }
-
         public async Task<string> IssueToken(List<Claim> claims)
         {
 
@@ -293,20 +116,6 @@ namespace CasAuth
             if (CasEnv.JwtMaxDuration > 0 && claims.FirstOrDefault(c => c.Type == "old") == null)
             {
                 claims.Add(new Claim("old", new DateTimeOffset(DateTime.UtcNow).AddMinutes(CasEnv.JwtMaxDuration).ToUnixTimeSeconds().ToString()));
-            }
-
-            // populate all application roles
-            var oid = claims.FirstOrDefault(c => c.Type == "oid");
-            if (oid != null)
-            {
-                var assignments = await GetRoleAssignments(oid.Value);
-                foreach (var assignment in assignments)
-                {
-                    foreach (var role in assignment.Roles)
-                    {
-                        claims.Add(new Claim(assignment.AppId + "-roles", role));
-                    }
-                }
             }
 
             // determine the signing duration
@@ -409,7 +218,7 @@ namespace CasAuth
             return validatedJwt;
         }
 
-        private async Task<JwtSecurityToken> IsTokenExpiredButEligibleForRenewal(string token)
+        public async Task<JwtSecurityToken> IsTokenExpiredButEligibleForRenewal(string token)
         {
 
             // read the token
@@ -461,30 +270,6 @@ namespace CasAuth
             {
                 throw new CasHttpException(403, "token is too old to renew");
             }
-
-        }
-
-        public async Task<string> ReissueToken(string token)
-        {
-
-            // make sure the token is eligible
-            var jwt = await IsTokenExpiredButEligibleForRenewal(token);
-
-            // make sure the user is eligible
-            var oid = jwt.Payload.FirstOrDefault(claim => claim.Key == "oid");
-            if (oid.Value == null) throw new CasHttpException(403, "oid is not specified in the token");
-            if (CasEnv.RequireUserEnabledOnReissue)
-            {
-                bool enabled = await IsUserEnabled((string)oid.Value);
-                if (!enabled) throw new CasHttpException(403, "user is not enabled");
-            }
-
-            // strip inappropriate claims
-            var filter = new string[] { "iss", "aud", "exp" }; // note: the "roles" claim is left if that were pulled from the id_token
-            var claims = jwt.Claims.Where(c => !filter.Contains(c.Type) && !c.Type.EndsWith("-roles")).ToList();
-
-            // reissue the token
-            return await IssueToken(claims);
 
         }
 

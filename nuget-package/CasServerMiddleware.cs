@@ -4,17 +4,15 @@ using System.Collections.Generic;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
-using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System.Net;
-using System.Security.Cryptography;
 using System.Threading.Tasks;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Cryptography.X509Certificates;
 using System.Net.Http;
+using Newtonsoft.Json;
 
 namespace CasAuth
 {
@@ -26,228 +24,6 @@ namespace CasAuth
 
     public static class UseCasServerAuthMiddlewareExtensions
     {
-
-        private static string GenerateSafeRandomString(int length)
-        {
-            RNGCryptoServiceProvider provider = new RNGCryptoServiceProvider();
-            var bytes = new byte[length];
-            provider.GetBytes(bytes);
-            string s = Convert.ToBase64String(bytes);
-            s = s.Split('=')[0];
-            s = s.Replace('+', '-');
-            s = s.Replace('/', '_');
-            return s;
-        }
-
-        private class AuthFlow
-        {
-            public string redirecturi { get; set; }
-            public string state { get; set; }
-            public string nonce { get; set; }
-        }
-
-        private static async Task<JwtSecurityToken> VerifyTokenFromAAD(CasTokenIssuer tokenIssuer, string token, string audience = null, string nonce = null)
-        {
-            var handler = new JwtSecurityTokenHandler();
-
-            // get configuration info from OpenID Connect endpoint
-            //  note: this is cached for 1 hour by default
-            OpenIdConnectConfiguration config = await tokenIssuer.ConfigManager.GetConfigurationAsync();
-
-            // determine the possible appropriate issuers
-            var issuers = new List<string>();
-            string tenant = CasEnv.Authority.Split("/").LastOrDefault();
-            if (tenant == "common")
-            {
-                // multi-tenant; the issuer will be the directory containing the user
-                var unvalidatedJwt = handler.ReadJwtToken(token);
-                var tid = unvalidatedJwt.Payload.Claims.FirstOrDefault(c => c.Type == "tid");
-                if (tid != null) issuers.Add($"https://login.microsoftonline.com/{tid.Value}/v2.0");
-            }
-            else
-            {
-                // single-tenant; users are issued from the first, but applications respond with the second
-                issuers.Add($"https://login.microsoftonline.com/{tenant}/v2.0");
-                issuers.Add($"https://sts.windows.net/{tenant}/");
-            }
-
-            // define the validation parameters
-            var validationParameters = new TokenValidationParameters
-            {
-                RequireExpirationTime = true,
-                RequireSignedTokens = true,
-                ValidateIssuer = true,
-                ValidIssuers = issuers.ToArray(),
-                ValidateAudience = (!string.IsNullOrEmpty(audience)),
-                ValidAudience = audience,
-                ValidateLifetime = true,
-                IssuerSigningKeys = config.SigningKeys
-            };
-
-            // validate all previously defined parameters
-            SecurityToken validatedSecurityToken = null;
-            handler.ValidateToken(token, validationParameters, out validatedSecurityToken);
-            JwtSecurityToken validatedJwt = validatedSecurityToken as JwtSecurityToken;
-
-            // validate alg
-            if (validatedJwt.Header.Alg != SecurityAlgorithms.RsaSha256) throw new SecurityTokenValidationException("The alg must be RS256.");
-
-            // validate nonce
-            if (string.IsNullOrEmpty(nonce))
-            {
-                // nonce not provided
-            }
-            else if (validatedJwt.Payload.Nonce != nonce)
-            {
-                throw new SecurityTokenValidationException("The nonce was invalid.");
-            }
-
-            return validatedJwt;
-        }
-
-        public class Tokens
-        {
-            public string access_token { get; set; }
-            public string refresh_token { get; set; }
-        }
-
-        public static async Task<Tokens> GetAccessTokenFromAuthCode(HttpClient httpClient, HttpContext context, ICasConfig config, string code, string scope)
-        {
-
-            // get the client secret
-            var secret = await config.GetString("CLIENT_SECRET", CasEnv.ClientSecret);
-
-            // get the response
-            using (var request = new HttpRequestMessage()
-            {
-                RequestUri = new Uri($"{CasEnv.Authority}/oauth2/v2.0/token"),
-                Method = HttpMethod.Post
-            })
-            {
-                using (request.Content = new FormUrlEncodedContent(new[] {
-                    new KeyValuePair<string, string>("client_id", CasEnv.ClientId),
-                    new KeyValuePair<string, string>("client_secret", secret),
-                    new KeyValuePair<string, string>("scope", scope),
-                    new KeyValuePair<string, string>("code", code),
-                    new KeyValuePair<string, string>("redirect_uri", CasEnv.RedirectUri(context.Request)),
-                    new KeyValuePair<string, string>("grant_type", "authorization_code")
-                }))
-                {
-                    using (var response = await httpClient.SendAsync(request))
-                    {
-                        var raw = await response.Content.ReadAsStringAsync();
-                        if (!response.IsSuccessStatusCode)
-                        {
-                            throw new Exception($"CasServerMiddleware.GetAccessTokenFromAuthCode: HTTP {(int)response.StatusCode} - {raw}");
-                        }
-                        var tokens = JsonSerializer.Deserialize<Tokens>(raw);
-                        return tokens;
-                    }
-                }
-            };
-
-        }
-
-        public static async Task<Tokens> GetAccessTokenFromRefreshToken(HttpClient httpClient, ICasConfig config, string refreshToken, string scope)
-        {
-
-            // get the client secret
-            var secret = await config.GetString("CLIENT_SECRET", CasEnv.ClientSecret);
-
-            // get the response
-            using (var request = new HttpRequestMessage()
-            {
-                RequestUri = new Uri($"{CasEnv.Authority}/oauth2/v2.0/token"),
-                Method = HttpMethod.Post
-            })
-            {
-                using (request.Content = new FormUrlEncodedContent(new[] {
-                    new KeyValuePair<string, string>("client_id", CasEnv.ClientId),
-                    new KeyValuePair<string, string>("client_secret", secret),
-                    new KeyValuePair<string, string>("scope", scope),
-                    new KeyValuePair<string, string>("refresh_token", refreshToken),
-                    new KeyValuePair<string, string>("grant_type", "refresh_token")
-                }))
-                {
-                    using (var response = await httpClient.SendAsync(request))
-                    {
-                        var raw = await response.Content.ReadAsStringAsync();
-                        if (!response.IsSuccessStatusCode)
-                        {
-                            throw new Exception($"CasServerMiddleware.GetAccessTokenFromRefreshToken: HTTP {(int)response.StatusCode} - {raw}");
-                        }
-                        var tokens = JsonSerializer.Deserialize<Tokens>(raw);
-                        return tokens;
-                    }
-                }
-            };
-
-        }
-
-        private static async Task<Tokens> GetAccessTokenFromClientSecret(HttpClient httpClient, string clientId, string clientSecret, string scope)
-        {
-
-            // get the response
-            using (var request = new HttpRequestMessage()
-            {
-                RequestUri = new Uri($"{CasEnv.Authority}/oauth2/v2.0/token"),
-                Method = HttpMethod.Post
-            })
-            {
-                using (request.Content = new FormUrlEncodedContent(new[] {
-                    new KeyValuePair<string, string>("client_id", clientId),
-                    new KeyValuePair<string, string>("client_secret", clientSecret),
-                    new KeyValuePair<string, string>("scope", scope),
-                    new KeyValuePair<string, string>("grant_type", "client_credentials")
-                }))
-                {
-                    using (var response = await httpClient.SendAsync(request))
-                    {
-                        var raw = await response.Content.ReadAsStringAsync();
-                        if (!response.IsSuccessStatusCode)
-                        {
-                            throw new Exception($"CasServerMiddleware.GetAccessTokenFromClientSecret: HTTP {(int)response.StatusCode} - {raw}");
-                        }
-                        var tokens = JsonSerializer.Deserialize<Tokens>(raw);
-                        return tokens;
-                    }
-                }
-            };
-
-        }
-
-        private static async Task<Tokens> GetAccessTokenFromClientCertificate(HttpClient httpClient, string clientId, string token, string scope)
-        {
-
-            // get the response
-            using (var request = new HttpRequestMessage()
-            {
-                RequestUri = new Uri($"{CasEnv.Authority}/oauth2/v2.0/token"),
-                Method = HttpMethod.Post
-            })
-            {
-                using (request.Content = new FormUrlEncodedContent(new[] {
-                    new KeyValuePair<string, string>("client_id", clientId),
-                    new KeyValuePair<string, string>("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"),
-                    new KeyValuePair<string, string>("client_assertion", token),
-                    new KeyValuePair<string, string>("scope", scope),
-                    new KeyValuePair<string, string>("grant_type", "client_credentials")
-                }))
-                {
-                    using (var response = await httpClient.SendAsync(request))
-                    {
-                        var raw = await response.Content.ReadAsStringAsync();
-                        if (!response.IsSuccessStatusCode)
-                        {
-                            throw new Exception($"CasServerMiddleware.GetAccessTokenFromClientSecret: HTTP {(int)response.StatusCode} - {raw}");
-                        }
-                        var tokens = JsonSerializer.Deserialize<Tokens>(raw);
-                        return tokens;
-                    }
-                }
-            };
-
-        }
 
         public class WellKnownConfigPayload
         {
@@ -307,62 +83,13 @@ namespace CasAuth
                     try
                     {
 
-                        // get the necessary variables
-                        string redirectForUser = context.Request.Query["redirecturi"];
-                        string authority = CasEnv.Authority;
-                        string clientId = WebUtility.UrlEncode(CasEnv.ClientId);
-                        string redirectForAAD = WebUtility.UrlEncode(CasEnv.RedirectUri(context.Request));
-                        string domainHint = WebUtility.UrlEncode(CasEnv.DomainHint);
-
-                        // get the scopes
-                        // REF: https://docs.microsoft.com/en-us/azure/active-directory/develop/id-tokens
-                        var scope = "openid profile email";
-                        var authCodeReceiver = context.RequestServices.GetService<ICasAuthCodeReceiver>();
-                        if (authCodeReceiver != null)
-                        {
-                            var scopes = await authCodeReceiver.GetAllScopes();
-                            foreach (var s in scopes)
-                            {
-                                scope += $" {s}";
-                            }
-                        }
-                        scope = WebUtility.UrlEncode(scope);
-
-                        // define the response type
-                        string response_type = (authCodeReceiver != null) ?
-                            WebUtility.UrlEncode("id_token code") :
-                            WebUtility.UrlEncode("id_token");
-
-                        // generate state and nonce
-                        AuthFlow flow = new AuthFlow()
-                        {
-                            state = GenerateSafeRandomString(16),
-                            nonce = GenerateSafeRandomString(16)
-                        };
-                        if (!string.IsNullOrEmpty(redirectForUser))
-                        {
-                            flow.redirecturi = redirectForUser;
-                        }
-                        else if (!string.IsNullOrEmpty(CasEnv.DefaultRedirectUrl))
-                        {
-                            flow.redirecturi = CasEnv.DefaultRedirectUrl;
-                        }
-
-                        // store the authflow for validating state and nonce later
-                        //  note: this has to be SameSite=none because it is being POSTed from login.microsoftonline.com
-                        context.Response.Cookies.Append("authflow", JsonSerializer.Serialize(flow), new CookieOptions()
-                        {
-                            Expires = DateTimeOffset.Now.AddMinutes(10),
-                            HttpOnly = true,
-                            Secure = CasEnv.RequireSecureForCookies,
-                            SameSite = SameSiteMode.None
-                        });
-
-                        // redirect to url
-                        string url = $"{authority}/oauth2/v2.0/authorize?response_type={response_type}&client_id={clientId}&redirect_uri={redirectForAAD}&scope={scope}&response_mode=form_post&state={flow.state}&nonce={flow.nonce}";
-                        if (!string.IsNullOrEmpty(domainHint)) url += $"&domain_hint={domainHint}";
-                        context.Response.Redirect(url);
-                        await context.Response.CompleteAsync();
+                        // hand off to the idp
+                        string idp = context.Request.Query["idp"];
+                        if (string.IsNullOrEmpty(idp)) idp = "azure";
+                        var providers = context.RequestServices.GetServices<ICasIdp>();
+                        var provider = providers.FirstOrDefault(i => string.Compare(i.Id, idp, StringComparison.InvariantCultureIgnoreCase) == 0);
+                        if (provider == null) throw new CasHttpException(400, $"\"{idp}\" was not a supported authentication provider.");
+                        await provider.Authorize(context);
 
                     }
                     catch (Exception e)
@@ -371,160 +98,59 @@ namespace CasAuth
                     }
                 }).RequireCors("cas-server");
 
-                // define the token endpoint
+                // define the token endpoints
                 endpoints.MapPost("/cas/token", async context =>
                 {
-                    var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
                     try
                     {
-                        var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
-                        var config = context.RequestServices.GetService<ICasConfig>();
-                        var httpClientFactory = context.RequestServices.GetService<IHttpClientFactory>();
-                        var httpClient = httpClientFactory.CreateClient("cas");
 
-                        // read flow, verify state and nonce
+                        // read flow to get the IDP
                         if (!context.Request.Cookies.ContainsKey("authflow")) throw new CasHttpException(400, "authflow not provided");
-                        AuthFlow flow = JsonSerializer.Deserialize<AuthFlow>(context.Request.Cookies["authflow"]);
-                        if (context.Request.Form["state"] != flow.state) throw new CasHttpException(400, "state does not match");
+                        var flow = JsonConvert.DeserializeObject<CasAuthFlow>(context.Request.Cookies["authflow"]);
 
-                        // throw error if one was returned
-                        if (context.Request.Form.ContainsKey("error_description"))
-                        {
-                            throw new CasHttpException(401, context.Request.Form["error_description"]);
-                        }
+                        // hand off to the IDP
+                        var providers = context.RequestServices.GetServices<ICasIdp>();
+                        var provider = providers.FirstOrDefault(i => string.Compare(i.Id, flow.idp, StringComparison.InvariantCultureIgnoreCase) == 0);
+                        if (provider == null) throw new CasHttpException(400, $"\"{flow.idp}\" was not a supported authentication provider.");
 
-                        // verify the id token
-                        string idRaw = context.Request.Form["id_token"];
-                        var idToken = await VerifyTokenFromAAD(tokenIssuer, idRaw, CasEnv.ClientId, flow.nonce);
+                        // defer to the provider
+                        await provider.Token(context);
 
-                        // ICasAuthCodeReceiver: use the code to get an access token
-                        var authCodeReceiver = context.RequestServices.GetService<ICasAuthCodeReceiver>();
-                        if (authCodeReceiver != null)
-                        {
-                            string code = context.Request.Form["code"];
-                            Tokens last = null;
-                            var scopes = await authCodeReceiver.GetAllScopes();
-                            foreach (var scope in scopes)
-                            {
-                                if (last == null)
-                                {
-                                    last = await GetAccessTokenFromAuthCode(httpClient, context, config, code, "offline_access " + scope);
-                                }
-                                else
-                                {
-                                    last = await GetAccessTokenFromRefreshToken(httpClient, config, last.refresh_token, "offline_access " + scope);
-                                }
-                                await authCodeReceiver.ReceiveAll(scope, last.access_token, last.refresh_token);
-                                break;
-                            }
-                        }
+                    }
+                    catch (Exception e)
+                    {
+                        await e.Apply(context);
+                    }
+                }).RequireCors("cas-server");
 
-                        // populate the claims from the id_token
-                        // NOTE: claims.Add(key, value) is an extension method that normalizes the names to their URIs,
-                        //    we do not want to use that here because we want the short names in the token
-                        List<Claim> claims = new List<Claim>();
-                        var email = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "email");
-                        if (email != null) claims.Add(new Claim("email", email.Value));
-                        var name = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "name");
-                        if (name != null) claims.Add(new Claim("name", name.Value));
-
-                        // get the oid
-                        if (CasEnv.Authority.EndsWith("/common"))
-                        {
-
-                            // add the tenant claim
-                            var tid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "tid");
-                            if (tid != null) claims.Add(new Claim("tenant", tid.Value));
-
-                            // oids for external users are wrong, we need to query for them
-                            var oid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
-                            if (oid != null)
-                            {
-                                if (await tokenIssuer.GetUserFromGraph(oid.Value) == null)
-                                {
-                                    // query by userPrincipalName
-                                    var username = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "preferred_username");
-                                    if (username != null)
-                                    {
-                                        string userId = username.Value.Replace("@", "_");
-                                        var users = await tokenIssuer.GetUserFromGraph($"?$filter=startsWith(userPrincipalName, '{userId}%23EXT%23')");
-                                        if (users != null && users.value.Count > 0)
-                                        {
-                                            claims.Add(new Claim("oid", (string)users.value[0].id));
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    // the oid was valid; the user is local
-                                    claims.Add(new Claim("oid", oid.Value));
-                                }
-                            }
-
-                        }
-                        else
-                        {
-                            // oids for 1st party users are fine
-                            var oid = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
-                            if (oid != null) claims.Add(new Claim("oid", oid.Value));
-                        }
-
-                        // attempt to propogate roles
-                        var roles = idToken.Payload.Claims.Where(c => c.Type == "roles");
-                        foreach (var role in roles)
-                        {
-                            claims.Add(new Claim("role", role.Value));
-                        }
-
-                        // ICasClaimsBuilder: add custom claims, potentially from other databases
-                        var claimsBuilder = context.RequestServices.GetService<ICasClaimsBuilder>();
-                        if (claimsBuilder != null)
-                        {
-                            await claimsBuilder.AddAllClaims(idToken.Payload.Claims, claims);
-                        }
-
-                        // write the XSRF-TOKEN cookie (if it will be verified)
-                        if (CasEnv.VerifyXsrfInHeader || CasEnv.VerifyXsrfInCookie)
-                        {
-                            string xsrf = GenerateSafeRandomString(16);
-                            string signed = xsrf;
-                            if (!CasEnv.RequireHttpOnlyOnUserCookie)
-                            {
-                                // if the source claim is going to be in a cookie that is readable by JavaScript the XSRF must be signed
-                                signed = await tokenIssuer.IssueXsrfToken(xsrf);
-                            }
-                            context.Response.Cookies.Append("XSRF-TOKEN", signed, new CookieOptions()
-                            {
-                                HttpOnly = CasEnv.RequireHttpOnlyOnXsrfCookie,
-                                Secure = CasEnv.RequireSecureForCookies,
-                                Domain = CasEnv.BaseDomain(context.Request),
-                                SameSite = CasEnv.SameSite,
-                                Path = "/"
-                            });
-                            claims.Add(new Claim("xsrf", xsrf));
-                        }
-
-                        // write the user cookie
-                        string jwt = await tokenIssuer.IssueToken(claims);
-                        context.Response.Cookies.Append("user", jwt, new CookieOptions()
-                        {
-                            HttpOnly = CasEnv.RequireHttpOnlyOnUserCookie,
-                            Secure = CasEnv.RequireSecureForCookies,
-                            Domain = CasEnv.BaseDomain(context.Request),
-                            SameSite = CasEnv.SameSite,
-                            Path = "/"
-                        });
-
-                        // revoke the authflow cookie
-                        context.Response.Cookies.Delete("authflow");
-
-                        // redirect to the appropriate place
-                        if (!string.IsNullOrEmpty(flow.redirecturi))
-                        {
-                            context.Response.Redirect(flow.redirecturi);
-                        }
-                        await context.Response.CompleteAsync();
-
+                // the extract service can use Javascript to get URL filters and pass them to token
+                endpoints.MapGet("/cas/extract", async context =>
+                {
+                    try
+                    {
+                        await context.Response.WriteAsync(@"
+                            <html>
+                                <head>
+                                    <script>
+                                        document.addEventListener('DOMContentLoaded', function () {
+                                            const hash = window.location.hash.substr(1);
+                                            for (let opt of hash.split('&')) {
+                                                const pair = opt.split('=', 2);
+                                                const element = document.getElementById(pair[0]);
+                                                if (element) element.value = pair[1];
+                                            }
+                                            document.auth.submit();
+                                        });
+                                    </script>
+                                </head>
+                                <body style='display: none;'>
+                                    <form name='auth' method='post' action='/cas/token'>
+                                        <input type='text' id='state' name='state' value='' />
+                                        <input type='text' id='id_token' name='id_token' value='' />
+                                    </form>
+                                </body>
+                            </html>
+                        ");
                     }
                     catch (Exception e)
                     {
@@ -538,53 +164,13 @@ namespace CasAuth
                     try
                     {
 
-                        // get all needed variables
-                        var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
-                        var httpClientFactory = context.RequestServices.GetService<IHttpClientFactory>();
-                        var httpClient = httpClientFactory.CreateClient("cas");
-                        string clientId = context.Request.Form["clientId"];
-                        string clientSecret = context.Request.Form["clientSecret"];
-                        string token = context.Request.Form["token"];
-                        string scope = context.Request.Form["scope"];
-
-                        // optionally the call can include a service name which we will assert in the claims
-                        string serviceName = context.Request.Form["serviceName"];
-
-                        // get an access token and verify it
-                        Tokens tokens = null;
-                        if (!string.IsNullOrEmpty(token))
-                        {
-                            tokens = await GetAccessTokenFromClientCertificate(httpClient, clientId, token, scope + "/.default");
-                        }
-                        else if (!string.IsNullOrEmpty(clientSecret))
-                        {
-                            tokens = await GetAccessTokenFromClientSecret(httpClient, clientId, clientSecret, scope + "/.default");
-                        }
-                        else
-                        {
-                            throw new Exception("clientSecret or token must be supplied");
-                        }
-                        var accessToken = await VerifyTokenFromAAD(tokenIssuer, tokens.access_token, scope);
-
-                        // populate the claims from the id_token
-                        List<Claim> claims = new List<Claim>();
-                        var oid = accessToken.Payload.Claims.FirstOrDefault(c => c.Type == "oid");
-                        if (oid != null) claims.Add(new Claim("oid", oid.Value));
-
-                        // add the service details
-                        if (!string.IsNullOrEmpty(serviceName)) claims.Add(new Claim("name", serviceName));
-                        claims.Add(new Claim("role", CasEnv.RoleForService));
-
-                        // attempt to propogate roles
-                        var roles = accessToken.Payload.Claims.Where(c => c.Type == "roles");
-                        foreach (var role in roles)
-                        {
-                            claims.Add(new Claim("role", role.Value));
-                        }
-
-                        // return the newly issued token
-                        string jwt = await tokenIssuer.IssueToken(claims);
-                        await context.Response.WriteAsync(jwt);
+                        // hand off to the IDP
+                        string idp = context.Request.Query["idp"];
+                        if (string.IsNullOrEmpty(idp)) idp = "azure";
+                        var providers = context.RequestServices.GetServices<ICasIdp>();
+                        var provider = providers.FirstOrDefault(i => string.Compare(i.Id, idp, StringComparison.InvariantCultureIgnoreCase) == 0);
+                        if (provider == null) throw new CasHttpException(400, $"\"{idp}\" was not a supported authentication provider.");
+                        await provider.Service(context);
 
                     }
                     catch (Exception e)
@@ -599,6 +185,8 @@ namespace CasAuth
                     try
                     {
 
+                        // TODO: test reissue
+
                         // get all needed variables
                         var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
                         string token = context.Request.Form["token"];
@@ -606,8 +194,16 @@ namespace CasAuth
                         // ensure a token was passed
                         if (string.IsNullOrEmpty(token)) throw new CasHttpException(400, "token was not provided for renewal");
 
-                        // see if it is eligible for reissue (an exception will be thrown if not)
-                        var reissued = await tokenIssuer.ReissueToken(token);
+                        // ensure it is eligible for reissue
+                        var jwt = await tokenIssuer.IsTokenExpiredButEligibleForRenewal(token);
+
+                        // hand off to the IDP
+                        var idp = jwt.Payload.Claims.FirstOrDefault(c => c.Type == "idp");
+                        var pid = (idp.Value == null) ? "azure" : idp.Value;
+                        var providers = context.RequestServices.GetServices<ICasIdp>();
+                        var provider = providers.FirstOrDefault(i => string.Compare(i.Id, pid, StringComparison.InvariantCultureIgnoreCase) == 0);
+                        if (provider == null) throw new CasHttpException(400, $"\"{idp}\" was not a supported authentication provider.");
+                        var reissued = await provider.Reissue(token);
                         await context.Response.WriteAsync(reissued);
 
                     }
@@ -633,7 +229,7 @@ namespace CasAuth
                         };
 
                         // return the json
-                        string json = JsonSerializer.Serialize(payload);
+                        string json = JsonConvert.SerializeObject(payload);
                         context.Response.Headers.Add("Content-Type", "application/json; charset=utf-8");
                         return context.Response.WriteAsync(json);
 
@@ -667,7 +263,7 @@ namespace CasAuth
                         }
 
                         // return the json
-                        string json = JsonSerializer.Serialize(payload);
+                        string json = JsonConvert.SerializeObject(payload);
                         context.Response.Headers.Add("Content-Type", "application/json; charset=utf-8");
                         await context.Response.WriteAsync(json);
 

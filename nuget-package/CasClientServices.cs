@@ -55,9 +55,9 @@ namespace CasAuth
                 config.Optional("AUTH_TYPE", authType);
                 if (authType == "app")
                 {
-                    config.Require("TENANT_ID", CasEnv.TenantId);
-                    config.Require("CLIENT_ID", CasEnv.ClientId);
-                    config.Require("CLIENT_SECRET", CasEnv.ClientSecret);
+                    config.Require("TENANT_ID", CasEnv.AzureTenantId);
+                    config.Require("CLIENT_ID", CasEnv.AzureClientId);
+                    config.Require("CLIENT_SECRET", CasEnv.AzureClientSecret);
                 }
                 config.Optional("AUTH_TYPE_CONFIG", CasAuthChooser.AuthType("AUTH_TYPE_CONFIG"));
                 config.Optional("APPCONFIG", CasEnv.AppConfig);
