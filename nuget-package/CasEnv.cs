@@ -265,7 +265,7 @@ namespace CasAuth
         {
             get
             {
-                return CasConfig.GetStringOnce("ISSUER", dflt: ClientHostUrl);
+                return CasConfig.GetStringOnce("AUDIENCE", dflt: ClientHostUrl);
             }
         }
 

@@ -23,6 +23,7 @@ BASE_DOMAIN=$RequestSubdomain
 REDIRECT_URI=$RequestDomain
 
 ISSUER=auth.domain1.com
+AUDIENCE=web.domain1.com
 ALLOWED_ORIGINS=web.domain1.com, web.domain2.com, web.domain3.com
 PUBLIC_KEYS_URL=https://auth.domain1.com/cas/keys
 PRIVATE_KEY=https://mykeyvault.vault.azure.net/secrets/PRIVATE-KEY
@@ -34,8 +35,9 @@ Note:
 
 -   The single auth service will be hosted under multiple domain names (ex. auth.domain1.com, auth.domain2.com, auth.domain3.com).
 -   The application registration (TENANT_ID and CLIENT_ID) is the same for all services.
--   The ISSUER and PUBLIC_KEYS_URL reference a single domain name, but that is fine.
+-   The ISSUER, AUDIENCE, PUBLIC_KEYS_URL reference a single domain name, but that is fine.
     -   ISSUER can be any string, it is just a way for you to denote who is issuing the token.
+    -   AUDIENCE can be any string, it is just a way for you to denote who is receiving the token.
     -   PUBLIC_KEYS_URL is never called by a browser, so CORS, cookies, etc. that might be tied to a domain are not relevant.
 -   All of your web-front-ends need to be covered by ALLOWED_ORGINS.
 -   BASE_DOMAIN and REDIRECT_URI use new values in v3.1.0 explained below.
@@ -56,9 +58,10 @@ As mentioned above, we cannot set SERVER_HOST_URL, CLIENT_HOST_URL, or WEB_HOST_
 
 ```
 LOG_LEVEL=Debug
-ISSUER=auth.plasne.com
+ISSUER=auth.domain1.com
+AUDIENCE=web.domain1.com
 ALLOWED_ORIGINS=web.domain1.com, web.domain2.com, web.domain3.com
-WELL_KNOWN_CONFIG_URL=https://auth.plasne.com/cas/.well-known/openid-configuration
+WELL_KNOWN_CONFIG_URL=https://auth.domain1.com/cas/.well-known/openid-configuration
 BASE_DOMAIN=$RequestSubdomain
 ```
 

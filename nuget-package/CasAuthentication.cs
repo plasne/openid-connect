@@ -124,8 +124,8 @@ namespace CasAuth
             }
             catch (Exception e)
             {
-                Logger.LogError(e, "CasAuthentication: exception...");
-                if (isTokenFromCookie) Response.Cookies.Delete("user"); // revoke the cookie
+                Logger.LogWarning(e, "CasAuthentication: exception...");
+                if (isTokenFromCookie) Response.Cookies.Delete(CasEnv.UserCookieName); // revoke the cookie
                 return AuthenticateResult.Fail(e);
             }
 
