@@ -1,6 +1,6 @@
 # Version 4
 
-Version 4 supports a number of new and streamlined features. Breaking changes...
+Version 4 supports a number of new and streamlined features. There is potentially one breaking change related to Config.
 
 ## NetBricks
 
