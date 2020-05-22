@@ -3,12 +3,10 @@ using System.Linq;
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using System.Net.Http;
 using Microsoft.AspNetCore.Authorization;
+using NetBricks;
 
 namespace CasAuth
 {
@@ -52,8 +50,11 @@ namespace CasAuth
                         var filters = compact.Split(',').Select(id => id.Trim()).ToArray();
                         if (filters.Count() < 1) throw new CasHttpException(404, $"config name of '{name}' is not found (2).");
 
+                        // get the config
+                        var config = context.RequestServices.GetService<IConfig>() as CasConfig;
+                        if (config == null) throw new CasHttpException(500, "CasConfig was not found in IServiceCollection.");
+
                         // return the config
-                        var config = context.RequestServices.GetService<ICasConfig>();
                         var values = await config.Load(filters);
                         string json = JsonSerializer.Serialize(values);
                         context.Response.Headers.Add("Content-Type", "application/json; charset=utf-8");
@@ -128,7 +129,7 @@ namespace CasAuth
                     {
                         return e.Apply(context);
                     }
-                }).RequireCors("cas-client").RequireAuthorization(new AuthorizeAttribute("cas") { Roles = CasEnv.RoleForAdmin });
+                }).RequireCors("cas-client").RequireAuthorization(new AuthorizeAttribute("cas") { Roles = CasConfig.RoleForAdmin });
 
                 // define the validation thumbprints endpoint
                 endpoints.MapGet("/cas/validation-thumbprints", async context =>
@@ -155,7 +156,7 @@ namespace CasAuth
                     {
                         await e.Apply(context);
                     }
-                }).RequireCors("cas-client").RequireAuthorization(new AuthorizeAttribute("cas") { Roles = CasEnv.RoleForAdmin });
+                }).RequireCors("cas-client").RequireAuthorization(new AuthorizeAttribute("cas") { Roles = CasConfig.RoleForAdmin });
 
             });
             return builder;

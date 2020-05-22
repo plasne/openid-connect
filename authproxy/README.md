@@ -72,7 +72,7 @@ When your authentication provider issues the JWT_COOKIE, it should also issue a 
 
 In your client, all AJAX calls should specify "withCredentials: true" to ensure the JWT_COOKIE is sent. In addition, Javascript should be used to read the XSRF cookie and put the contents into the XSRF_HEADER.
 
-## Where to go from here?
+## Next Steps
 
 -   While this solution authenticates the user, it does nothing for authorization. The JWT is passed to the API, so you could read the claims from the JWT without validating it again. You could modify this code to extract and present certain claims (like roles) as headers.
 

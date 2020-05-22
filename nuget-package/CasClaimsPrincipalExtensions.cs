@@ -47,7 +47,7 @@ namespace CasAuth
         public static ClaimsPrincipal CreateClaimsPrincipalForService()
         {
             var claims = new List<Claim>() {
-                new Claim("http://schemas.microsoft.com/ws/2008/06/identity/claims/role", CasEnv.RoleForService)
+                new Claim("http://schemas.microsoft.com/ws/2008/06/identity/claims/role", CasConfig.RoleForService)
             };
             var identity = new ClaimsIdentity(claims);
             var principal = new ClaimsPrincipal(identity);

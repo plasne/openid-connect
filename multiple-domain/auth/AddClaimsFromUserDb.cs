@@ -5,6 +5,7 @@ using Microsoft.Data.SqlClient;
 using System.Data;
 using CasAuth;
 using System.Threading.Tasks;
+using NetBricks;
 
 namespace auth
 {
@@ -12,12 +13,12 @@ namespace auth
     public class AddClaimsFromUserDb : ICasClaimsBuilder
     {
 
-        public AddClaimsFromUserDb(ICasConfig config)
+        public AddClaimsFromUserDb(IConfig config)
         {
             this.Config = config;
         }
 
-        private ICasConfig Config { get; set; }
+        private IConfig Config { get; set; }
 
         public async Task AddClaimsAsync(IEnumerable<Claim> inClaims, List<Claim> outClaims)
         {
@@ -25,7 +26,7 @@ namespace auth
             if (email != null)
             {
                 // NOTE: Config.GetString() caches the response, so no worry about calling it many times
-                string connstring = await Config.GetString("USER_SQL_CONNSTRING");
+                string connstring = await Config.GetSecret<string>("USER_SQL_CONNSTRING");
                 using (var conn = new SqlConnection(connstring))
                 {
                     await conn.OpenAsync();

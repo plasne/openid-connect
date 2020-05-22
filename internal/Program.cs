@@ -1,23 +1,15 @@
-using System;
 using dotenv.net;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using CasAuth;
 using Microsoft.AspNetCore;
+using NetBricks;
 
 namespace internal_svc
 {
     public class Program
     {
-
-        private static string LogLevel
-        {
-            get
-            {
-                return System.Environment.GetEnvironmentVariable("LOG_LEVEL");
-            }
-        }
 
         private static string HostUrl
         {
@@ -25,6 +17,11 @@ namespace internal_svc
             {
                 return System.Environment.GetEnvironmentVariable("HOST_URL");
             }
+        }
+
+        private static int Port
+        {
+            get => CasConfig.GetOnce("PORT").AsInt(() => 5200);
         }
 
         public static void Main(string[] args)
@@ -38,18 +35,10 @@ namespace internal_svc
             var builder = WebHost.CreateDefaultBuilder(args)
                 .ConfigureLogging(logging =>
                 {
-                    logging.AddConsole();
-                    if (Enum.TryParse(LogLevel, true, out Microsoft.Extensions.Logging.LogLevel level))
-                    {
-                        logging.SetMinimumLevel(level);
-                    }
-                    else
-                    {
-                        logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Information);
-                    }
+                    logging.ClearProviders();
                 })
                 .UseStartup<Startup>();
-            if (!string.IsNullOrEmpty(HostUrl)) builder.UseUrls(HostUrl);
+            builder.UseUrls($"http://*:{Port}");
             return builder;
         }
 

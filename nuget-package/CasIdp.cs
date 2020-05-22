@@ -19,21 +19,18 @@ namespace CasAuth
 
         public CasIdp(
             ILogger logger,
-            ICasConfig config,
             CasTokenIssuer tokenIssuer,
             ICasClaimsBuilder claimsBuilder = null,
             ICasAuthCodeReceiver authCodeReceiver = null
         )
         {
             this.Logger = logger;
-            this.Config = config;
             this.TokenIssuer = tokenIssuer;
             this.ClaimsBuilder = claimsBuilder;
             this.AuthCodeReceiver = authCodeReceiver;
         }
 
         protected ILogger Logger { get; }
-        protected ICasConfig Config { get; }
         protected CasTokenIssuer TokenIssuer { get; }
         protected ICasClaimsBuilder ClaimsBuilder { get; }
         protected ICasAuthCodeReceiver AuthCodeReceiver { get; }
@@ -87,9 +84,9 @@ namespace CasAuth
             {
                 flow.redirecturi = redirect;
             }
-            else if (!string.IsNullOrEmpty(CasEnv.DefaultRedirectUrl))
+            else if (!string.IsNullOrEmpty(CasConfig.DefaultRedirectUrl))
             {
-                flow.redirecturi = CasEnv.DefaultRedirectUrl;
+                flow.redirecturi = CasConfig.DefaultRedirectUrl;
             }
 
             // store the authflow for validating state and nonce later
@@ -98,7 +95,7 @@ namespace CasAuth
             {
                 Expires = DateTimeOffset.Now.AddMinutes(10),
                 HttpOnly = true,
-                Secure = CasEnv.RequireSecureForCookies,
+                Secure = CasConfig.RequireSecureForCookies,
                 SameSite = SameSiteMode.None
             });
 
@@ -161,24 +158,24 @@ namespace CasAuth
 
         protected async Task WriteTokenCookies(HttpContext context, List<Claim> claims)
         {
-            var domain = CasEnv.BaseDomain(context.Request);
+            var domain = CasConfig.BaseDomain(context.Request);
 
             // write the XSRF-TOKEN cookie (if it will be verified)
-            if (CasEnv.VerifyXsrfInHeader || CasEnv.VerifyXsrfInCookie)
+            if (CasConfig.VerifyXsrfInHeader || CasConfig.VerifyXsrfInCookie)
             {
                 string xsrf = this.GenerateSafeRandomString(16);
                 string signed = xsrf;
-                if (!CasEnv.RequireHttpOnlyOnUserCookie)
+                if (!CasConfig.RequireHttpOnlyOnUserCookie)
                 {
                     // if the source claim is going to be in a cookie that is readable by JavaScript the XSRF must be signed
                     signed = await TokenIssuer.IssueXsrfToken(xsrf);
                 }
                 context.Response.Cookies.Append("XSRF-TOKEN", signed, new CookieOptions()
                 {
-                    HttpOnly = CasEnv.RequireHttpOnlyOnXsrfCookie,
-                    Secure = CasEnv.RequireSecureForCookies,
+                    HttpOnly = CasConfig.RequireHttpOnlyOnXsrfCookie,
+                    Secure = CasConfig.RequireSecureForCookies,
                     Domain = domain,
-                    SameSite = CasEnv.SameSite,
+                    SameSite = CasConfig.SameSite,
                     Path = "/"
                 });
                 Logger.LogInformation($"wrote XSRF-TOKEN cookie on domain \"{domain}\".");
@@ -187,13 +184,13 @@ namespace CasAuth
 
             // write the user cookie
             string jwt = await TokenIssuer.IssueToken(claims);
-            var userCookie = CasEnv.UserCookieName;
+            var userCookie = CasConfig.UserCookieName;
             context.Response.Cookies.Append(userCookie, jwt, new CookieOptions()
             {
-                HttpOnly = CasEnv.RequireHttpOnlyOnUserCookie,
-                Secure = CasEnv.RequireSecureForCookies,
+                HttpOnly = CasConfig.RequireHttpOnlyOnUserCookie,
+                Secure = CasConfig.RequireSecureForCookies,
                 Domain = domain,
-                SameSite = CasEnv.SameSite,
+                SameSite = CasConfig.SameSite,
                 Path = "/"
             });
             Logger.LogInformation($"wrote session cookie as \"{userCookie}\" on domain \"{domain}\".");

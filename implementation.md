@@ -48,13 +48,13 @@ rm -r Properties
     - Reply URL of "http://localhost:5100/cas/token".
     - Enable implicit grant for "ID tokens" only (not Access tokens).
 
-3. Create an .env file in the root of the auth folder with the following (use the TENANT_ID and CLIENT_ID from step 2)...
+3. Create an .env file in the root of the auth folder with the following (use the AZURE_TENANT_ID and AZURE_CLIENT_ID from step 2)...
 
 ```bash
 LOG_LEVEL=Debug
 USE_INSECURE_DEFAULTS=true
-TENANT_ID=00000000-0000-0000-0000-000000000000
-CLIENT_ID=00000000-0000-0000-0000-000000000000
+AZURE_TENANT_ID=00000000-0000-0000-0000-000000000000
+AZURE_CLIENT_ID=00000000-0000-0000-0000-000000000000
 ```
 
 4. Modify the Program.cs to resemble the following...
@@ -378,7 +378,7 @@ This solution supports a centralized authentication service that can be used acr
 
 5. If you have defined roles for your application and you are using AUTH_TYPE=app, you must give the application permission (not delegated permission) of Microsoft Graph Directory.Read.All on the "API permissions" tab. This access right requires administrative consent - the link is provided on the same page.
 
-6. Make note of the "Application (client) ID" on the "Overview" tab, you will need it later for the CLIENT_ID setting (and possibly the APPLICATION_ID setting).
+6. Make note of the "Application (client) ID" on the "Overview" tab, you will need it later for the AZURE_CLIENT_ID setting (and possibly the AZURE_APPLICATION_ID setting).
 
 ### Multiple Applications
 
@@ -386,7 +386,7 @@ This solution supports a centralized authentication service that can be used acr
 
 2. Follow steps 1 and 4 above for each application you will be providing authentication for.
 
-3. If you are defining roles for your applications, make note of each "Application (client) ID" on the "Overview" tab of each. You will need them later for the APPLICATION_ID setting.
+3. If you are defining roles for your applications, make note of each "Application (client) ID" on the "Overview" tab of each. You will need them later for the AZURE_APPLICATION_ID setting.
 
 ## Azure Key Vault
 
@@ -473,11 +473,11 @@ The settings below are commonly set as environment variables and their values de
 
 If you are going to use AUTH_TYPE=mi, the above settings are the only things you will commonly set. If you are going to use AUTH_TYPE=app, you must supply the following settings:
 
--   TENANT_ID - This is the tenant ID of the Azure AD directory that contains the CLIENT_ID.
+-   AZURE_TENANT_ID (also: TENANT_ID) - This is the tenant ID of the Azure AD directory that contains the CLIENT_ID.
 
--   CLIENT_ID - This is the Client ID of the application that will be used to authenticate the user (step 5 from the Azure AD Application section above).
+-   AZURE_CLIENT_ID (also: CLIENT_ID) - This is the Client ID of the application that will be used to authenticate the user (step 5 from the Azure AD Application section above).
 
--   CLIENT_SECRET - This is the client secret (step 3 from the Azure AD Application section above) for the CLIENT_ID.
+-   AZURE_CLIENT_SECRET (also: CLIENT_SECRET) - This is the client secret (step 3 from the Azure AD Application section above) for the AUZRE_CLIENT_ID.
 
 ### Recommended
 
@@ -489,9 +489,9 @@ Generally, you should supply these settings. These are shown in the format that 
 
 -   app:common:env:WEB_HOST_URL - This allows you to specify the fully qualified URL of the static web assets (ex. https://web.plasne.com). Using this setting in conjunction with SERVER_HOST_URL and CLIENT_HOST_URL will be able to set many of the default values. When unspecified and USE_INSECURE_DEFAULTS is true, this will default to http://localhost:5000.
 
--   app:auth:env:TENANT_ID - This is the tenant ID of the Azure AD directory that contains the CLIENT_ID. You must have a CLIENT_ID, but it could have already been set by using AUTH_TYPE=app, and if that is the case, it does not need to be in the App Configuration settings.
+-   app:auth:env:AZURE_TENANT_ID (also: TENANT_ID) - This is the tenant ID of the Azure AD directory that contains the AZURE_CLIENT_ID. You must have an AZURE_TENANT_ID, but it could have already been set by using AUTH_TYPE=app, and if that is the case, it does not need to be in the App Configuration settings.
 
--   app:auth:env:CLIENT_ID - This is the Client ID of the application that will be used to authenticate the user (step 5 from the Azure AD Application section above). You must have a CLIENT_ID, but it could have already been set by using AUTH_TYPE=app, and if that is the case, it does not need to be in the App Configuration settings.
+-   app:auth:env:AZURE_CLIENT_ID (also: CLIENT_ID) - This is the Client ID of the application that will be used to authenticate the user (step 5 from the Azure AD Application section above). You must have an AZURE_CLIENT_ID, but it could have already been set by using AUTH_TYPE=app, and if that is the case, it does not need to be in the App Configuration settings.
 
 ### Optional
 
@@ -505,13 +505,13 @@ Generally these settings do not need to be modified, but there are many configur
 
 -   app:common:env:BASE_DOMAIN (default: derived from SERVER_HOST_URL, CLIENT_HOST_URL, and WEB_HOST_URL) - This should be the common domain shared by the WFE, API, and auth services. It will used when the cookies are created to ensure they can be shared by all services. In my example, wfe.plasne.com, api.plasne.com, and auth.plasne.com share "plasne.com" as the BASE_DOMAIN. This can be automatically calculated when SERVER_HOST_URL, CLIENT_HOST_URL, and WEB_HOST_URL or DEFAULT_HOST_URL is supplied. If you are using multiple domains, you can use the variables $RequestDomain or $RequestSubdomain; for more details see the [multiple domain](./multiple-domain) docs.
 
--   app:auth:env:AUTHORITY (default: derived from TENANT_ID) - This is the Microsoft endpoint that will act as the authentication authority. It should be https://login.microsoftonline.com/your_tenant_id (no trailing slash). You can get them from "Endpoints" in the "Overview" tab of your Azure AD application.
+-   app:auth:env:AZURE_AUTHORITY (default: derived from AZURE_TENANT_ID, also: AUTHORITY) - This is the Microsoft endpoint that will act as the authentication authority. It should be https://login.microsoftonline.com/your_tenant_id (no trailing slash). You can get them from "Endpoints" in the "Overview" tab of your Azure AD application.
 
--   app:auth:env:REDIRECT_URI (default: derived from CLIENT_HOST_URL) - This is the URL that the Microsoft login process will deliver the id_token and code to. This must match the Redirect URI specified when creating the Azure AD application. If you are using multiple domains, you can use the variable $RequestDomain; for more details see the [multiple domain](./multiple-domain) docs.
+-   app:auth:env:REDIRECT_URI (default: derived from CLIENT_HOST_URL) - This is the URL that the Microsoft login process will deliver the id_token and code to. This must match the Redirect URI specified when creating the Azure AD application. If you are using multiple domains, you can use the variable \$RequestDomain; for more details see the [multiple domain](./multiple-domain) docs.
 
 -   app:common:env:ALLOWED_ORIGINS (default: WEB_HOST_URL) - This should be a comma-delimited list of URLs that are allowed by CORS policy to access the auth services.
 
--   app:auth:env:APPLICATION_ID - You can optionally include a comma-delimited list of application IDs. If you do, the session_token will contain the roles from those applications. Each will be projected as a claim named as the APPLICATION_ID-roles. For this to work, the application specified by CLIENT_ID must have Directory.Read.All as a Microsoft Graph Application Permission (not Delegated) - this right requires administrative consent.
+-   app:auth:env:AZURE_APPLICATION_ID (also: APPLICATION_ID) - You can optionally include a comma-delimited list of application IDs. If you do, the session_token will contain the roles from those applications. Each will be projected as a claim named as the AZURE_APPLICATION_ID-roles. For this to work, the application specified by AZURE_CLIENT_ID must have Directory.Read.All as a Microsoft Graph Application Permission (not Delegated) - this right requires administrative consent.
 
 -   app:auth:env:CLIENT_SECRET - This is the Client Secret of the application that will be used to authenticate the user (step 5 from the Azure AD Application section above). You only need this if using AuthCode. This could have already been set if using AUTH_TYPE=app. This commonly will be a URL to a secret in the Key Vault.
 
@@ -537,7 +537,7 @@ Generally these settings do not need to be modified, but there are many configur
 
 -   app:api:env:REISSUE_URL (default: derived from SERVER_HOST_URL) - This is the URL of the reissue endpoint. You could set this to "false" if you don't want tokens to be reissued.
 
--   app:auth:env:DOMAIN_HINT - If you want to provide a domain hint when authenticating, you can specify it.
+-   app:auth:env:AZURE_DOMAIN_HINT (also: DOMAIN_HINT) - If you want to provide a domain hint when authenticating, you can specify it.
 
 -   app:auth:env:REQUIRE_USER_ENABLED_ON_REISSUE (default: true) - Before a token is reissued, the "accountEnabled" status of the user is checked to ensure it is "true". However, if you set REQUIRE_USER_ENABLED_ON_REISSUE to "false", this check will be ignored. Querying the "accountEnabled" property of a user requires Directory.Read.All or User.Read.All.
 
@@ -551,9 +551,15 @@ Generally these settings do not need to be modified, but there are many configur
 
 -   app:auth:env:ROLE_FOR_SERVICE (default: service) - The name of the role that indicates this authentication is for a service (for instance, will accept an authentication bearer token).
 
-- app:common:env:IS_HTTPS (default: derived) - You can specifically set whether URLs that are generated by defaults in the configuration are HTTP or HTTPS using this flag. You should generally just let the application decide. If you want more details, look at the [version 3](./version3.md) docs for how this is implemented.
+-   app:common:env:IS_HTTPS (default: derived) - You can specifically set whether URLs that are generated by defaults in the configuration are HTTP or HTTPS using this flag. You should generally just let the application decide. If you want more details, look at the [version 3](./version3.md) docs for how this is implemented.
 
-- app:common:env:SAME_SITE (default: lax) - This determines the same-site field for all cookies. You can specifically set this value to "strict" or "none" (though many browsers will no longer respect "none"). Many browsers now require "lax" for Javascript to be able to read the XSRF-TOKEN cookie. Generally you should leave this on "lax", but if you used a single domain for API, auth, and WFE, you might set it to "strict".
+-   app:common:env:SAME_SITE (default: lax) - This determines the same-site field for all cookies. You can specifically set this value to "strict" or "none" (though many browsers will no longer respect "none"). Many browsers now require "lax" for Javascript to be able to read the XSRF-TOKEN cookie. Generally you should leave this on "lax", but if you used a single domain for API, auth, and WFE, you might set it to "strict".
+
+-   app:auth:env:GOOGLE_CLIENT_ID - This is the Client ID of the Google application that can be used to authenticate the user.
+
+-   app:auth:env:GOOGLE_EMAIL_MUST_BE_VERIFIED (default: true) - If "true", the "email_verified" claim must be "true" in the id_token received from Google.
+
+-   app:auth:env:GOOGLE_DOMAIN_HINT - If you want to provide a domain hint when authenticating, you can specify it.
 
 ### Alternate Service Authentication
 
@@ -565,23 +571,23 @@ In some rare cases, you might need separate methods of authetication to Azure se
 
 -   app:auth:env:AUTH_TYPE_GRAPH (default: AUTH_TYPE) - Generally, you just need to use AUTH_TYPE which applies to everything, but if you needed a different method for accessing the Microsoft Graph, you can specify it specifically.
 
--   app:common:env:TENANT_ID_CONFIG (default: TENANT_ID) - Generally, you just need to use TENANT_ID which specifies the tenant to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure App Configuration, you can specify it specifically.
+-   app:common:env:AZURE_TENANT_ID_CONFIG (default: AZURE_TENANT_ID) - Generally, you just need to use AZURE_TENANT_ID which specifies the tenant to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure App Configuration, you can specify it specifically.
 
--   app:common:env:CLIENT_ID_CONFIG (default: CLIENT_ID) - Generally, you just need to use CLIENT_ID which specifies the application ID to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure App Configuration, you can specify it specifically.
+-   app:common:env:AZURE_CLIENT_ID_CONFIG (default: AZURE_CLIENT_ID) - Generally, you just need to use AZURE_CLIENT_ID which specifies the application ID to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure App Configuration, you can specify it specifically.
 
--   app:common:env:CLIENT_SECRET_CONFIG (default: CLIENT_SECRET) - Generally, you just need to use CLIENT_SECRET which specifies the secret to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure App Configuration, you can specify it specifically.
+-   app:common:env:AZURE_CLIENT_SECRET_CONFIG (default: AZURE_CLIENT_SECRET) - Generally, you just need to use AZURE_CLIENT_SECRET which specifies the secret to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure App Configuration, you can specify it specifically.
 
--   app:auth:env:TENANT_ID_VAULT (default: TENANT_ID) - Generally, you just need to use TENANT_ID which specifies the tenant to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Azure Key Vault, you can specify it specifically.
+-   app:auth:env:AZURE_TENANT_ID_VAULT (default: AZURE_TENANT_ID) - Generally, you just need to use AZURE_TENANT_ID which specifies the tenant to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Azure Key Vault, you can specify it specifically.
 
--   app:auth:env:CLIENT_ID_VAULT (default: CLIENT_ID) - Generally, you just need to use CLIENT_ID which specifies the application ID to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure Key Vault, you can specify it specifically.
+-   app:auth:env:AZURE_CLIENT_ID_VAULT (default: AZURE_CLIENT_ID) - Generally, you just need to use AZURE_CLIENT_ID which specifies the application ID to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure Key Vault, you can specify it specifically.
 
--   app:auth:env:CLIENT_SECRET_VAULT (default: CLIENT_SECRET) - Generally, you just need to use CLIENT_SECRET which specifies the secret to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure Key Vault, you can specify it specifically.
+-   app:auth:env:AZURE_CLIENT_SECRET_VAULT (default: AZURE_CLIENT_SECRET) - Generally, you just need to use AZURE_CLIENT_SECRET which specifies the secret to use for all AUTH_TYPE=app calls, but if you need something different for accessing Azure Key Vault, you can specify it specifically.
 
--   app:auth:env:TENANT_ID_GRAPH (default: TENANT_ID) - Generally, you just need to use TENANT_ID which specifies the tenant to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Microsoft Graph, you can specify it specifically.
+-   app:auth:env:AZURE_TENANT_ID_GRAPH (default: AZURE_TENANT_ID) - Generally, you just need to use AZURE_TENANT_ID which specifies the tenant to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Microsoft Graph, you can specify it specifically.
 
--   app:auth:env:CLIENT_ID_GRAPH (default: CLIENT_ID) - Generally, you just need to use CLIENT_ID which specifies the application ID to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Microsoft Graph, you can specify it specifically.
+-   app:auth:env:AZURE_CLIENT_ID_GRAPH (default: AZURE_CLIENT_ID) - Generally, you just need to use AZURE_CLIENT_ID which specifies the application ID to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Microsoft Graph, you can specify it specifically.
 
--   app:auth:env:CLIENT_SECRET_GRAPH (default: CLIENT_SECRET) - Generally, you just need to use CLIENT_SECRET which specifies the secret to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Microsoft Graph, you can specify it specifically. If specified, this commonly will be a URL to a secret in the Key Vault.
+-   app:auth:env:AZURE_CLIENT_SECRET_GRAPH (default: AZURE_CLIENT_SECRET) - Generally, you just need to use AZURE_CLIENT_SECRET which specifies the secret to use for all AUTH_TYPE=app calls, but if you need something different for accessing the Microsoft Graph, you can specify it specifically. If specified, this commonly will be a URL to a secret in the Key Vault.
 
 ### Use Authorization Bearer Mode
 
@@ -647,7 +653,7 @@ Follow these steps to configure the Auth service...
 
 3. Add an Access Control Role Assignment (IAM) in the Azure portal on the App Configuration resource for the Managed Identity or Application Service Principal. It must have the "App Configuration Data Reader" role.
 
-4. If using APPLICATION_ID or REQUIRE_USER_ENABLED_ON_REISSUE (which is a default), then the Managed Identity or Application Service Principal must be given rights to query all objects in the Microsoft Graph:
+4. If using AZURE_APPLICATION_ID or REQUIRE_USER_ENABLED_ON_REISSUE (which is a default), then the Managed Identity or Application Service Principal must be given rights to query all objects in the Microsoft Graph:
 
     - Managed Identity - Follow these steps to assign grant access:
 
@@ -716,7 +722,7 @@ Generally you need to set the .env file for tools the same as your server config
 
 It is possible to configure this application to work for multi-tenant. You need to make the following changes:
 
--   You need to specify an AUTHORITY of "https://login.microsoftonline.com/common".
+-   You need to specify an AZURE_AUTHORITY of "https://login.microsoftonline.com/common".
 
 -   You need to change the main application registration to "multi-tenant". You can find that under "Auth" and then "Supported account types".
 
@@ -728,7 +734,7 @@ When configured for multi-tenant the following changes can be observed:
 
 -   The oid that comes in the id_token is the id in the user's home directory, not their B2B id in your application's directory. Since, that is not useful, the claim written to the session_token is fixed so it is the oid in the application's directory.
 
--   If there would be a "roles" claim for the primary application, it will not be included. This is an unfortunate side effect of the oid claim asserted in the id_token not being the id for the user in the application's directory. However, you can still include that application in the APPLICATION_ID list and it will be included as a separate claim.
+-   If there would be a "roles" claim for the primary application, it will not be included. This is an unfortunate side effect of the oid claim asserted in the id_token not being the id for the user in the application's directory. However, you can still include that application in the AZURE_APPLICATION_ID list and it will be included as a separate claim.
 
 ## Steps to implement using Visual Studio Online (Linux)
 

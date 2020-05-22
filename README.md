@@ -1,5 +1,7 @@
 # OpenID Connect Authentication Sample
 
+THERE IS ONE BREAKING CHANGE FOR VERSION 4. Please see this [guide](./version-4.md) for information on changes in version 4.
+
 THERE IS ONE BREAKING CHANGE FOR VERSION 3. Please see this [guide](./version-3.md) for information on changes in version 3.
 
 While this repository is named "openid-connect", this sample will actually encompass OpenID Connect (OIDC), AuthCode, and Service-to-Service (S2S) authentication and authorization techniques.
@@ -10,7 +12,7 @@ There are many ways to authenticate users. Some of the advantages of this approa
 
 -   It does not require any session state
 
-- It allows for single-page applications to authenticate and renew safely (ie. without implicit grant)
+-   It allows for single-page applications to authenticate and renew safely (ie. without implicit grant)
 
 -   It allows for claims to be asserted from multiple sources (id_token, Microsoft Graph, databases, etc.)
 
@@ -202,9 +204,9 @@ $.ajax({
     method: 'GET',
     url: config.ME_URL,
     headers: {
-        'X-XSRF-TOKEN': xsrf
+        'X-XSRF-TOKEN': xsrf,
     },
-    xhrFields: { withCredentials: true }
+    xhrFields: { withCredentials: true },
 });
 ```
 
@@ -233,7 +235,7 @@ import {
     HttpHandler,
     HttpRequest,
     HttpXsrfTokenExtractor,
-    HttpEvent
+    HttpEvent,
 } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
@@ -433,23 +435,23 @@ These are the current lifetimes for tokens, but of course that could change.
 
 ### What are the considerations for keeping this method secure?
 
-- An Azure AD application registration for a Web App ensures the redirect URLs to be HTTPS. Since the redirection returns an auth-code in the response, it is important that this be encrypted.
+-   An Azure AD application registration for a Web App ensures the redirect URLs to be HTTPS. Since the redirection returns an auth-code in the response, it is important that this be encrypted.
 
-- An Azure AD application registration for a Web App ensures that an access-code cannot be generated without a client secret. Even though the public client will see an auth-code, it will never be given the client secret (it is kept by the auth service).
+-   An Azure AD application registration for a Web App ensures that an access-code cannot be generated without a client secret. Even though the public client will see an auth-code, it will never be given the client secret (it is kept by the auth service).
 
-- It is important when an Azure AD application registration is created to turn off (unflag) the implicit grant flow for access-codes - this is not a secure workflow.
+-   It is important when an Azure AD application registration is created to turn off (unflag) the implicit grant flow for access-codes - this is not a secure workflow.
 
-- Azure AD returns an auth-code to the REDIRECT_URI which is a setting for the auth service only and is immutable while the service is running. Having this as a configuration option that cannot be changed at runtime helps ensure that the auth-code could not be sent to a bad actor.
+-   Azure AD returns an auth-code to the REDIRECT_URI which is a setting for the auth service only and is immutable while the service is running. Having this as a configuration option that cannot be changed at runtime helps ensure that the auth-code could not be sent to a bad actor.
 
-- The user cookie is written with a domain. Even if someone supplied an invalid redirecturi to /authorize endpoint, the cookie is only available on the same base domain as the authentication service.
+-   The user cookie is written with a domain. Even if someone supplied an invalid redirecturi to /authorize endpoint, the cookie is only available on the same base domain as the authentication service.
 
-- The authflow cookie is marked HTTPONLY to ensure a compromised client cannot tamper with the flow.
+-   The authflow cookie is marked HTTPONLY to ensure a compromised client cannot tamper with the flow.
 
-- The default configuration includes a user cookie marked HTTPONLY and a xsrf cookie that is available via Javascript. This combination protects you from both XSRF and XSS.
+-   The default configuration includes a user cookie marked HTTPONLY and a xsrf cookie that is available via Javascript. This combination protects you from both XSRF and XSS.
 
-- You should always host your services via HTTPS so that the cookie contents cannot be stolen or compromised.
+-   You should always host your services via HTTPS so that the cookie contents cannot be stolen or compromised.
 
-- You should always run with REQUIRE_SECURE_FOR_COOKIES=true so that cookies are only sent to secure endpoints.
+-   You should always run with REQUIRE_SECURE_FOR_COOKIES=true so that cookies are only sent to secure endpoints.
 
 ## Limitations
 

@@ -34,7 +34,7 @@ namespace CasAuth
                 Logger.LogDebug("CasXsrfHandler: start authorization check for XSRF...");
 
                 // if there is no requirement for XSRF, then don't check for it
-                if (!CasEnv.VerifyXsrfInHeader && !CasEnv.VerifyXsrfInCookie)
+                if (!CasConfig.VerifyXsrfInHeader && !CasConfig.VerifyXsrfInCookie)
                 {
                     Logger.LogDebug("CasXsrfHandler: neither VERIFY_XSRF_IN_HEADER or VERIFY_XSRF_IN_COOKIE are \"true\" so the authorization check is a success.");
                     return true;
@@ -57,12 +57,12 @@ namespace CasAuth
 
                 // get the XSRF-TOKEN (header, cookie)
                 string code = null;
-                if (CasEnv.VerifyXsrfInHeader)
+                if (CasConfig.VerifyXsrfInHeader)
                 {
                     code = ContextAccessor.HttpContext.Request.Headers["X-XSRF-TOKEN"];
                     Logger.LogDebug($"CasXsrfHandler: the XSRF token was obtained from a header as \"{code}\"...");
                 }
-                if (CasEnv.VerifyXsrfInCookie && string.IsNullOrEmpty(code))
+                if (CasConfig.VerifyXsrfInCookie && string.IsNullOrEmpty(code))
                 {
                     code = ContextAccessor.HttpContext.Request.Cookies["XSRF-TOKEN"];
                     Logger.LogDebug($"CasXsrfHandler: the XSRF token was obtained from a cookie as \"{code}\"...");
@@ -75,7 +75,7 @@ namespace CasAuth
 
                 // validate the signature if signed
                 //  NOTE: it will be signed if the source claim was accessible via JavaScript
-                if (!CasEnv.RequireHttpOnlyOnUserCookie)
+                if (!CasConfig.RequireHttpOnlyOnUserCookie)
                 {
                     Logger.LogDebug($"CasXsrfHandler: the XSRF token is signed, it will be verified...");
                     var validated = await this.Validator.ValidateToken(code);

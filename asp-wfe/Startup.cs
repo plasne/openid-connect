@@ -4,7 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using CasAuth;
-using asp_wfe.Controllers;
+using NetBricks;
 
 namespace asp_wfe
 {
@@ -31,7 +31,7 @@ namespace asp_wfe
         {
 
             // log settings
-            var config = app.ApplicationServices.GetService<ICasConfig>();
+            var config = app.ApplicationServices.GetService<IConfig>();
             config.Optional("LOGIN_URL");
             config.Optional("REDIRECT_URL");
             config.Optional("ME_URL");

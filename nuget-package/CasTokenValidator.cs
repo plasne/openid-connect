@@ -1,10 +1,6 @@
 using System;
-using System.Linq;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
-using System.Net;
-using System.Collections.Specialized;
-using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
@@ -21,7 +17,7 @@ namespace CasAuth
         public CasTokenValidator(ILogger<CasTokenValidator> logger)
         {
             this.Logger = logger;
-            this.ConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>(CasEnv.WellKnownConfigUrl,
+            this.ConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>(CasConfig.WellKnownConfigUrl,
                 new OpenIdConnectConfigurationRetriever(),
                 new HttpDocumentRetriever() { RequireHttps = false });
         }
@@ -48,9 +44,9 @@ namespace CasAuth
             {
                 RequireSignedTokens = true,
                 ValidateIssuer = true,
-                ValidIssuer = CasEnv.Issuer,
+                ValidIssuer = CasConfig.Issuer,
                 ValidateAudience = true,
-                ValidAudience = CasEnv.Audience,
+                ValidAudience = CasConfig.Audience,
                 ValidateLifetime = true,
                 IssuerSigningKeys = config.SigningKeys
             };
@@ -67,7 +63,7 @@ namespace CasAuth
         {
             using (var request = new HttpRequestMessage()
             {
-                RequestUri = new Uri(CasEnv.ReissueUrl),
+                RequestUri = new Uri(CasConfig.ReissueUrl),
                 Method = HttpMethod.Post
             })
             {

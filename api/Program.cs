@@ -1,37 +1,18 @@
-﻿using System;
-using dotenv.net;
+﻿using dotenv.net;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using CasAuth;
+using NetBricks;
 
 namespace dotnetauth
 {
     public class Program
     {
 
-        private static string LogLevel
-        {
-            get
-            {
-                return System.Environment.GetEnvironmentVariable("LOG_LEVEL");
-            }
-        }
-
         private static int Port
         {
-            get
-            {
-                string sport = System.Environment.GetEnvironmentVariable("PORT");
-                if (int.TryParse(sport, out int port))
-                {
-                    return port;
-                }
-                else
-                {
-                    return 5200;
-                }
-            }
+            get => CasConfig.GetOnce("PORT").AsInt(() => 5200);
         }
 
         public static void Main(string[] args)
@@ -45,15 +26,7 @@ namespace dotnetauth
             var builder = WebHost.CreateDefaultBuilder(args)
                 .ConfigureLogging(logging =>
                 {
-                    logging.AddConsole();
-                    if (Enum.TryParse(LogLevel, true, out Microsoft.Extensions.Logging.LogLevel level))
-                    {
-                        logging.SetMinimumLevel(level);
-                    }
-                    else
-                    {
-                        logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Information);
-                    }
+                    logging.ClearProviders();
                 })
                 .UseStartup<Startup>();
             builder.UseUrls($"http://*:{Port}");

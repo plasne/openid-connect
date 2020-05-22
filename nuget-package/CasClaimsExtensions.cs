@@ -36,12 +36,12 @@ namespace CasAuth
 
         public static bool IsAdmin(this IEnumerable<Claim> claims)
         {
-            return claims.HasRole(CasEnv.RoleForAdmin);
+            return claims.HasRole(CasConfig.RoleForAdmin);
         }
 
         public static bool IsService(this IEnumerable<Claim> claims)
         {
-            return claims.HasRole(CasEnv.RoleForService);
+            return claims.HasRole(CasConfig.RoleForService);
         }
 
         public static List<Claim> FilterToSignificant(this IEnumerable<Claim> claims)

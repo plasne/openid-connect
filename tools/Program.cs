@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.Extensions.Logging;
+using NetBricks;
 
 namespace tools
 {
@@ -73,21 +74,13 @@ namespace tools
 
             // support dependency injection
             var services = new ServiceCollection();
-            services
-                .AddLogging(configure => configure.AddConsole())
-                .Configure<LoggerFilterOptions>(options =>
-                {
-                    if (Enum.TryParse(LogLevel, out Microsoft.Extensions.Logging.LogLevel level))
-                    {
-                        options.MinLevel = level;
-                    }
-                    else
-                    {
-                        options.MinLevel = Microsoft.Extensions.Logging.LogLevel.Information;
-                    }
-                });
+            services.AddLogging(configure => configure.ClearProviders());
+            services.AddSingleLineConsoleLogger();
             services.AddHttpClient("cas").ConfigurePrimaryHttpMessageHandler(() => new CasProxyHandler());
+            services.AddSingleton<IAccessTokenFetcher, AccessTokenFetcher>();
             services.AddSingleton<CasTokenIssuer>();
+            services.AddSingleton<IConfig, CasConfig>();
+            services.AddSingleton<ICasIdp, CasAzureAd>();
             using (var provider = services.BuildServiceProvider())
             {
                 using (var scope = provider.CreateScope())
@@ -95,61 +88,61 @@ namespace tools
 
                     // get the configuration
                     DotEnv.Config(throwOnError: false);
-                    Action applyConfig = () =>
+                    Action applyConfig = async () =>
                     {
                         var logger = scope.ServiceProvider.GetService<ILogger<Program>>();
-                        var config = provider.GetService<ICasConfig>();
+                        var config = provider.GetService<IConfig>() as CasConfig;
                         config.Apply().Wait();
-                        config.Optional("PROXY", CasEnv.Proxy);
-                        config.Optional("USE_INSECURE_DEFAULTS", CasEnv.UseInsecureDefaults, hideValue: false);
-                        config.Optional("DEFAULT_HOST_URL", CasEnv.DefaultHostUrl);
-                        config.Optional("SERVER_HOST_URL", CasEnv.ServerHostUrl);
-                        config.Optional("CLIENT_HOST_URL", CasEnv.ClientHostUrl);
-                        config.Optional("WEB_HOST_URL", CasEnv.WebHostUrl);
-                        config.Optional("BASE_DOMAIN", CasEnv.BaseDomain());
-                        config.Optional("ISSUER", CasEnv.Issuer);
-                        config.Optional("AUDIENCE", CasEnv.Audience);
-                        config.Optional("WELL_KNOWN_CONFIG_URL", CasEnv.WellKnownConfigUrl);
-                        config.Optional("REISSUE_URL", CasEnv.ReissueUrl);
-                        config.Optional("ALLOWED_ORIGINS", CasEnv.AllowedOrigins);
-                        config.Optional("REQUIRE_SECURE_FOR_COOKIES", CasEnv.RequireSecureForCookies, hideValue: false);
-                        config.Optional("REQUIRE_HTTPONLY_ON_USER_COOKIE", CasEnv.RequireHttpOnlyOnUserCookie, hideValue: false);
-                        config.Optional("REQUIRE_HTTPONLY_ON_XSRF_COOKIE", CasEnv.RequireHttpOnlyOnXsrfCookie, hideValue: false);
-                        config.Optional("VERIFY_TOKEN_IN_HEADER", CasEnv.VerifyTokenInHeader, hideValue: false);
-                        config.Optional("VERIFY_TOKEN_IN_COOKIE", CasEnv.VerifyTokenInCookie, hideValue: false);
-                        config.Optional("VERIFY_XSRF_IN_HEADER", CasEnv.VerifyXsrfInHeader, hideValue: false);
-                        config.Optional("VERIFY_XSRF_IN_COOKIE", CasEnv.VerifyXsrfInCookie, hideValue: false);
-                        config.Optional("USER_COOKIE_NAME", CasEnv.UserCookieName);
-                        config.Optional("ROLE_FOR_ADMIN", CasEnv.RoleForAdmin);
-                        config.Optional("ROLE_FOR_SERVICE", CasEnv.RoleForService);
-                        config.Optional("TENANT_ID", CasEnv.TenantId);
-                        config.Optional("CLIENT_ID", CasEnv.ClientId);
-                        config.Optional("CLIENT_SECRET", CasEnv.ClientSecret);
-                        config.Optional("TENANT_ID_CONFIG", CasEnv.TenantIdConfig);
-                        config.Optional("CLIENT_ID_CONFIG", CasEnv.ClientIdConfig);
-                        config.Optional("CLIENT_SECRET_CONFIG", CasEnv.ClientSecretConfig);
-                        config.Optional("TENANT_ID_GRAPH", CasEnv.TenantIdGraph);
-                        config.Optional("CLIENT_ID_GRAPH", CasEnv.ClientIdGraph);
-                        config.Optional("CLIENT_SECRET_GRAPH", CasEnv.ClientSecretGraph);
-                        config.Optional("TENANT_ID_VAULT", CasEnv.TenantIdVault);
-                        config.Optional("CLIENT_ID_VAULT", CasEnv.ClientIdVault);
-                        config.Optional("CLIENT_SECRET_VAULT", CasEnv.ClientSecretVault);
-                        config.Optional("AUTHORITY", CasEnv.Authority);
-                        config.Optional("REDIRECT_URI", CasEnv.RedirectUri());
-                        config.Optional("DEFAULT_REDIRECT_URL", CasEnv.DefaultRedirectUrl);
-                        config.Optional("APPLICATION_ID", CasEnv.ApplicationIds);
-                        config.Optional("DOMAIN_HINT", CasEnv.DomainHint);
-                        config.Optional("JWT_DURATION", CasEnv.JwtDuration.ToString());
-                        config.Optional("JWT_SERVICE_DURATION", CasEnv.JwtServiceDuration.ToString());
-                        config.Optional("JWT_MAX_DURATION", CasEnv.JwtMaxDuration.ToString());
-                        config.Optional("REQUIRE_USER_ENABLED_ON_REISSUE", CasEnv.RequireUserEnabledOnReissue, hideValue: false);
-                        config.Optional("COMMAND_PASSWORD", CasEnv.CommandPassword);
-                        config.Optional("PRIVATE_KEY", CasEnv.PrivateKey);
-                        config.Optional("PRIVATE_KEY_PASSWORD", CasEnv.PrivateKeyPassword);
-                        config.Optional("PUBLIC_CERT_0", CasEnv.PublicCert0);
-                        config.Optional("PUBLIC_CERT_1", CasEnv.PublicCert1);
-                        config.Optional("PUBLIC_CERT_2", CasEnv.PublicCert2);
-                        config.Optional("PUBLIC_CERT_3", CasEnv.PublicCert3);
+                        config.Optional("PROXY", CasConfig.Proxy);
+                        config.Optional("USE_INSECURE_DEFAULTS", CasConfig.UseInsecureDefaults, hideValue: false);
+                        config.Optional("DEFAULT_HOST_URL", CasConfig.DefaultHostUrl);
+                        config.Optional("SERVER_HOST_URL", CasConfig.ServerHostUrl);
+                        config.Optional("CLIENT_HOST_URL", CasConfig.ClientHostUrl);
+                        config.Optional("WEB_HOST_URL", CasConfig.WebHostUrl);
+                        config.Optional("BASE_DOMAIN", CasConfig.BaseDomain());
+                        config.Optional("ISSUER", CasConfig.Issuer);
+                        config.Optional("AUDIENCE", CasConfig.Audience);
+                        config.Optional("WELL_KNOWN_CONFIG_URL", CasConfig.WellKnownConfigUrl);
+                        config.Optional("REISSUE_URL", CasConfig.ReissueUrl);
+                        config.Optional("ALLOWED_ORIGINS", CasConfig.AllowedOrigins);
+                        config.Optional("REQUIRE_SECURE_FOR_COOKIES", CasConfig.RequireSecureForCookies, hideValue: false);
+                        config.Optional("REQUIRE_HTTPONLY_ON_USER_COOKIE", CasConfig.RequireHttpOnlyOnUserCookie, hideValue: false);
+                        config.Optional("REQUIRE_HTTPONLY_ON_XSRF_COOKIE", CasConfig.RequireHttpOnlyOnXsrfCookie, hideValue: false);
+                        config.Optional("VERIFY_TOKEN_IN_HEADER", CasConfig.VerifyTokenInHeader, hideValue: false);
+                        config.Optional("VERIFY_TOKEN_IN_COOKIE", CasConfig.VerifyTokenInCookie, hideValue: false);
+                        config.Optional("VERIFY_XSRF_IN_HEADER", CasConfig.VerifyXsrfInHeader, hideValue: false);
+                        config.Optional("VERIFY_XSRF_IN_COOKIE", CasConfig.VerifyXsrfInCookie, hideValue: false);
+                        config.Optional("USER_COOKIE_NAME", CasConfig.UserCookieName);
+                        config.Optional("ROLE_FOR_ADMIN", CasConfig.RoleForAdmin);
+                        config.Optional("ROLE_FOR_SERVICE", CasConfig.RoleForService);
+                        config.Optional("TENANT_ID", config.TenantId());
+                        config.Optional("CLIENT_ID", config.ClientId());
+                        config.Optional("CLIENT_SECRET", await config.ClientSecret());
+                        config.Optional("TENANT_ID_CONFIG", config.TenantId("CONFIG"));
+                        config.Optional("CLIENT_ID_CONFIG", config.ClientId("CONFIG"));
+                        config.Optional("CLIENT_SECRET_CONFIG", await config.ClientSecret("CONFIG"));
+                        config.Optional("TENANT_ID_GRAPH", config.TenantId("GRAPH"));
+                        config.Optional("CLIENT_ID_GRAPH", config.ClientId("GRAPH"));
+                        config.Optional("CLIENT_SECRET_GRAPH", await config.ClientSecret("GRAPH"));
+                        config.Optional("TENANT_ID_VAULT", config.TenantId("VAULT"));
+                        config.Optional("CLIENT_ID_VAULT", config.ClientId("VAULT"));
+                        config.Optional("CLIENT_SECRET_VAULT", await config.ClientSecret("VAULT"));
+                        config.Optional("AUTHORITY", CasConfig.AzureAuthority);
+                        config.Optional("REDIRECT_URI", CasConfig.RedirectUri());
+                        config.Optional("DEFAULT_REDIRECT_URL", CasConfig.DefaultRedirectUrl);
+                        config.Optional("APPLICATION_ID", CasConfig.AzureApplicationIds);
+                        config.Optional("DOMAIN_HINT", CasConfig.AzureDomainHint);
+                        config.Optional("JWT_DURATION", CasConfig.JwtDuration.ToString());
+                        config.Optional("JWT_SERVICE_DURATION", CasConfig.JwtServiceDuration.ToString());
+                        config.Optional("JWT_MAX_DURATION", CasConfig.JwtMaxDuration.ToString());
+                        config.Optional("REQUIRE_USER_ENABLED_ON_REISSUE", CasConfig.RequireUserEnabledOnReissue, hideValue: false);
+                        config.Optional("COMMAND_PASSWORD", await config.CommandPassword());
+                        config.Optional("PRIVATE_KEY", await config.PrivateKey());
+                        config.Optional("PRIVATE_KEY_PASSWORD", await config.PrivateKeyPassword());
+                        config.Optional("PUBLIC_CERT_0", await config.PublicCert(0));
+                        config.Optional("PUBLIC_CERT_1", await config.PublicCert(1));
+                        config.Optional("PUBLIC_CERT_2", await config.PublicCert(2));
+                        config.Optional("PUBLIC_CERT_3", await config.PublicCert(3));
                     };
 
                     // execute the proper command
@@ -263,10 +256,10 @@ namespace tools
                                 applyConfig();
                                 Parser.Default.ParseArguments<UserOptions>(args).WithParsed<UserOptions>(o =>
                                 {
-                                    var tokenIssuer = scope.ServiceProvider.GetService<CasTokenIssuer>();
+                                    var provider = scope.ServiceProvider.GetService<ICasIdp>() as CasAzureAd;
                                     if (!string.IsNullOrEmpty(o.Oid))
                                     {
-                                        var task = tokenIssuer.GetUserFromGraph(o.Oid);
+                                        var task = provider.GetUserFromGraph(o.Oid);
                                         task.Wait();
                                         Console.WriteLine("");
                                         Console.WriteLine(task.Result);
@@ -274,7 +267,7 @@ namespace tools
                                     }
                                     else if (!string.IsNullOrEmpty(o.Email))
                                     {
-                                        var task = tokenIssuer.GetUserFromGraph("?$filter=mail eq '{email}'");
+                                        var task = provider.GetUserFromGraph($"?$filter=mail eq '{o.Email}'");
                                         task.Wait();
                                         Console.WriteLine("");
                                         Console.WriteLine(task.Result);

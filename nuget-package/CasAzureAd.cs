@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using NetBricks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -21,19 +22,25 @@ namespace CasAuth
 
         public CasAzureAd(
             ILogger<CasAzureAd> logger,
-            ICasConfig config,
+            IConfig config,
             CasTokenIssuer tokenIssuer,
             IHttpClientFactory httpClientFactory,
+            IAccessTokenFetcher accessTokenFetcher,
             ICasClaimsBuilder claimsBuilder = null,
             ICasAuthCodeReceiver authCodeReceiver = null
-        ) : base(logger, config, tokenIssuer, claimsBuilder, authCodeReceiver)
+        ) : base(logger, tokenIssuer, claimsBuilder, authCodeReceiver)
         {
-            this.ConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>($"{CasEnv.AzureAuthority}/.well-known/openid-configuration", new OpenIdConnectConfigurationRetriever());
+            this.ConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>($"{CasConfig.AzureAuthority}/.well-known/openid-configuration", new OpenIdConnectConfigurationRetriever());
             this.HttpClient = httpClientFactory.CreateClient("cas");
+            this.AccessTokenFetcher = accessTokenFetcher;
+            this.Config = config as CasConfig;
+            if (this.Config == null) throw new Exception("CasAzureAd: CasConfig was not found in the IServiceCollection.");
         }
 
         private ConfigurationManager<OpenIdConnectConfiguration> ConfigManager { get; }
         private HttpClient HttpClient { get; }
+        private IAccessTokenFetcher AccessTokenFetcher { get; }
+        private CasConfig Config { get; }
 
         public override string Id { get => "Azure"; }
 
@@ -41,10 +48,10 @@ namespace CasAuth
         {
 
             // get the necessary variables
-            string authority = CasEnv.AzureAuthority;
-            string clientId = WebUtility.UrlEncode(CasEnv.AzureClientId);
-            string redirect = WebUtility.UrlEncode(CasEnv.RedirectUri(context.Request));
-            string domainHint = WebUtility.UrlEncode(CasEnv.AzureDomainHint);
+            string authority = CasConfig.AzureAuthority;
+            string clientId = WebUtility.UrlEncode(CasConfig.AzureClientId);
+            string redirect = WebUtility.UrlEncode(CasConfig.RedirectUri(context.Request));
+            string domainHint = WebUtility.UrlEncode(CasConfig.AzureDomainHint);
 
             // get the scope
             var basicScope = "openid profile email";
@@ -82,7 +89,7 @@ namespace CasAuth
 
             // determine the possible appropriate issuers
             var issuers = new List<string>();
-            string tenant = CasEnv.AzureAuthority.Split("/").LastOrDefault();
+            string tenant = CasConfig.AzureAuthority.Split("/").LastOrDefault();
             if (tenant == "common")
             {
                 // multi-tenant; the issuer will be the directory containing the user
@@ -108,21 +115,21 @@ namespace CasAuth
         {
 
             // get the client secret
-            var secret = await Config.GetString("CLIENT_SECRET", CasEnv.AzureClientSecret);
+            var secret = await Config.AzureClientSecret();
 
             // get the response
             using (var request = new HttpRequestMessage()
             {
-                RequestUri = new Uri($"{CasEnv.AzureAuthority}/oauth2/v2.0/token"),
+                RequestUri = new Uri($"{CasConfig.AzureAuthority}/oauth2/v2.0/token"),
                 Method = HttpMethod.Post
             })
             {
                 using (request.Content = new FormUrlEncodedContent(new[] {
-                    new KeyValuePair<string, string>("client_id", CasEnv.AzureClientId),
+                    new KeyValuePair<string, string>("client_id", CasConfig.AzureClientId),
                     new KeyValuePair<string, string>("client_secret", secret),
                     new KeyValuePair<string, string>("scope", scope),
                     new KeyValuePair<string, string>("code", code),
-                    new KeyValuePair<string, string>("redirect_uri", CasEnv.RedirectUri(context.Request)),
+                    new KeyValuePair<string, string>("redirect_uri", CasConfig.RedirectUri(context.Request)),
                     new KeyValuePair<string, string>("grant_type", "authorization_code")
                 }))
                 {
@@ -145,17 +152,17 @@ namespace CasAuth
         {
 
             // get the client secret
-            var secret = await Config.GetString("CLIENT_SECRET", CasEnv.AzureClientSecret);
+            var secret = await Config.AzureClientSecret();
 
             // get the response
             using (var request = new HttpRequestMessage()
             {
-                RequestUri = new Uri($"{CasEnv.AzureAuthority}/oauth2/v2.0/token"),
+                RequestUri = new Uri($"{CasConfig.AzureAuthority}/oauth2/v2.0/token"),
                 Method = HttpMethod.Post
             })
             {
                 using (request.Content = new FormUrlEncodedContent(new[] {
-                    new KeyValuePair<string, string>("client_id", CasEnv.AzureClientId),
+                    new KeyValuePair<string, string>("client_id", CasConfig.AzureClientId),
                     new KeyValuePair<string, string>("client_secret", secret),
                     new KeyValuePair<string, string>("scope", scope),
                     new KeyValuePair<string, string>("refresh_token", refreshToken),
@@ -183,7 +190,7 @@ namespace CasAuth
             // get the response
             using (var request = new HttpRequestMessage()
             {
-                RequestUri = new Uri($"{CasEnv.AzureAuthority}/oauth2/v2.0/token"),
+                RequestUri = new Uri($"{CasConfig.AzureAuthority}/oauth2/v2.0/token"),
                 Method = HttpMethod.Post
             })
             {
@@ -215,7 +222,7 @@ namespace CasAuth
             // get the response
             using (var request = new HttpRequestMessage()
             {
-                RequestUri = new Uri($"{CasEnv.AzureAuthority}/oauth2/v2.0/token"),
+                RequestUri = new Uri($"{CasConfig.AzureAuthority}/oauth2/v2.0/token"),
                 Method = HttpMethod.Post
             })
             {
@@ -246,7 +253,7 @@ namespace CasAuth
         {
 
             // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this.Config);
+            var accessToken = await AccessTokenFetcher.GetAccessToken("https://graph.microsoft.com", "GRAPH");
 
             // check for enabled
             using (var request = new HttpRequestMessage()
@@ -274,11 +281,11 @@ namespace CasAuth
 
         }
 
-        private async Task<dynamic> GetUserFromGraph(string query)
+        public async Task<dynamic> GetUserFromGraph(string query)
         {
 
             // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this.Config);
+            var accessToken = await AccessTokenFetcher.GetAccessToken("https://graph.microsoft.com", "GRAPH");
 
             // get the user info
             using (var request = new HttpRequestMessage()
@@ -327,11 +334,11 @@ namespace CasAuth
             List<RoleAssignments> assignments = new List<RoleAssignments>();
 
             // get the list of applications to consider for roles
-            var appIds = CasEnv.AzureApplicationIds;
-            if (appIds.Count() < 1) return assignments;
+            var appIds = CasConfig.AzureApplicationIds;
+            if (appIds == null || appIds.Count() < 1) return assignments;
 
             // get an access token
-            var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", this.Config);
+            var accessToken = await AccessTokenFetcher.GetAccessToken("https://graph.microsoft.com", "GRAPH");
 
             // lookup all specified applications
             //   NOTE: catch the possible 403 Forbidden because access rights have not been granted
@@ -420,7 +427,7 @@ namespace CasAuth
 
         public async Task<string> GetOid(JwtSecurityToken idToken, List<Claim> claims)
         {
-            if (CasEnv.AzureAuthority.EndsWith("/common"))
+            if (CasConfig.AzureAuthority.EndsWith("/common"))
             {
 
                 // add the tenant claim
@@ -488,7 +495,7 @@ namespace CasAuth
 
             // verify the id token
             string idRaw = context.Request.Form["id_token"];
-            var idToken = await VerifyTokenFromAAD(idRaw, CasEnv.AzureClientId, flow.nonce);
+            var idToken = await VerifyTokenFromAAD(idRaw, CasConfig.AzureClientId, flow.nonce);
 
             // ICasAuthCodeReceiver: use the code to get an access token
             if (AuthCodeReceiver != null)
@@ -591,7 +598,7 @@ namespace CasAuth
 
             // add the service details
             if (!string.IsNullOrEmpty(serviceName)) claims.Add(new Claim("name", serviceName));
-            claims.Add(new Claim("role", CasEnv.RoleForService));
+            claims.Add(new Claim("role", CasConfig.RoleForService));
 
             // attempt to propogate roles
             var roles = accessToken.Payload.Claims.Where(c => c.Type == "roles");
@@ -618,7 +625,7 @@ namespace CasAuth
             // make sure the user is eligible
             var oid = claims.FirstOrDefault(claim => claim.Type == "oid");
             if (oid.Value == null) throw new CasHttpException(403, "oid is not specified in the token");
-            if (CasEnv.RequireUserEnabledOnReissue)
+            if (CasConfig.RequireUserEnabledOnReissue)
             {
                 bool enabled = await IsUserEnabled((string)oid.Value);
                 if (!enabled) throw new CasHttpException(403, "user is not enabled");

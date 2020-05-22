@@ -7,22 +7,25 @@ using CasAuth;
 using System.Threading.Tasks;
 using System.Net.Http;
 using System;
+using NetBricks;
 
 namespace asp_wfe.Controllers
 {
 
     public class HomeController : Controller
     {
-        private readonly ILogger<HomeController> _logger;
-        private readonly HttpClient _httpClient;
-        private readonly ICasConfig _config;
 
-        public HomeController(ILogger<HomeController> logger, IHttpClientFactory httpClientFactory, ICasConfig config)
+        public HomeController(
+            ILogger<HomeController> logger,
+            IHttpClientFactory httpClientFactory
+        )
         {
-            _logger = logger;
-            _httpClient = httpClientFactory.CreateClient("wfe");
-            _config = config;
+            Logger = logger;
+            HttpClient = httpClientFactory.CreateClient("wfe");
         }
+
+        private ILogger<HomeController> Logger { get; }
+        private HttpClient HttpClient { get; }
 
         public IActionResult Index()
         {
@@ -55,7 +58,7 @@ namespace asp_wfe.Controllers
 
                 // if authenticated, make a call to another API
                 UserInfo userinfo = null;
-                var meUrl = await _config.GetString("ME_URL") ?? "http://localhost:5200/cas/me";
+                var meUrl = Config.GetOnce("ME_URL") ?? "http://localhost:5200/cas/me";
                 using (var req = new HttpRequestMessage()
                 {
                     RequestUri = new Uri(meUrl),
@@ -64,7 +67,7 @@ namespace asp_wfe.Controllers
                 {
                     req.Headers.Add("Cookie", cookie);
                     req.Headers.Add("X-XSRF-TOKEN", xsrf);
-                    using (var response = await _httpClient.SendAsync(req))
+                    using (var response = await HttpClient.SendAsync(req))
                     {
                         var raw = await response.Content.ReadAsStringAsync();
                         if (!response.IsSuccessStatusCode)
@@ -83,8 +86,8 @@ namespace asp_wfe.Controllers
             }
             else
             {
-                var loginUrl = await _config.GetString("LOGIN_URL") ?? "http://localhost:5100/cas/authorize";
-                var redirectUrl = await _config.GetString("REDIRECT_URL") ?? "http://localhost:5000/Home/Redirector";
+                var loginUrl = Config.GetOnce("LOGIN_URL") ?? "http://localhost:5100/cas/authorize";
+                var redirectUrl = Config.GetOnce("REDIRECT_URL") ?? "http://localhost:5000/Home/Redirector";
                 var uri = System.Web.HttpUtility.UrlEncode(redirectUrl);
                 return Redirect($"{loginUrl}?redirecturi={uri}");
             }

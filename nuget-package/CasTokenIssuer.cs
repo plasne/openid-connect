@@ -8,6 +8,7 @@ using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using System.Net.Http;
+using NetBricks;
 
 namespace CasAuth
 {
@@ -18,17 +19,18 @@ namespace CasAuth
         public CasTokenIssuer(
             ILogger<CasTokenIssuer> logger,
             IHttpClientFactory httpClientFactory,
-            ICasConfig config
+            IConfig config
         )
         {
             this.Logger = logger;
             this.HttpClient = httpClientFactory.CreateClient("cas");
-            this.Config = config;
+            this.Config = config as CasConfig;
+            if (this.Config == null) throw new Exception("CasTokenIssuer: CasConfig was not found in the IServiceCollection.");
         }
 
         private ILogger Logger { get; }
         private HttpClient HttpClient { get; }
-        private ICasConfig Config { get; }
+        private CasConfig Config { get; }
 
         private X509SigningCredentials _signingCredentials;
 
@@ -36,9 +38,9 @@ namespace CasAuth
         {
             if (_signingCredentials == null)
             {
-                var privateKey = await Config.GetString("PRIVATE_KEY", CasEnv.PrivateKey);
+                var privateKey = await Config.PrivateKey();
                 var bytes = Convert.FromBase64String(privateKey);
-                var privateKeyPassword = await Config.GetString("PRIVATE_KEY_PASSWORD", CasEnv.PrivateKeyPassword);
+                var privateKeyPassword = await Config.PrivateKeyPassword();
                 var certificate = new X509Certificate2(bytes, privateKeyPassword);
                 _signingCredentials = new X509SigningCredentials(certificate, SecurityAlgorithms.RsaSha256);
             }
@@ -55,10 +57,10 @@ namespace CasAuth
 
                 // attempt to get certificates indexed 0-3 at the same time
                 var tasks = new List<Task<string>>();
-                tasks.Add(Config.GetString("PUBLIC_CERT_0", CasEnv.PublicCert0));
-                tasks.Add(Config.GetString("PUBLIC_CERT_1", CasEnv.PublicCert1));
-                tasks.Add(Config.GetString("PUBLIC_CERT_2", CasEnv.PublicCert2));
-                tasks.Add(Config.GetString("PUBLIC_CERT_3", CasEnv.PublicCert3));
+                for (int i = 0; i < 4; i++)
+                {
+                    tasks.Add(Config.PublicCert(i));
+                }
 
                 // wait for all the tasks to complete
                 await Task.WhenAll(tasks.ToArray());
@@ -113,21 +115,21 @@ namespace CasAuth
             if (claims.FirstOrDefault(c => c.Type == "exp") != null) throw new Exception("claim cannot contain an expiration");
 
             // add the max-age if appropriate
-            if (CasEnv.JwtMaxDuration > 0 && claims.FirstOrDefault(c => c.Type == "old") == null)
+            if (CasConfig.JwtMaxDuration > 0 && claims.FirstOrDefault(c => c.Type == "old") == null)
             {
-                claims.Add(new Claim("old", new DateTimeOffset(DateTime.UtcNow).AddMinutes(CasEnv.JwtMaxDuration).ToUnixTimeSeconds().ToString()));
+                claims.Add(new Claim("old", new DateTimeOffset(DateTime.UtcNow).AddMinutes(CasConfig.JwtMaxDuration).ToUnixTimeSeconds().ToString()));
             }
 
             // determine the signing duration
-            var duration = (claims.IsService()) ? CasEnv.JwtServiceDuration : CasEnv.JwtDuration;
+            var duration = (claims.IsService()) ? CasConfig.JwtServiceDuration : CasConfig.JwtDuration;
 
             // get the signing creds
             var signingCredentials = await GetSigningCredentials();
 
             // generate the token
             var jwt = new JwtSecurityToken(
-                issuer: CasEnv.Issuer,
-                audience: CasEnv.Audience,
+                issuer: CasConfig.Issuer,
+                audience: CasConfig.Audience,
                 claims: claims,
                 expires: DateTime.UtcNow.AddMinutes(duration),
                 signingCredentials: signingCredentials);
@@ -164,10 +166,10 @@ namespace CasAuth
 
             // generate the token
             var jwt = new JwtSecurityToken(
-                issuer: CasEnv.Issuer,
-                audience: CasEnv.Audience,
+                issuer: CasConfig.Issuer,
+                audience: CasConfig.Audience,
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(CasEnv.JwtMaxDuration).AddMinutes(60), // good beyond the max-duration
+                expires: DateTime.UtcNow.AddMinutes(CasConfig.JwtMaxDuration).AddMinutes(60), // good beyond the max-duration
                 signingCredentials: signingCredentials);
 
             // serialize
@@ -203,9 +205,9 @@ namespace CasAuth
             {
                 RequireSignedTokens = true,
                 ValidateIssuer = true,
-                ValidIssuer = CasEnv.Issuer,
+                ValidIssuer = CasConfig.Issuer,
                 ValidateAudience = true,
-                ValidAudience = CasEnv.Audience,
+                ValidAudience = CasConfig.Audience,
                 ValidateLifetime = true,
                 IssuerSigningKeys = keys
             };
@@ -244,9 +246,9 @@ namespace CasAuth
                     RequireExpirationTime = true,
                     RequireSignedTokens = true,
                     ValidateIssuer = true,
-                    ValidIssuer = CasEnv.Issuer,
+                    ValidIssuer = CasConfig.Issuer,
                     ValidateAudience = true,
-                    ValidAudience = CasEnv.Audience,
+                    ValidAudience = CasConfig.Audience,
                     ValidateLifetime = false, // we want to validate everything but the lifetime
                     IssuerSigningKeys = keys
                 }, out validatedSecurityToken);

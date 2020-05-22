@@ -18,11 +18,10 @@ namespace CasAuth
 
         public CasGoogleId(
             ILogger<CasGoogleId> logger,
-            ICasConfig config,
             CasTokenIssuer tokenIssuer,
             ICasClaimsBuilder claimsBuilder = null,
             ICasAuthCodeReceiver authCodeReceiver = null
-        ) : base(logger, config, tokenIssuer, claimsBuilder, authCodeReceiver)
+        ) : base(logger, tokenIssuer, claimsBuilder, authCodeReceiver)
         {
             this.ConfigManager = new ConfigurationManager<OpenIdConnectConfiguration>("https://accounts.google.com/.well-known/openid-configuration", new OpenIdConnectConfigurationRetriever());
         }
@@ -36,12 +35,12 @@ namespace CasAuth
 
             // get the necessary variables
             string authority = "https://accounts.google.com";
-            string clientId = WebUtility.UrlEncode(CasEnv.GoogleClientId);
+            string clientId = WebUtility.UrlEncode(CasConfig.GoogleClientId);
             string redirect = WebUtility.UrlEncode(
                 // NOTE: google sends the values on a filter, so we need to extract via javascript
-                CasEnv.RedirectUri(context.Request).Replace("/cas/token", "/cas/extract")
+                CasConfig.RedirectUri(context.Request).Replace("/cas/token", "/cas/extract")
             );
-            string domainHint = WebUtility.UrlEncode(CasEnv.GoogleDomainHint);
+            string domainHint = WebUtility.UrlEncode(CasConfig.GoogleDomainHint);
 
             // get the scope
             var basicScope = "openid profile email";
@@ -241,10 +240,10 @@ namespace CasAuth
 
             // verify the id_token
             string idRaw = context.Request.Form["id_token"];
-            var idToken = await VerifyTokenFromGoogle(idRaw, CasEnv.GoogleClientId, flow.nonce);
+            var idToken = await VerifyTokenFromGoogle(idRaw, CasConfig.GoogleClientId, flow.nonce);
 
             // ensure the email is verified
-            if (CasEnv.GoogleEmailMustBeVerified)
+            if (CasConfig.GoogleEmailMustBeVerified)
             {
                 var verified = idToken.Payload.Claims.FirstOrDefault(c => c.Type == "email_verified");
                 if (verified.Value != "true") throw new CasHttpException(403, "email was not verified");

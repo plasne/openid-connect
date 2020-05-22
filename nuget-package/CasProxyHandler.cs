@@ -10,8 +10,8 @@ namespace CasAuth
 
         public CasProxyHandler()
         {
-            Proxy = (!string.IsNullOrEmpty(CasEnv.Proxy)) ? new WebProxy(CasEnv.Proxy, true) : null;
-            UseProxy = (!string.IsNullOrEmpty(CasEnv.Proxy));
+            Proxy = (!string.IsNullOrEmpty(CasConfig.Proxy)) ? new WebProxy(CasConfig.Proxy, true) : null;
+            UseProxy = (!string.IsNullOrEmpty(CasConfig.Proxy));
         }
 
     }

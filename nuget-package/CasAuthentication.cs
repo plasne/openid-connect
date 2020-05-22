@@ -56,10 +56,10 @@ namespace CasAuth
                 }
 
                 // look next at the cookie
-                if (CasEnv.VerifyTokenInCookie && string.IsNullOrEmpty(token))
+                if (CasConfig.VerifyTokenInCookie && string.IsNullOrEmpty(token))
                 {
-                    Logger.LogDebug($"CasAuthentication: checking cookie named \"{CasEnv.UserCookieName}\" for token...");
-                    token = Request.Cookies[CasEnv.UserCookieName];
+                    Logger.LogDebug($"CasAuthentication: checking cookie named \"{CasConfig.UserCookieName}\" for token...");
+                    token = Request.Cookies[CasConfig.UserCookieName];
                     isTokenFromCookie = true;
                 }
 
@@ -70,8 +70,11 @@ namespace CasAuth
                     return AuthenticateResult.NoResult();
                 }
 
-                // see if the token has expired
-                if (CasTokenValidator.IsTokenExpired(token))
+                // attempt reissue is appropriate
+                if (
+                    !string.IsNullOrEmpty(CasConfig.ReissueUrl) // reissue is allowed (there is a URL)
+                    && CasTokenValidator.IsTokenExpired(token)  // the token is expired
+                )
                 {
 
                     // attempt to reissue
@@ -84,12 +87,12 @@ namespace CasAuth
                     // rewrite the cookie
                     if (isTokenFromCookie)
                     {
-                        Response.Cookies.Append(CasEnv.UserCookieName, token, new CookieOptions()
+                        Response.Cookies.Append(CasConfig.UserCookieName, token, new CookieOptions()
                         {
-                            HttpOnly = CasEnv.RequireHttpOnlyOnUserCookie,
-                            Secure = CasEnv.RequireSecureForCookies,
-                            Domain = CasEnv.BaseDomain(Request),
-                            SameSite = CasEnv.SameSite,
+                            HttpOnly = CasConfig.RequireHttpOnlyOnUserCookie,
+                            Secure = CasConfig.RequireSecureForCookies,
+                            Domain = CasConfig.BaseDomain(Request),
+                            SameSite = CasConfig.SameSite,
                             Path = "/"
                         });
                     }
@@ -101,7 +104,7 @@ namespace CasAuth
 
                 // if the token was in the header and that wasn't allowed, it had better be a service account
                 if (isTokenFromHeader &&
-                    !CasEnv.VerifyTokenInHeader &&
+                    !CasConfig.VerifyTokenInHeader &&
                     !jwt.Payload.Claims.IsService()
                 )
                 {
@@ -125,7 +128,7 @@ namespace CasAuth
             catch (Exception e)
             {
                 Logger.LogWarning(e, "CasAuthentication: exception...");
-                if (isTokenFromCookie) Response.Cookies.Delete(CasEnv.UserCookieName); // revoke the cookie
+                if (isTokenFromCookie) Response.Cookies.Delete(CasConfig.UserCookieName); // revoke the cookie
                 return AuthenticateResult.Fail(e);
             }
 

@@ -3,16 +3,12 @@ using System.Linq;
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System.Threading.Tasks;
-using System.IdentityModel.Tokens.Jwt;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
-using Microsoft.IdentityModel.Tokens;
 using System.Security.Cryptography.X509Certificates;
 using System.Net.Http;
 using Newtonsoft.Json;
+using NetBricks;
 
 namespace CasAuth
 {
@@ -185,8 +181,6 @@ namespace CasAuth
                     try
                     {
 
-                        // TODO: test reissue
-
                         // get all needed variables
                         var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
                         string token = context.Request.Form["token"];
@@ -224,8 +218,8 @@ namespace CasAuth
                         // REF: https://developer.byu.edu/docs/consume-api/use-api/implement-openid-connect/openid-connect-discovery
                         var payload = new WellKnownConfigPayload()
                         {
-                            issuer = CasEnv.Issuer,
-                            jwks_uri = CasEnv.PublicKeysUrl
+                            issuer = CasConfig.Issuer,
+                            jwks_uri = CasConfig.PublicKeysUrl
                         };
 
                         // return the json
@@ -321,13 +315,20 @@ namespace CasAuth
                 {
                     try
                     {
-                        switch (CasAuthChooser.AuthType())
+
+                        // get the config
+                        var config = context.RequestServices.GetService<IConfig>() as CasConfig;
+                        if (config == null) throw new CasHttpException(500, "CasConfig not found in IServiceCollection");
+
+                        // display results
+                        switch (config.AuthType())
                         {
-                            case "app":
+                            case AuthTypes.Service:
                                 return context.Response.WriteAsync("Application Identity / Service Principal");
                             default:
                                 return context.Response.WriteAsync("Managed Identity / az CLI");
                         }
+
                     }
                     catch (Exception e)
                     {
@@ -345,11 +346,11 @@ namespace CasAuth
                         var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
                         var httpClientFactory = context.RequestServices.GetService<IHttpClientFactory>();
                         var httpClient = httpClientFactory.CreateClient("cas");
-                        var config = context.RequestServices.GetService<ICasConfig>();
+                        var fetcher = context.RequestServices.GetService<IAccessTokenFetcher>();
 
                         // validate graph access
                         logger.LogInformation("/cas/check-requirements: checking graph access...");
-                        var accessToken = await CasAuthChooser.GetAccessToken("https://graph.microsoft.com", "AUTH_TYPE_GRAPH", config);
+                        var accessToken = await fetcher.GetAccessToken("https://graph.microsoft.com", "GRAPH");
                         using (var request = new HttpRequestMessage()
                         {
                             RequestUri = new Uri("https://graph.microsoft.com/beta/users?$top=1"),
@@ -382,10 +383,13 @@ namespace CasAuth
                     try
                     {
 
+                        // get the config
+                        var config = context.RequestServices.GetService<IConfig>() as CasConfig;
+                        if (config == null) throw new CasHttpException(500, "CasConfig not found in IServiceCollection");
+
                         // ensure the user is authorized
-                        var config = context.RequestServices.GetService<ICasConfig>();
                         var tokenIssuer = context.RequestServices.GetService<CasTokenIssuer>();
-                        var commandPassword = await config.GetString("COMMAND_PASSWORD", CasEnv.CommandPassword);
+                        var commandPassword = await config.CommandPassword();
                         string password = context.Request.Form["password"];
                         if (password != commandPassword) throw new CasHttpException(401, "user did not provide the valid command password");
 
