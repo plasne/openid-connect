@@ -184,6 +184,9 @@ namespace CasAuth
 
             // write the user cookie
             string jwt = await TokenIssuer.IssueToken(claims);
+            Console.WriteLine("jwt....................................jwt");
+            Console.WriteLine(jwt);
+            Console.WriteLine("jwt....................................jwt");
             var userCookie = CasConfig.UserCookieName;
             context.Response.Cookies.Append(userCookie, jwt, new CookieOptions()
             {

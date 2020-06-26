@@ -10,10 +10,10 @@ CasAuth now supports APIs on multiple domains authenticating against a single au
 
 There is a new environment variable called IS_HTTPS. This was always used by CasEnv, but it was not previously exposed as a setting that you could control. Generally, you should just leave it with the default behavior:
 
--   if CLIENT_HOST_URL is not set => true
--   if SERVER_HOST_URL is not set => true
--   if both CLIENT_HOST_URL and SERVER_HOST_URL start with "https://" => true
--   otherwise => false
+- if CLIENT_HOST_URL is not set => true
+- if SERVER_HOST_URL is not set => true
+- if both CLIENT_HOST_URL and SERVER_HOST_URL start with "https://" => true
+- otherwise => false
 
 This was added because of the REDIRECT_URI change (below). Now that REDIRECT_URI supports building a URL based on the RequestDomain, there needs to be a consistent way to apply a protocol. The defaults should work fine, but if they don't, you can now change it manually.
 

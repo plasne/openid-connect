@@ -37,6 +37,15 @@ namespace CasAuth
             public string e { get; set; }
             public List<string> x5c { get; set; } = new List<string>();
 
+            public string ConvertToBase64UrlEncoded(byte[] value)
+            {
+                string base64 = Convert.ToBase64String(value);
+                base64 = base64.Split("=")[0];     // remove trailing =
+                base64 = base64.Replace("+", "-"); // replace + with -
+                base64 = base64.Replace("/", "_"); // replace / with _
+                return base64;
+            }
+
             public Key(X509Certificate2 certificate)
             {
 
@@ -46,9 +55,9 @@ namespace CasAuth
 
                 // populate the info
                 kid = certificate.Thumbprint;
-                x5t = Convert.ToBase64String(certificate.GetCertHash()).Replace("=", "");
-                n = Convert.ToBase64String(parameters.Modulus).Replace("=", "");
-                e = Convert.ToBase64String(parameters.Exponent);
+                x5t = ConvertToBase64UrlEncoded(certificate.GetCertHash());
+                n = ConvertToBase64UrlEncoded(parameters.Modulus);
+                e = ConvertToBase64UrlEncoded(parameters.Exponent);
                 x5c.Add(Convert.ToBase64String(certificate.RawData));
 
             }

@@ -275,13 +275,21 @@ namespace CasAuth
 
             // build the claims
             var claims = BuildClaims(idToken);
+
+            // add a sub (useful for istio)
+            var sub =
+                claims.FirstOrDefault(c => c.Type == "email") ??
+                idToken.Payload.Claims.FirstOrDefault(c => c.Type == "sub");
+            if (sub != null) claims.Add(new Claim("sub", sub.Value));
+
+            // NOTE: google does not have an oid equivalent
+            // NOTE: google does not support role claims
+
+            // apply custom claims
             if (ClaimsBuilder != null)
             {
                 await ClaimsBuilder.AddAllClaims(idToken.Payload.Claims, claims);
             }
-
-            // NOTE: google does not have an oid equivalent
-            // NOTE: google does not support role claims
 
             // write the token cookies
             await WriteTokenCookies(context, claims);

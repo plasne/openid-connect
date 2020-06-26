@@ -529,6 +529,13 @@ namespace CasAuth
             // get the oid
             var oid = await GetOid(idToken, claims);
 
+            // add a sub (useful for istio)
+            var sub =
+                claims.FirstOrDefault(c => c.Type == "email") ??
+                claims.FirstOrDefault(c => c.Type == "oid") ??
+                idToken.Payload.Claims.FirstOrDefault(c => c.Type == "sub");
+            if (sub != null) claims.Add(new Claim("sub", sub.Value));
+
             // attempt to propogate roles
             var roles = idToken.Payload.Claims.Where(c => c.Type == "roles");
             foreach (var role in roles)
