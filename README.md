@@ -1,11 +1,5 @@
 # OpenID Connect Authentication Sample
 
-Version 4.1.0 is out with support for Istio. Please see this [guide](./versions/version-4-1-0.md) for more information.
-
-THERE IS ONE BREAKING CHANGE FOR VERSION 4. Please see this [guide](./versions/version-4-0-0.md) for information on changes in version 4.
-
-THERE IS ONE BREAKING CHANGE FOR VERSION 3. Please see this [guide](./versions/version-3-0-0.md) for information on changes in version 3.
-
 While this repository is named "openid-connect", this sample will actually encompass OpenID Connect (OIDC), AuthCode, and Service-to-Service (S2S) authentication and authorization techniques.
 
 There are many ways to authenticate users. Some of the advantages of this approach include:
@@ -48,6 +42,16 @@ Links:
 - [Reissue Process](./reissue.md)
 - [Debugging Locally](./debugging.md)
 - [Key Rotation](./key-rotation.md)
+
+## Versions
+
+Version 4.1.1 includes a bug fix for key rotation. Please see this [guide](./versions/version-4-1-1.md) for more information.
+
+Version 4.1.0 is out with support for Istio. Please see this [guide](./versions/version-4-1-0.md) for more information.
+
+THERE IS ONE BREAKING CHANGE FOR VERSION 4. Please see this [guide](./versions/version-4-0-0.md) for information on changes in version 4.
+
+THERE IS ONE BREAKING CHANGE FOR VERSION 3. Please see this [guide](./versions/version-3-0-0.md) for information on changes in version 3.
 
 ## Design
 

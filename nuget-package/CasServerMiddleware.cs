@@ -404,10 +404,21 @@ namespace CasAuth
 
                         // clear the caches
                         var logger = context.RequestServices.GetService<ILogger<CasServerAuthMiddleware>>();
-                        tokenIssuer.ClearSigningKey();
-                        logger.LogDebug("The signing key cache was cleared.");
-                        tokenIssuer.ClearValidationCertificates();
-                        logger.LogDebug("The validation certificate cache was cleared.");
+                        string scope = context.Request.Form["scope"];
+                        if (scope == "private")
+                        {
+                            tokenIssuer.ClearSigningKey();
+                            logger.LogDebug("The signing key cache was cleared.");
+                        }
+                        else if (scope == "public")
+                        {
+                            tokenIssuer.ClearValidationCertificates();
+                            logger.LogDebug("The validation certificate cache was cleared.");
+                        }
+                        else
+                        {
+                            throw new CasHttpException(400, "you must specify a scope of either \"public\" or \"private\".");
+                        }
 
                         // respond with success
                         await context.Response.CompleteAsync();

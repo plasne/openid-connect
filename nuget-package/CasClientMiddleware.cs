@@ -118,8 +118,16 @@ namespace CasAuth
                     {
 
                         // find the validator and use it to clear cache
-                        var validator = context.RequestServices.GetService<CasTokenValidator>();
-                        validator.ConfigManager.RequestRefresh();
+                        string scope = context.Request.Form["scope"];
+                        if (scope == "public")
+                        {
+                            var validator = context.RequestServices.GetService<CasTokenValidator>();
+                            validator.ConfigManager.RequestRefresh();
+                        }
+                        else
+                        {
+                            throw new CasHttpException(400, "you must specify a scope of \"public\".");
+                        }
 
                         // respond with success
                         return context.Response.CompleteAsync();

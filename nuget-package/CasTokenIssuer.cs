@@ -98,11 +98,17 @@ namespace CasAuth
 
         public void ClearSigningKey()
         {
+            Config.RemoveFromCache("PRIVATE_KEY");
+            Config.RemoveFromCache("PRIVATE_KEY_PASSWORD");
             _signingCredentials = null;
         }
 
         public void ClearValidationCertificates()
         {
+            Config.RemoveFromCache("PUBLIC_CERT_0");
+            Config.RemoveFromCache("PUBLIC_CERT_1");
+            Config.RemoveFromCache("PUBLIC_CERT_2");
+            Config.RemoveFromCache("PUBLIC_CERT_3");
             _validationCertificates = null;
         }
 

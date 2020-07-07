@@ -774,7 +774,7 @@ namespace CasAuth
                     rZvYuY1wwqr2AHQjRrLwwT4N3ms7dPVeSHg=
                     -----END CERTIFICATE-----";
                 return str;
-            });
+            }, ignore404: true);
         }
 
 
