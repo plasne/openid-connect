@@ -531,7 +531,7 @@ Generally these settings do not need to be modified, but there are many configur
 
 - app:auth:env:PRIVATE_KEY_PASSWORD - The private key is in PFX format, which requires a password for export. This allows you to specify the password you used when creating the PFX. This commonly will be a URL to a secret in the Key Vault.
 
-- app:auth:env:PUBLIC_CERT_index (0, 1, 2, 3) - Rather than store the public certificates in the Key Vault, it is possible to specify PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, and/or PUBLIC_CERT_3 as environment variables instead. These commonly will be URLs to secrets in the Key Vault.
+- app:auth:env:PUBLIC_CERT_index (0, 1, 2, 3) - Rather than store the public certificates in the Key Vault, it is possible to specify PUBLIC_CERT_0, PUBLIC_CERT_1, PUBLIC_CERT_2, and/or PUBLIC_CERT_3 as environment variables instead. These commonly will be URLs to secrets in the Key Vault. If you are storing them in Key Vault and you want to support zero-downtime key rotation, you must specify at least 2 of these variables. It is fine for all but one of them to return a 404 because they do not point to a valid Key Vault secret yet. This allows you to use one of those slots on key rotation.
 
 - app:api:env:WELL_KNOWN_CONFIG_URL (default: derived from SERVER_HOST_URL) - This is the URL of the auth/.well-known/openid-configuration endpoint.
 
